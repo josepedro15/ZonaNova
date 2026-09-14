@@ -74,6 +74,17 @@ a tela de espera — nada é ingerido.
 
 Se a unidade escolhida ainda não tem gestor, o pedido cai para o supervisor.
 
+## 1.4-A O padrão comercial da casa: o MEC
+
+A Zona Nova (Redemac) tem um **Modelo de Execução Comercial** escrito — o MEC,
+Book 1: *Do atendimento ao fechamento*. Ele define seis etapas de venda mais o
+acompanhamento, e é a diretriz oficial da rede.
+
+O sistema não só analisa a conversa: ele **mede se o MEC está sendo seguido**, e
+minera o que funciona fora dele para alimentar a próxima versão do Book. Isso
+tem doc próprio — [§7](07-aderencia-mec.md) — porque muda o schema da análise, o
+modelo de dados e três telas.
+
 ## 1.5 Regras de negócio da análise
 
 Herdadas do MetricsIA (doutrina já validada em produção) e mantidas:

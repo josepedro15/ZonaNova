@@ -164,6 +164,20 @@ unidade, reprocessamento, desconexão forçada. Quem, o quê, quando, sobre quem
 | `relatorios_diarios (unidade_id, data_ref)` | rollup de unidade |
 | `fila_processamento (status, created_at) WHERE status='pendente'` | worker pegar o próximo |
 
+## 2.7-A Módulo MEC
+
+O módulo de aderência acrescenta `playbooks`, `playbook_etapas`,
+`playbook_itens`, `aderencia_conversa`, `aderencia_contestacoes`,
+`aderencia_diaria` e `descobertas` — em
+[`supabase/migrations/0002_mec.sql`](../supabase/migrations/0002_mec.sql),
+explicadas em [§7.5](07-aderencia-mec.md).
+
+Uma decisão que vale destacar: **a doutrina de avaliação mora no banco**, não no
+código. O prompt da análise é montado a partir de `playbook_etapas` e
+`playbook_itens` da versão vigente. Mudar o MEC vira uma linha nova de dados e
+uma versão nova, não um deploy — e toda aderência já medida continua apontando
+para a versão sob a qual foi medida.
+
 ## 2.8 Retenção
 
 Mensagem de WhatsApp é dado pessoal de terceiro (o cliente). Definir na fase de

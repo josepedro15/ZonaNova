@@ -29,6 +29,8 @@
         │
         ├─ rollup_unidade  → SQL puro + 1 chamada curta p/ o texto ─► relatorios_unidade
         └─ rollup_rede     → SQL puro + 1 chamada curta p/ o texto ─► relatorios_rede
+
+  (semanal) descoberta → 4 buscas sobre os resumos da semana ─► descobertas
 ```
 
 **Regra de ouro do custo:** LLM só onde há julgamento a fazer. Número é somado em
@@ -144,6 +146,31 @@ de erro mais comum do MetricsIA (número plausível e errado).
 
 Média do dia = média de `score_atendimento` **só das conversas
 `tipo_conversa = 'negociacao'`**.
+
+## 3.6-A Etapa 2-A — aderência ao MEC
+
+Sai junto com a análise individual (mesma chamada, schema maior): um bloco `mec`
+com as 7 etapas, cada uma com `aplicavel`, `aplicado`, `justificativa`,
+`evidencias` e os itens específicos.
+
+O prompt desse bloco é **montado a partir do banco** (`playbook_etapas` +
+`playbook_itens` da versão vigente), não escrito à mão no código.
+
+Custo: o prompt cresce e a saída quase dobra. Duas defesas — o bloco de doutrina
+é fixo e vai para prompt caching, e a aderência só é medida em
+`tipo_conversa = 'negociacao'`, que é a minoria do dia. Medir isso na simulação
+de custo antes de ligar para a rede.
+
+Detalhes e a regra de `aplicáveis` em [§7](07-aderencia-mec.md).
+
+## 3.6-B Descoberta (semanal)
+
+Job novo, domingo de madrugada. Quatro buscas sobre a semana — prática fora do
+script que converteu, script seguido que não converteu, objeção fora do
+catálogo, minhoca inventada — mais o cruzamento etapa × conversão em SQL puro.
+
+Recebe **os resumos das análises**, nunca os transcripts. Uma chamada por busca.
+Grava em `descobertas` para o supervisor avaliar. Ver [§7.4](07-aderencia-mec.md).
 
 ## 3.7 Etapa 3 — unidade e rede (SQL + narrativa curta)
 

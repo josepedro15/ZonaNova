@@ -13,6 +13,10 @@ envia para a LLM analisar e publica o resultado em três níveis de dashboard:
 | **Gestor** | gestor da unidade | todos os vendedores da(s) unidade(s) dele |
 | **Supervisor** | topo da hierarquia | todas as unidades, ranking e comparativo |
 
+Além das análises de conversa, o sistema mede **aderência ao MEC** — o Modelo de
+Execução Comercial que a rede determinou — e minera o que funciona fora dele.
+Ver [doc 7](docs/07-aderencia-mec.md).
+
 ## Stack
 
 Next.js 16 (App Router) · React 19 · Tailwind v4 + shadcn · Supabase (Postgres +
@@ -34,8 +38,11 @@ Leia nesta ordem:
 4. [Arquitetura técnica](docs/04-arquitetura-tecnica.md) — rotas, crons, segredos, ambientes
 5. [Mapa de telas](docs/05-mapa-de-telas.md) — briefing para a fase de design
 6. [Roadmap](docs/06-roadmap.md) — fases de entrega
+7. [Aderência ao MEC](docs/07-aderencia-mec.md) — medir se o padrão comercial está sendo seguido, e descobrir o que ele ainda não diz
 
 ## Estado atual
 
-**Fase 1 — Planejamento.** Nada implementado ainda. Próximo passo: desenho das
-telas (Claude Design) a partir do [mapa de telas](docs/05-mapa-de-telas.md).
+**Fase 1 — Planejamento.** Nada implementado ainda. As telas estão desenhadas
+(ver `design/`) e precisam de uma passada para incorporar a aderência ao MEC e
+para corrigir o domínio dos dados de exemplo — Zona Nova é Redemac, material de
+construção.

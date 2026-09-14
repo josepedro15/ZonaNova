@@ -90,6 +90,20 @@ Idêntica à tela 6, para qualquer unidade. Uma tela só, dois papéis.
 Fila (pendente/processando/falhou com o erro), custo de LLM por dia/unidade/
 vendedor, reprocessamento, gestão de unidades e papéis, log de `eventos_admin`.
 
+### 11-14. Telas do módulo MEC
+
+Detalhadas em [§7.7](07-aderencia-mec.md):
+
+- **Vendedor · Meu MEC** — as 7 etapas do dia, o que aplicou e o que passou, com
+  o trecho ao lado. Transforma "sua nota caiu" em "você não perguntou em que
+  etapa a obra está, em 9 de 11 atendimentos".
+- **Gestor · Aderência da unidade** — matriz vendedor × etapa. Coluna fraca é
+  treino coletivo; linha fraca é conversa individual. Fila de contestações.
+- **Supervisor · O MEC está pegando?** — aderência por unidade, evolução desde a
+  última versão do Book, cruzamento etapa × conversão.
+- **Supervisor · Descobertas** — hipótese, força da evidência, trechos, aprovar
+  ou descartar. É a porta de entrada do Book 2.
+
 ## 5.3 Diretrizes de design
 
 - **Português do Brasil**, linguagem de vendas, não de software.
@@ -115,3 +129,6 @@ vendedor, reprocessamento, gestão de unidades e papéis, log de `eventos_admin`
 5. `/unidades`
 6. `/cadastro` + `/aguardando-aprovacao`
 7. `/admin`
+
+As quatro telas do MEC entram depois de `/equipe` — a de vendedor junto com o
+dashboard, a do gestor logo em seguida.

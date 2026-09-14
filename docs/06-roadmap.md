@@ -41,6 +41,20 @@ correto, e o custo medido bate com o estimado.
 Vendedor → gestor → supervisor, nessa ordem, mais a tela de conversa com
 evidências. Rollups de unidade e rede.
 
+## Fase 6-A — Aderência ao MEC
+
+Playbook carregado no banco (Book 1 v1), bloco `mec` no schema da análise, telas
+de aderência do vendedor e do gestor, contestação. Ver [§7](07-aderencia-mec.md).
+
+**Critério de pronto:** um gestor olha a matriz da unidade e consegue dizer, com
+o trecho na mão, qual etapa a equipe dele não está cumprindo.
+
+## Fase 6-B — Descoberta
+
+Job semanal, tela de descobertas do supervisor, cruzamento etapa × conversão.
+Só faz sentido depois de algumas semanas de aderência acumulada — precisa de
+volume para a evidência valer alguma coisa.
+
 ## Fase 7 — Operação
 Painel de admin (fila, custos, reprocessamento), alertas de conexão caída,
 expurgo de retenção, aceite de LGPD, documentação de uso para gestores.
@@ -59,3 +73,7 @@ o que o gestor vê, ninguém confia no sistema depois.
 | Metas por vendedor/unidade | existem metas formais para o dashboard comparar? |
 | Integração com CRM/ERP da Zona Nova | há conversão de venda registrada em outro sistema? |
 | Fim de semana e feriado | unidades atendem? o relatório deve rodar? |
+| Books seguintes do MEC | o Book 1 fala em "alguns elementos"; só temos ele |
+| Duas seções incompletas do Book 1 | "estratégia de preço" está *página não editada* e o contorno de objeções *no aguardo de reforço* |
+| Alçada de desconto por vendedor | sem isso não dá para medir estouro de alçada |
+| Peso das etapas do MEC | todas valem igual na aderência? o Book não diz |
