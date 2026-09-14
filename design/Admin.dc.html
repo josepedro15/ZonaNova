@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #faf8f4; color: #161b1d;
+      font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    }
+    .dsp { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; }
+    .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+    a { color: #0f5c6b; text-decoration: none; }
+    a:hover { color: #0a4450; }
+    .th { font-size: 11px; font-weight: 600; color: #8a9296; letter-spacing: 0.04em; text-align: left; padding: 0 0 9px; }
+    .td { padding: 11px 0; border-top: 1px solid #f0ece4; font-size: 13px; }
+    .num { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; font-weight: 600; letter-spacing: -0.04em; }
+    .tab { padding: 9px 14px; font-size: 13.5px; color: #5f686b; border-bottom: 2px solid transparent; }
+    .tab-on { color: #0f5c6b; font-weight: 600; border-bottom-color: #0f5c6b; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 940px; background: #faf8f4; display: flex; flex-direction: column;">
+
+  <!-- Header -->
+  <div style="background: #ffffff; border-bottom: 1px solid #e7e2d9; padding: 18px 30px 0;">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 22px;">
+      <div style="display: flex; flex-direction: column; gap: 3px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h1 class="dsp" style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.035em;">Operação</h1>
+          <span style="padding: 3px 9px; border-radius: 999px; background: #f2efe8; color: #5f686b; font-size: 11px; font-weight: 600; letter-spacing: 0.03em;">ADMIN</span>
+        </div>
+        <span style="font-size: 12.5px; color: #8a9296;">Último fechamento: 14 set, 23h30 · próximo em 21h38</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="padding: 8px 14px; border-radius: 9px; background: #ffffff; border: 1px solid #ddd7cc;">
+          <span style="font-size: 12.5px; font-weight: 600; color: #3c4548;">Rodar fila agora</span>
+        </div>
+        <div style="padding: 8px 14px; border-radius: 9px; background: #0f5c6b;">
+          <span style="font-size: 12.5px; font-weight: 600; color: #faf8f4;">Reprocessar dia</span>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 4px; margin-top: 16px;">
+      <span class="tab tab-on">Fila</span>
+      <span class="tab">Custo de IA</span>
+      <span class="tab">Unidades e papéis</span>
+      <span class="tab">Conexões</span>
+      <span class="tab">Registro de ações</span>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; padding: 22px 30px; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
+
+    <!-- Estado da fila -->
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;">
+      <div style="padding: 15px 17px; border-radius: 12px; background: #ffffff; border: 1px solid #e7e2d9;">
+        <span style="font-size: 11.5px; color: #8a9296; font-weight: 500;">Concluídos hoje</span>
+        <div class="num" style="margin-top: 2px; font-size: 27px; color: #2f7d52;">381</div>
+      </div>
+      <div style="padding: 15px 17px; border-radius: 12px; background: #ffffff; border: 1px solid #e7e2d9;">
+        <span style="font-size: 11.5px; color: #8a9296; font-weight: 500;">Processando</span>
+        <div class="num" style="margin-top: 2px; font-size: 27px;">6</div>
+      </div>
+      <div style="padding: 15px 17px; border-radius: 12px; background: #ffffff; border: 1px solid #e7e2d9;">
+        <span style="font-size: 11.5px; color: #8a9296; font-weight: 500;">Pendentes</span>
+        <div class="num" style="margin-top: 2px; font-size: 27px;">24</div>
+      </div>
+      <div style="padding: 15px 17px; border-radius: 12px; background: #fbe8e6; border: 1px solid #f2ccc8;">
+        <span style="font-size: 11.5px; color: #a8564e; font-weight: 500;">Falharam</span>
+        <div class="num" style="margin-top: 2px; font-size: 27px; color: #b3382f;">3</div>
+      </div>
+      <div style="padding: 15px 17px; border-radius: 12px; background: #ffffff; border: 1px solid #e7e2d9;">
+        <span style="font-size: 11.5px; color: #8a9296; font-weight: 500;">Custo do dia</span>
+        <div style="display: flex; align-items: baseline; gap: 5px;">
+          <div class="num" style="margin-top: 2px; font-size: 27px;">R$ 7,41</div>
+        </div>
+        <span style="font-size: 11px; color: #8a9296;">R$ 0,019 por conversa</span>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 18px; flex-grow: 1; min-height: 0;">
+
+      <!-- Fila -->
+      <div style="flex-grow: 1; padding: 20px 22px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; min-width: 0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <h2 class="dsp" style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.025em;">Itens que precisam de você</h2>
+          <div style="display: flex; gap: 6px;">
+            <span style="padding: 4px 10px; border-radius: 999px; background: #fbe8e6; color: #b3382f; font-size: 11.5px; font-weight: 600;">Falhou 3</span>
+            <span style="padding: 4px 10px; border-radius: 999px; background: #f2efe8; color: #5f686b; font-size: 11.5px; font-weight: 500;">Todos 414</span>
+          </div>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-top: 13px;">
+          <thead>
+            <tr>
+              <th class="th" style="width: 17%;">TIPO</th>
+              <th class="th" style="width: 22%;">REFERÊNCIA</th>
+              <th class="th">ERRO</th>
+              <th class="th" style="text-align: center; width: 8%;">TENT.</th>
+              <th class="th" style="text-align: right; width: 12%;">AÇÃO</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td"><span style="padding: 3px 8px; border-radius: 6px; background: #fbe8e6; color: #b3382f; font-size: 11.5px; font-weight: 600;">análise</span></td>
+              <td class="td mono" style="font-size: 12px; color: #5f686b;">conv · 8f31c2…</td>
+              <td class="td" style="color: #3c4548;">Resposta não bateu com o schema (campo <span class="mono" style="font-size: 12px;">tipo_conversa</span> vazio)</td>
+              <td class="td" style="text-align: center; color: #b3382f; font-weight: 600;">4</td>
+              <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 600; color: #0f5c6b;">Repetir</span></td>
+            </tr>
+            <tr>
+              <td class="td"><span style="padding: 3px 8px; border-radius: 6px; background: #fbe8e6; color: #b3382f; font-size: 11.5px; font-weight: 600;">análise</span></td>
+              <td class="td mono" style="font-size: 12px; color: #5f686b;">conv · 21ba90…</td>
+              <td class="td" style="color: #3c4548;">Transcrição de áudio nunca chegou — 3 áudios pendentes</td>
+              <td class="td" style="text-align: center; color: #b3382f; font-weight: 600;">4</td>
+              <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 600; color: #0f5c6b;">Repetir</span></td>
+            </tr>
+            <tr>
+              <td class="td"><span style="padding: 3px 8px; border-radius: 6px; background: #fbe8e6; color: #b3382f; font-size: 11.5px; font-weight: 600;">relatório</span></td>
+              <td class="td mono" style="font-size: 12px; color: #5f686b;">Mauro Kunz</td>
+              <td class="td" style="color: #3c4548;">Tempo limite do provedor de IA depois de 60s</td>
+              <td class="td" style="text-align: center; color: #b3382f; font-weight: 600;">4</td>
+              <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 600; color: #0f5c6b;">Repetir</span></td>
+            </tr>
+            <tr>
+              <td class="td"><span style="padding: 3px 8px; border-radius: 6px; background: #e3f0f2; color: #0f5c6b; font-size: 11.5px; font-weight: 600;">transcrição</span></td>
+              <td class="td mono" style="font-size: 12px; color: #5f686b;">msg · 4c0d7e…</td>
+              <td class="td" style="color: #8a9296;">processando há 2 min</td>
+              <td class="td" style="text-align: center; color: #8a9296;">1</td>
+              <td class="td" style="text-align: right; color: #a8afb2; font-size: 12.5px;">—</td>
+            </tr>
+            <tr>
+              <td class="td"><span style="padding: 3px 8px; border-radius: 6px; background: #f2efe8; color: #5f686b; font-size: 11.5px; font-weight: 600;">rollup</span></td>
+              <td class="td mono" style="font-size: 12px; color: #5f686b;">Garibaldi · 14 set</td>
+              <td class="td" style="color: #8a9296;">aguardando 2 relatórios de vendedor</td>
+              <td class="td" style="text-align: center; color: #8a9296;">0</td>
+              <td class="td" style="text-align: right; color: #a8afb2; font-size: 12.5px;">—</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid #f0ece4;">
+          <h3 class="dsp" style="margin: 0 0 12px; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">Custo de IA por dia · 14 dias</h3>
+          <div style="display: flex; align-items: flex-end; gap: 6px; height: 84px;">
+            <div style="flex-grow: 1; height: 61%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 66%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 54%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 70%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 64%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 31%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 29%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 72%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 68%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 100%; border-radius: 4px 4px 2px 2px; background: #dcae4a;"></div>
+            <div style="flex-grow: 1; height: 74%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 71%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 76%; border-radius: 4px 4px 2px 2px; background: #cfe4e7;"></div>
+            <div style="flex-grow: 1; height: 79%; border-radius: 4px 4px 2px 2px; background: #0f5c6b;"></div>
+          </div>
+          <div style="margin-top: 8px; display: flex; align-items: center; gap: 7px;">
+            <div style="width: 10px; height: 10px; border-radius: 3px; background: #dcae4a;"></div>
+            <span style="font-size: 11.5px; color: #8a9296;">9 set: reprocessamento manual de 3 unidades — R$ 11,80 (custo dobrado no dia)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lateral -->
+      <div style="width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px;">
+
+        <div style="padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <h3 class="dsp" style="margin: 0 0 13px; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">Pipeline de ontem</h3>
+          <div style="display: flex; flex-direction: column; gap: 11px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="flex-shrink: 0;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f7d52" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.2l2.6 2.6 5-5.2"/></svg>
+              <span style="font-size: 13px; flex-grow: 1;">Fechamento do dia</span>
+              <span style="font-size: 12px; color: #8a9296;">23h30</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="flex-shrink: 0;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f7d52" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.2l2.6 2.6 5-5.2"/></svg>
+              <span style="font-size: 13px; flex-grow: 1;">381 análises de conversa</span>
+              <span style="font-size: 12px; color: #8a9296;">23h34</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="flex-shrink: 0;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f7d52" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.2l2.6 2.6 5-5.2"/></svg>
+              <span style="font-size: 13px; flex-grow: 1;">33 relatórios de vendedor</span>
+              <span style="font-size: 12px; color: #8a9296;">23h41</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="flex-shrink: 0;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b07d10" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4.5l3 2"/></svg>
+              <span style="font-size: 13px; flex-grow: 1; color: #8a6209;">4 de 5 unidades consolidadas</span>
+              <span style="font-size: 12px; color: #a37d2c;">parcial</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; opacity: 0.5;">
+              <svg style="flex-shrink: 0;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a9296" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>
+              <span style="font-size: 13px; flex-grow: 1;">Consolidado da rede</span>
+              <span style="font-size: 12px;">aguardando</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; flex-grow: 1;">
+          <h3 class="dsp" style="margin: 0 0 4px; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">Últimas ações sensíveis</h3>
+          <span style="font-size: 12px; color: #8a9296;">tudo que muda nota de gente tem dono</span>
+
+          <div style="margin-top: 14px; display: flex; flex-direction: column; gap: 13px;">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 12.5px; color: #3c4548; line-height: 1.45;"><strong style="font-weight: 600;">Paulo Amaral</strong> reprocessou 9 set da unidade Bento</span>
+              <span style="font-size: 11.5px; color: #8a9296;">hoje, 10h22 · 78 conversas · R$ 1,49</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 12.5px; color: #3c4548; line-height: 1.45;"><strong style="font-weight: 600;">Carla Seibert</strong> aprovou o cadastro de Vera Klein</span>
+              <span style="font-size: 11.5px; color: #8a9296;">hoje, 09h04 · Unidade Centro</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 12.5px; color: #3c4548; line-height: 1.45;"><strong style="font-weight: 600;">Paulo Amaral</strong> promoveu Denis Farias a gestor</span>
+              <span style="font-size: 11.5px; color: #8a9296;">ontem, 17h38 · Centro Norte</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 12.5px; color: #3c4548; line-height: 1.45;"><strong style="font-weight: 600;">Carla Seibert</strong> transferiu Éverton Diniz para Centro</span>
+              <span style="font-size: 11.5px; color: #8a9296;">12 set, 14h11 · histórico antigo preservado em Garibaldi</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 12.5px; color: #3c4548; line-height: 1.45;"><strong style="font-weight: 600;">Paulo Amaral</strong> exportou o relatório da rede de agosto</span>
+              <span style="font-size: 11.5px; color: #8a9296;">11 set, 08h50</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
