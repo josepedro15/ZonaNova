@@ -1,0 +1,237 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #faf8f4; color: #161b1d;
+      font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    }
+    .dsp { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; }
+    a { color: #0f5c6b; text-decoration: none; }
+    a:hover { color: #0a4450; }
+    .card { padding: 15px 16px; border-radius: 12px; background: #ffffff; border: 1px solid #e7e2d9; }
+    .chip { padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 600; flex-shrink: 0; }
+    .ok  { background: #e4f2ea; color: #2f7d52; }
+    .par { background: #fbf0d8; color: #8a6209; }
+    .no  { background: #fbe8e6; color: #b3382f; }
+    .na  { background: #f2efe8; color: #8a9296; }
+    .ev  { margin-top: 9px; padding: 9px 11px; border-radius: 8px; background: #faf8f4; border-left: 3px solid #dcae4a; font-size: 12px; color: #3c4548; line-height: 1.45; }
+    .q   { display: flex; align-items: center; gap: 7px; }
+  </style>
+</helmet>
+
+<div style="width: 390px; background: #faf8f4;">
+
+  <!-- Topo -->
+  <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e7e2d9;">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#5f686b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    <div style="display: flex; flex-direction: column; flex-grow: 1;">
+      <span class="dsp" style="font-size: 16px; font-weight: 600; letter-spacing: -0.025em;">Meu MEC</span>
+      <span style="font-size: 11.5px; color: #8a9296;">terça, 14 de setembro · 9 negociações</span>
+    </div>
+    <a href="#" style="font-size: 12px; font-weight: 500;">Ler o Book</a>
+  </div>
+
+  <!-- Aderência do dia -->
+  <div style="margin: 18px 18px 0; padding: 20px; border-radius: 14px; background: #0f5c6b; color: #f2f7f8;">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 11.5px; font-weight: 500; color: #a9cdd4; letter-spacing: 0.03em;">VOCÊ SEGUIU O MEC EM</span>
+        <div style="display: flex; align-items: baseline; gap: 7px;">
+          <span class="dsp" style="font-size: 46px; font-weight: 600; letter-spacing: -0.05em; line-height: 1;">4</span>
+          <span style="font-size: 17px; color: #a9cdd4;">de 6 etapas que cabiam</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,0.14); flex-shrink: 0;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f0b7ae" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 10l-5 5-5-5"/></svg>
+        <span style="font-size: 12px; font-weight: 600; color: #f0b7ae;">−1</span>
+      </div>
+    </div>
+    <div style="margin-top: 16px; display: flex; gap: 4px;">
+      <div style="flex-grow: 1; height: 6px; border-radius: 999px; background: #8fe0b0;"></div>
+      <div style="flex-grow: 1; height: 6px; border-radius: 999px; background: #8fe0b0;"></div>
+      <div style="flex-grow: 1; height: 6px; border-radius: 999px; background: #8fe0b0;"></div>
+      <div style="flex-grow: 1; height: 6px; border-radius: 999px; background: #8fe0b0;"></div>
+      <div style="flex-grow: 1; height: 6px; border-radius: 999px; background: #e8a09a;"></div>
+      <div style="flex-grow: 1; height: 6px; border-radius: 999px; background: #e8a09a;"></div>
+      <div style="flex-grow: 1; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.2);"></div>
+    </div>
+    <p style="margin: 12px 0 0; font-size: 12px; color: #a9cdd4; line-height: 1.5;">
+      A etapa 7 ainda não conta: o acompanhamento de hoje vence amanhã de manhã.
+    </p>
+  </div>
+
+  <!-- Etapas -->
+  <div style="padding: 18px; display: flex; flex-direction: column; gap: 10px;">
+
+    <div class="card">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="dsp" style="flex-shrink: 0; width: 20px; font-size: 12px; font-weight: 600; color: #a8afb2;">1</span>
+        <span style="flex-grow: 1; font-size: 14.5px; font-weight: 600;">Acolhida</span>
+        <span class="chip ok">9 de 9</span>
+      </div>
+      <p style="margin: 7px 0 0 30px; font-size: 12.5px; color: #5f686b; line-height: 1.45;">Cumprimentou e se apresentou em todas. Nada a corrigir aqui.</p>
+    </div>
+
+    <div class="card" style="border-color: #f2ccc8;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="dsp" style="flex-shrink: 0; width: 20px; font-size: 12px; font-weight: 600; color: #a8afb2;">2</span>
+        <span style="flex-grow: 1; font-size: 14.5px; font-weight: 600;">Sondagem</span>
+        <span class="chip no">2,1 das 7</span>
+      </div>
+      <p style="margin: 7px 0 0 30px; font-size: 12.5px; color: #5f686b; line-height: 1.45;">
+        Em média você levantou 2 das 7 informações. É a etapa que mais te custa venda.
+      </p>
+
+      <div style="margin: 12px 0 0 30px; display: flex; flex-direction: column; gap: 7px;">
+        <div class="q">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2f7d52" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          <span style="font-size: 12.5px; color: #3c4548; flex-grow: 1;">O que está construindo</span>
+          <span style="font-size: 11.5px; color: #8a9296;">8 de 9</span>
+        </div>
+        <div class="q">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2f7d52" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          <span style="font-size: 12.5px; color: #3c4548; flex-grow: 1;">Uso pretendido do produto</span>
+          <span style="font-size: 11.5px; color: #8a9296;">7 de 9</span>
+        </div>
+        <div class="q">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b3382f" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+          <span style="font-size: 12.5px; color: #b3382f; font-weight: 500; flex-grow: 1;">Em que etapa está a obra</span>
+          <span style="font-size: 11.5px; color: #b3382f;">1 de 9</span>
+        </div>
+        <div class="q">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b3382f" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+          <span style="font-size: 12.5px; color: #b3382f; font-weight: 500; flex-grow: 1;">Andamento e prazo da obra</span>
+          <span style="font-size: 11.5px; color: #b3382f;">0 de 9</span>
+        </div>
+        <div class="q">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b3382f" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+          <span style="font-size: 12.5px; color: #b3382f; font-weight: 500; flex-grow: 1;">Tem orientação de profissional</span>
+          <span style="font-size: 11.5px; color: #b3382f;">1 de 9</span>
+        </div>
+        <div class="q">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b3382f" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+          <span style="font-size: 12.5px; color: #b3382f; font-weight: 500; flex-grow: 1;">Compra todas as categorias conosco</span>
+          <span style="font-size: 11.5px; color: #b3382f;">0 de 9</span>
+        </div>
+        <div class="q">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b3382f" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+          <span style="font-size: 12.5px; color: #b3382f; font-weight: 500; flex-grow: 1;">Prefere preço ou condição</span>
+          <span style="font-size: 11.5px; color: #b3382f;">2 de 9</span>
+        </div>
+      </div>
+
+      <div class="ev" style="margin-left: 30px;">
+        <strong style="font-weight: 600;">Uma pergunta teria mudado o dia:</strong> a Márcia disse “tô acabando a laje”. Ninguém perguntou o prazo — e o prazo era o argumento contra o preço da internet.
+      </div>
+    </div>
+
+    <div class="card" style="border-color: #f2ccc8;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="dsp" style="flex-shrink: 0; width: 20px; font-size: 12px; font-weight: 600; color: #a8afb2;">3</span>
+        <span style="flex-grow: 1; font-size: 14.5px; font-weight: 600;">Solução completa</span>
+        <span class="chip no">3 de 9</span>
+      </div>
+      <p style="margin: 7px 0 0 30px; font-size: 12.5px; color: #5f686b; line-height: 1.45;">
+        Em 6 atendimentos você vendeu só o que o cliente pediu.
+      </p>
+      <div style="margin: 10px 0 0 30px; display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 8px; background: #fbe8e6;">
+        <svg style="flex-shrink: 0;" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b3382f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M18.4 5.6L5.6 18.4"/></svg>
+        <span style="font-size: 12px; color: #8f2c25; line-height: 1.4;"><strong style="font-weight: 600;">“Algo mais?” 4 vezes.</strong> O MEC proíbe: ofereça o item pelo nome.</span>
+      </div>
+      <div class="ev" style="margin-left: 30px;">
+        Vendeu 18 L de acrílico para a Márcia sem rolo, bandeja, fita crepe nem lona. Ela vai voltar na loja amanhã — ou comprar de outro.
+      </div>
+    </div>
+
+    <div class="card" style="border-color: #f0dfc4;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="dsp" style="flex-shrink: 0; width: 20px; font-size: 12px; font-weight: 600; color: #a8afb2;">4</span>
+        <span style="flex-grow: 1; font-size: 14.5px; font-weight: 600;">Contorno de objeções</span>
+        <span class="chip par">2 de 5</span>
+      </div>
+      <p style="margin: 7px 0 0 30px; font-size: 12.5px; color: #5f686b; line-height: 1.45;">
+        Apareceram 5 objeções. Em 3 você foi direto ao desconto, sem o método.
+      </p>
+      <div style="margin: 11px 0 0 30px; display: flex; gap: 6px;">
+        <div style="flex-grow: 1; padding: 9px 10px; border-radius: 8px; background: #e4f2ea; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 10.5px; font-weight: 600; color: #2f7d52; letter-spacing: 0.03em;">CACHORRO</span>
+          <span style="font-size: 11.5px; color: #2f7d52;">elogiou · 4</span>
+        </div>
+        <div style="flex-grow: 1; padding: 9px 10px; border-radius: 8px; background: #fbf0d8; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 10.5px; font-weight: 600; color: #8a6209; letter-spacing: 0.03em;">PAPAGAIO</span>
+          <span style="font-size: 11.5px; color: #8a6209;">repetiu · 2</span>
+        </div>
+        <div style="flex-grow: 1; padding: 9px 10px; border-radius: 8px; background: #fbe8e6; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 10.5px; font-weight: 600; color: #b3382f; letter-spacing: 0.03em;">MINHOCA</span>
+          <span style="font-size: 11.5px; color: #b3382f;">reverteu · 2</span>
+        </div>
+      </div>
+      <div class="ev" style="margin-left: 30px;">
+        “Na internet é mais barato” tem minhoca pronta no Book: pronta-entrega, troca sem burocracia, marca legítima. Você deu 8% de desconto.
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="dsp" style="flex-shrink: 0; width: 20px; font-size: 12px; font-weight: 600; color: #a8afb2;">5</span>
+        <span style="flex-grow: 1; font-size: 14.5px; font-weight: 600;">Estratégia de preço</span>
+        <span class="chip par">parcial</span>
+      </div>
+      <p style="margin: 7px 0 0 30px; font-size: 12.5px; color: #5f686b; line-height: 1.45;">
+        Dentro da alçada nas 9. Mas um cliente trouxe orçamento do concorrente e não foi levado à gerência.
+      </p>
+      <div style="margin: 10px 0 0 30px; display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 8px; background: #f4f1ea;">
+        <svg style="flex-shrink: 0;" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5f686b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+        <span style="font-size: 12px; color: #5f686b; line-height: 1.4;">O desconto que vale é o do Carrinho. Aqui só vemos o que foi dito na conversa.</span>
+      </div>
+    </div>
+
+    <div class="card" style="border-color: #f2ccc8;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="dsp" style="flex-shrink: 0; width: 20px; font-size: 12px; font-weight: 600; color: #a8afb2;">6</span>
+        <span style="flex-grow: 1; font-size: 14.5px; font-weight: 600;">Fechamento</span>
+        <span class="chip no">3 de 9</span>
+      </div>
+      <p style="margin: 7px 0 0 30px; font-size: 12.5px; color: #5f686b; line-height: 1.45;">
+        Em 6 conversas não teve machadada — a conversa morreu sem pergunta de fechamento.
+      </p>
+      <div class="ev" style="margin-left: 30px;">
+        Troque “qualquer dúvida estou à disposição” por “já vou tirar o pedido, entrego na obra ou vocês retiram?”
+      </div>
+    </div>
+
+    <div class="card" style="background: #f4f1ea; border-style: dashed;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="dsp" style="flex-shrink: 0; width: 20px; font-size: 12px; font-weight: 600; color: #a8afb2;">7</span>
+        <span style="flex-grow: 1; font-size: 14.5px; font-weight: 600; color: #5f686b;">Acompanhamento</span>
+        <span class="chip na">vence amanhã</span>
+      </div>
+      <p style="margin: 7px 0 0 30px; font-size: 12.5px; color: #5f686b; line-height: 1.45;">
+        <strong style="font-weight: 600; color: #3c4548;">4 orçamentos em aberto</strong> pedem retorno no turno seguinte. O MEC pede ligação — e ligação a gente não enxerga, então só marcamos o que passar por aqui.
+      </p>
+    </div>
+
+  </div>
+
+  <!-- Rodapé de confiança -->
+  <div style="margin: 0 18px 22px; padding: 14px 16px; border-radius: 12px; background: #f4f1ea; display: flex; gap: 10px;">
+    <svg style="flex-shrink: 0; margin-top: 1px;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5f686b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+    <span style="font-size: 12px; color: #5f686b; line-height: 1.5;">
+      A conta é sobre as etapas que <strong style="font-weight: 600;">cabiam</strong> em cada conversa, nunca sobre 6 fixo. Achou que uma marcação está errada? Fale com a Carla — ela registra e alguém revisa.
+    </span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Telas do ZonaNova
 
-Mockups de alta fidelidade das 9 telas do sistema, autorados como artboards
+Mockups de alta fidelidade das 13 telas do sistema, autorados como artboards
 `.dc.html` e publicados como canvas de design.
 
 ## Arquivos
@@ -16,6 +16,10 @@ Mockups de alta fidelidade das 9 telas do sistema, autorados como artboards
 | `VendedorGestor.dc.html` | 7 · Vendedor visto pelo gestor | 1180 |
 | `Rede.dc.html` | 8 · Rede (supervisor) | 1440 |
 | `Admin.dc.html` | 9 · Operação (admin) | 1440 |
+| `MeuMec.dc.html` | 10 · Meu MEC (vendedor) | 390 |
+| `AderenciaUnidade.dc.html` | 11 · Aderência da unidade (gestor) | 1440 |
+| `MecRede.dc.html` | 12 · O MEC está pegando? (supervisor) | 1440 |
+| `Descobertas.dc.html` | 13 · Descobertas (supervisor) | 1440 |
 | `DirecaoB.dc.html` | Alternativa · Placar | 620 |
 | `DirecaoC.dc.html` | Alternativa · Caderno | 620 |
 | `canvas.json` | Layout, páginas e anotações do canvas | — |
@@ -61,6 +65,12 @@ MetricsIA (`oklch(0.55 0.16 260)`) para os dois produtos não se confundirem.
   nota vira opinião de robô.
 - **Estado vazio nunca é nota zero**: vendedor sem movimento aparece como
   ausência de dado, não como desempenho ruim.
-- Dados dos mockups são fictícios, escritos para exercitar os casos difíceis da
-  doutrina de avaliação (áudio, mensagem automática, mídia ilegível, cliente
-  sem resposta).
+- Dados dos mockups são fictícios mas do domínio certo: **Zona Nova é Redemac,
+  material de construção**. Obra, tinta, argamassa, laje, rejunte, crediário,
+  frete com guindaste. Escritos para exercitar os casos difíceis da doutrina
+  (áudio, mensagem automática, mídia ilegível, cliente sem resposta) e as
+  violações típicas do MEC (frase proibida, objeção sem o método, sondagem rasa).
+- **Aderência é aplicadas ÷ aplicáveis**, e as telas dizem isso em voz alta. O
+  que o sistema não vê — ligação, balcão, desconto no Carrinho — aparece como
+  não verificável, nunca como descumprimento.
+- O canvas tem três páginas: telas do sistema, MEC e aderência, direções.
