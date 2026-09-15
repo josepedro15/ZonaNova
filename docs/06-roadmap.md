@@ -44,8 +44,14 @@ zap-insight vivem nele e o nosso admintoken as controla. A separação é por
 operação destrutiva confere de quem é a instância antes de agir. Verificado
 contra o servidor real.
 
-**Falta:** transcrição de áudio (a fila já recebe o item), e o teste ponta a
-ponta — exige vendedor aprovado, instância real e alguém lendo o QR.
+Transcrição de áudio de pé: `GET /api/cron/processar-fila` com backoff
+exponencial (5, 20, 45 min; na 4ª falha desiste) e cache por hash do arquivo —
+o mesmo áudio encaminhado não é transcrito duas vezes, porque transcrição é
+paga por minuto.
+
+**Falta:** `OPENAI_API_KEY` para a transcrição correr de facto, e o teste ponta
+a ponta — que exige unidade cadastrada, vendedor aprovado, instância real e
+alguém lendo o QR.
 
 **Critério de pronto:** mensagem enviada no celular aparece no banco em segundos,
 e reentrega de webhook não duplica. *A segunda metade está provada
