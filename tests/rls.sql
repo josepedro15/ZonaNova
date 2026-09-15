@@ -221,3 +221,49 @@ begin
         raise notice 'PASSOU  instance_token fora de todo grant';
     end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- CONTADORES DA CONVERSA (migration 0005)
+--
+-- O que se prova aqui é a reentrega: a UAZAPI reentrega o que demora, e o
+-- webhook responde com ON CONFLICT DO NOTHING. Se o contador fosse mantido
+-- pela aplicação, a segunda entrega somaria de novo e o vendedor apareceria
+-- com o dobro de mensagens. Roda por último porque escreve.
+-- ---------------------------------------------------------------------------
+do $$
+declare v_conv uuid; n integer; ult timestamptz;
+begin
+    select id into v_conv from public.conversas limit 1;
+
+    insert into public.mensagens (conversa_id, wa_message_id, direcao, tipo, conteudo, enviada_em)
+    values (v_conv, 'TESTE-TRIGGER-1', 'entrada', 'texto', 'oi', '2026-09-15 10:00:00-03');
+
+    select total_mensagens, ultima_mensagem_em into n, ult
+      from public.conversas where id = v_conv;
+
+    if n = (select count(*) from public.mensagens where conversa_id = v_conv)
+    then raise notice 'PASSOU  trigger somou a mensagem';
+    else raise notice 'FALHOU  total ficou %, mensagens são %', n,
+         (select count(*) from public.mensagens where conversa_id = v_conv); end if;
+
+    if ult = '2026-09-15 10:00:00-03'::timestamptz
+    then raise notice 'PASSOU  ultima_mensagem_em carimbada';
+    else raise notice 'FALHOU  ultima_mensagem_em veio %', ult; end if;
+
+    insert into public.mensagens (conversa_id, wa_message_id, direcao, tipo, conteudo, enviada_em)
+    values (v_conv, 'TESTE-TRIGGER-1', 'entrada', 'texto', 'oi', '2026-09-15 10:00:00-03')
+    on conflict (wa_message_id) do nothing;
+
+    if (select total_mensagens from public.conversas where id = v_conv) = n
+    then raise notice 'PASSOU  reentrega do webhook não inflou o contador';
+    else raise notice 'FALHOU  reentrega subiu o contador para %',
+         (select total_mensagens from public.conversas where id = v_conv); end if;
+
+    insert into public.mensagens (conversa_id, wa_message_id, direcao, tipo, conteudo, enviada_em)
+    values (v_conv, 'TESTE-TRIGGER-2', 'entrada', 'texto', 'atrasada', '2026-09-10 08:00:00-03');
+
+    if (select ultima_mensagem_em from public.conversas where id = v_conv)
+       = '2026-09-15 10:00:00-03'::timestamptz
+    then raise notice 'PASSOU  mensagem atrasada não recuou ultima_mensagem_em';
+    else raise notice 'FALHOU  carimbo recuou com mensagem atrasada'; end if;
+end $$;

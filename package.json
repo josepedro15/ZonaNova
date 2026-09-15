@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:reset": "bash scripts/db-local.sh reset",
-    "test:rls": "bash scripts/db-local.sh test"
+    "test:rls": "bash scripts/db-local.sh test",
+    "test:unidade": "node --test 'tests/unidade/*.test.ts'"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
