@@ -222,6 +222,29 @@ begin
     end if;
 end $$;
 
+-- As funções são o segundo lugar onde "revogar do papel errado" não revoga:
+-- toda função nasce com EXECUTE para PUBLIC, e PUBLIC não é anon nem
+-- authenticated. A 0003 e a 0005 caíram nisso; a 0006 corrige. Aqui se afirma
+-- que continua corrigido.
+do $$
+declare v text;
+begin
+    select string_agg(p.proname, ', ' order by p.proname) into v
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and has_function_privilege('anon', p.oid, 'execute');
+    if v is not null then raise notice 'FALHOU  anon executa função de public: %', v;
+    else raise notice 'PASSOU  anon não executa função nenhuma de public'; end if;
+
+    -- E o contrário: sem EXECUTE nas funções de escopo, toda política morre.
+    select string_agg(nome, ', ') into v from unnest(array[
+        'zn_role()', 'zn_ativo()', 'zn_unidades_visiveis()', 'zn_minha_unidade()'
+    ]) nome
+    where not has_function_privilege('authenticated', 'public.' || nome, 'execute');
+    if v is not null then raise notice 'FALHOU  authenticated perdeu execute em: %', v;
+    else raise notice 'PASSOU  authenticated executa as quatro funções de escopo'; end if;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- CONTADORES DA CONVERSA (migration 0005)
 --

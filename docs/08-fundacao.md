@@ -107,6 +107,12 @@ defeito, e GRANT nunca tira privilégio. Quem fecha é o `revoke` do `0003`.
 Regra prática para toda migration futura: **privilégio estreito em `public` só
 vale depois de um `revoke`** — escrever só o `grant` é um no-op silencioso.
 
+E o `revoke` tem de nomear o papel certo. A 0003 e a 0005 escreveram `revoke
+all on function … from anon, authenticated` e não revogaram nada: função nasce
+com EXECUTE para **PUBLIC**, que não é anon nem authenticated — é todo mundo,
+os dois incluídos. Revogar dos papéis nominais deixa o herdado intacto. Corrige
+a 0006, e `tests/rls.sql` passou a afirmar que continua corrigido.
+
 **O token da instância tem grant por coluna.** `conexoes_whatsapp` é legível
 (a UI precisa do status para o alerta de número caído), mas `instance_token`
 está fora do grant: nem um `select *` o alcança. É a credencial do WhatsApp de

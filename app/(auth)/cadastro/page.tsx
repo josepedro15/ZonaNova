@@ -1,12 +1,21 @@
 import Link from 'next/link';
-import { criarClienteServidor } from '@/lib/supabase/server';
+import { criarClienteAdmin } from '@/lib/supabase/admin';
 import FormularioCadastro from './formulario';
 import Marca from '@/app/marca';
 
 export default async function Cadastro() {
-    // A lista de unidades é legível por qualquer autenticado e pelo anónimo —
-    // é o campo que define todo o resto do acesso (ver p_unidades_select).
-    const supabase = await criarClienteServidor();
+    // Service role de propósito. Quem abre esta tela ainda não tem conta, e
+    // portanto é o papel `anon` — que não tem privilégio nenhum em `public`
+    // desde a 0003. A política p_unidades_select também é `to authenticated`,
+    // então nem antes da 0003 o anónimo via linha alguma: a lista vinha vazia
+    // em silêncio e ninguém conseguia escolher unidade.
+    //
+    // A alternativa seria devolver privilégio ao `anon`. Não vale: a lista de
+    // unidades é pública por natureza (é o que a pessoa precisa escolher para
+    // se cadastrar), e lê-la aqui com service role mantém o `anon` em zero —
+    // propriedade que o tests/rls.sql afirma e que é mais fácil de defender do
+    // que uma exceção.
+    const supabase = criarClienteAdmin();
     const { data: unidades } = await supabase
         .from('unidades')
         .select('id, nome, cidade, uf')
