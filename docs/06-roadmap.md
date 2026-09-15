@@ -34,8 +34,22 @@ reconciliados: mesmas tabelas, mesmas policies, mesmos privilégios.
 Criação de instância UAZAPI por vendedor, tela de QR, webhook, gravação
 idempotente de mensagens, transcrição de áudio, `checar-conexoes`.
 
+**De pé:** cifra do `instance_token`, normalização e descarte do payload, token
+de rota por vendedor, `POST /api/webhook/uazapi/[token]`, criação de instância,
+tela de QR, `GET /api/cron/checar-conexoes`, e o trigger de contadores (`0005`).
+
+O servidor UAZAPI é **compartilhado com o MetricsIA** — 25 instâncias do
+zap-insight vivem nele e o nosso admintoken as controla. A separação é por
+`systemName = 'zonanova'`, aplicada em código: `listar()` filtra, e toda
+operação destrutiva confere de quem é a instância antes de agir. Verificado
+contra o servidor real.
+
+**Falta:** transcrição de áudio (a fila já recebe o item), e o teste ponta a
+ponta — exige vendedor aprovado, instância real e alguém lendo o QR.
+
 **Critério de pronto:** mensagem enviada no celular aparece no banco em segundos,
-e reentrega de webhook não duplica.
+e reentrega de webhook não duplica. *A segunda metade está provada
+(`tests/rls.sql`); a primeira não.*
 
 ## Fase 5 — Pipeline de análise
 Prompts portados e adaptados ao GPT-4.1 mini, structured outputs, fila, worker,

@@ -71,6 +71,19 @@ export async function proxy(request: NextRequest) {
     }
 
     const papel = perfil.role as string;
+
+    // Vendedor ativo sem WhatsApp ligado não tem o que ver no dashboard: sem
+    // conexão não entra mensagem, sem mensagem não há análise. Mandar para
+    // /conectar é o doc 4 §4.3 — e continua sendo só navegação, não barreira.
+    if (papel === 'vendedor' && caminho !== '/conectar') {
+        const { data: conexao } = await supabase
+            .from('vw_conexoes_status').select('status')
+            .eq('user_id', user.id).maybeSingle();
+        if (!conexao || conexao.status === 'desconectada') {
+            return NextResponse.redirect(new URL('/conectar', request.url));
+        }
+    }
+
     if (comecaCom(caminho, ROTAS_DE_ADMIN) && papel !== 'admin') {
         return NextResponse.redirect(new URL('/dashboard', request.url));
     }
