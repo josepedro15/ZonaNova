@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import FormularioCadastro from './formulario';
+import Marca from '@/app/marca';
 
 export default async function Cadastro() {
     // A lista de unidades é legível por qualquer autenticado e pelo anónimo —
@@ -14,14 +15,8 @@ export default async function Cadastro() {
 
     return (
         <main className="mx-auto flex min-h-screen w-full max-w-[430px] flex-col px-6 pb-9">
-            <div className="flex flex-col items-center gap-3 pb-7 pt-13">
-                <div className="flex size-12 items-center justify-center rounded-[13px] bg-petroleo">
-                    <span className="display text-[19px] font-bold text-papel">ZN</span>
-                </div>
-                <div className="flex flex-col items-center gap-0.5">
-                    <span className="display text-[18px] font-semibold">Zona Nova</span>
-                    <span className="text-xs text-tinta-3">Análise de atendimento</span>
-                </div>
+            <div className="pb-7 pt-13">
+                <Marca tamanho="md" orientacao="vertical" legenda="Análise de atendimento" />
             </div>
 
             <h1 className="display text-[26px] font-semibold">Criar sua conta</h1>

@@ -26,6 +26,18 @@
   --color-ambar:     #b07d10;  --color-ambar-sof:   #fbf0d8;
   --color-vermelho:  #b3382f;  --color-vermelho-sof:#fbe8e6;
 
+  /* Bordas e textos que vivem SOBRE as superfícies suaves acima. Estavam
+   * escritos à mão em hex pelas páginas, o que os deixava de fora de qualquer
+   * troca de marca — o `bg-ocre-sof` mudaria e o texto por cima não. */
+  --color-linha-campo:    #ddd7cc;  /* borda de input */
+  --color-linha-quente:   #f0dfc4;  /* borda sobre ocre-sof / ambar-sof */
+  --color-papel-2:        #f4f1ea;  /* caixa neutra sobre o papel */
+  --color-ocre-texto:     #8a5a22;  /* título sobre ocre-sof */
+  --color-ocre-texto-2:   #4a3a26;  /* corpo sobre ocre-sof */
+  --color-ambar-texto:    #8a6209;  /* texto sobre ambar-sof */
+  --color-vermelho-linha: #f2ccc8;  /* borda sobre vermelho-sof */
+  --color-vermelho-texto: #8f2c25;  /* texto sobre vermelho-sof */
+
   /* Preenchidas pelo next/font no layout raiz. */
   --font-display: var(--fonte-display), 'Helvetica Neue', Helvetica, sans-serif;
   --font-sans:    var(--fonte-corpo),   'Helvetica Neue', Helvetica, sans-serif;

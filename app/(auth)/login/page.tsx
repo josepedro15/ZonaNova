@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import Link from 'next/link';
 import { entrar, type Resultado } from '@/app/actions/auth';
+import Marca from '@/app/marca';
 
 const inicial: Resultado = {};
 
@@ -11,14 +12,8 @@ export default function Login() {
 
     return (
         <main className="mx-auto flex min-h-screen w-full max-w-[430px] flex-col px-6 pb-9">
-            <div className="flex flex-col items-center gap-3 pb-9 pt-20">
-                <div className="flex size-12 items-center justify-center rounded-[13px] bg-petroleo">
-                    <span className="display text-[19px] font-bold text-papel">ZN</span>
-                </div>
-                <div className="flex flex-col items-center gap-0.5">
-                    <span className="display text-[18px] font-semibold">Zona Nova</span>
-                    <span className="text-xs text-tinta-3">Análise de atendimento</span>
-                </div>
+            <div className="pb-9 pt-20">
+                <Marca tamanho="md" orientacao="vertical" legenda="Análise de atendimento" />
             </div>
 
             <h1 className="display text-[26px] font-semibold">Entrar</h1>
@@ -29,7 +24,7 @@ export default function Login() {
                     <span className="text-xs font-semibold text-tinta-2">E-mail</span>
                     <input
                         name="email" type="email" required autoComplete="email"
-                        className="min-h-[46px] rounded-[10px] border border-[#ddd7cc] bg-superficie px-3.5 text-[15px]"
+                        className="min-h-[46px] rounded-[10px] border border-linha-campo bg-superficie px-3.5 text-[15px]"
                     />
                 </label>
 
@@ -42,12 +37,12 @@ export default function Login() {
                     </div>
                     <input
                         name="senha" type="password" required autoComplete="current-password"
-                        className="min-h-[46px] rounded-[10px] border border-[#ddd7cc] bg-superficie px-3.5 text-[15px]"
+                        className="min-h-[46px] rounded-[10px] border border-linha-campo bg-superficie px-3.5 text-[15px]"
                     />
                 </label>
 
                 {estado.erro && (
-                    <p role="alert" className="rounded-[10px] border border-[#f2ccc8] bg-vermelho-sof px-3.5 py-3 text-[12.5px] text-[#8f2c25]">
+                    <p role="alert" className="rounded-[10px] border border-vermelho-linha bg-vermelho-sof px-3.5 py-3 text-[12.5px] text-vermelho-texto">
                         {estado.erro}
                     </p>
                 )}

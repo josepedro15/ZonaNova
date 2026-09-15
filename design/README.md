@@ -40,6 +40,12 @@ Mockups de alta fidelidade das 22 telas do sistema, autorados como artboards
 A marca da Zona Nova é **placeholder**: não havia logo, cores nem tipografia da
 empresa. O "ZN" e toda a paleta abaixo são proposta, não a identidade real.
 
+**Onde trocar quando a identidade chegar.** No app são dois ficheiros, e só:
+`app/marca.tsx` (o monograma e o nome, que estavam copiados à mão em quatro
+páginas) e os tokens de `app/globals.css`. Nenhum componente tem cor escrita em
+hex — foi verificado. Os mockups em `design/*.dc.html` continuam com os valores
+literais: são registo do que foi desenhado, não código que roda.
+
 | Token | Valor | Uso |
 |---|---|---|
 | Papel | `#faf8f4` | fundo |

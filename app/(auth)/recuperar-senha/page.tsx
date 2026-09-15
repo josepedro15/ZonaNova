@@ -13,7 +13,7 @@ export default function RecuperarSenha() {
         return (
             <main className="mx-auto flex min-h-screen w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
                 <div className="mb-5 flex size-[74px] items-center justify-center rounded-full bg-verde-sof">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2f7d52" strokeWidth="1.7" strokeLinecap="round">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="stroke-verde" strokeWidth="1.7" strokeLinecap="round">
                         <rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3.5 6.5l8.5 6 8.5-6" />
                     </svg>
                 </div>
@@ -23,8 +23,8 @@ export default function RecuperarSenha() {
                 <p className="mt-2.5 text-sm leading-relaxed text-tinta-2">
                     Se esse e-mail estiver cadastrado, o link chega em instantes. Ele vale por 1 hora.
                 </p>
-                <div className="mt-6 w-full rounded-[11px] border border-[#f0dfc4] bg-ambar-sof px-4 py-3.5 text-left">
-                    <span className="text-[12.5px] leading-relaxed text-[#8a6209]">
+                <div className="mt-6 w-full rounded-[11px] border border-linha-quente bg-ambar-sof px-4 py-3.5 text-left">
+                    <span className="text-[12.5px] leading-relaxed text-ambar-texto">
                         Não chegou em 5 minutos? Confira o lixo eletrônico antes de pedir de novo.
                     </span>
                 </div>
@@ -52,12 +52,12 @@ export default function RecuperarSenha() {
                     <span className="text-xs font-semibold text-tinta-2">E-mail</span>
                     <input
                         name="email" type="email" required autoComplete="email"
-                        className="min-h-[46px] rounded-[10px] border border-[#ddd7cc] bg-superficie px-3.5 text-[15px]"
+                        className="min-h-[46px] rounded-[10px] border border-linha-campo bg-superficie px-3.5 text-[15px]"
                     />
                 </label>
 
                 {estado.erro && (
-                    <p role="alert" className="rounded-[10px] border border-[#f2ccc8] bg-vermelho-sof px-3.5 py-3 text-[12.5px] text-[#8f2c25]">
+                    <p role="alert" className="rounded-[10px] border border-vermelho-linha bg-vermelho-sof px-3.5 py-3 text-[12.5px] text-vermelho-texto">
                         {estado.erro}
                     </p>
                 )}

@@ -1,5 +1,6 @@
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { sair } from '@/app/actions/auth';
+import Marca from '@/app/marca';
 
 export default async function Aguardando() {
     const supabase = await criarClienteServidor();
@@ -16,12 +17,7 @@ export default async function Aguardando() {
     return (
         <main className="mx-auto flex min-h-screen w-full max-w-[430px] flex-col px-6 pb-8">
             <div className="flex items-center justify-between py-5">
-                <div className="flex items-center gap-2.5">
-                    <div className="flex size-[26px] items-center justify-center rounded-[7px] bg-petroleo">
-                        <span className="display text-[13px] font-bold text-papel">ZN</span>
-                    </div>
-                    <span className="display text-sm font-semibold">Zona Nova</span>
-                </div>
+                <Marca />
                 <form action={sair}>
                     <button type="submit" className="text-[13px] text-tinta-3">Sair</button>
                 </form>
@@ -29,8 +25,8 @@ export default async function Aguardando() {
 
             <div className="flex flex-1 flex-col justify-center">
                 <div className="mb-6 flex justify-center">
-                    <div className="flex size-[78px] items-center justify-center rounded-full border border-[#f0dfc4] bg-ocre-sof">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#b8712a" strokeWidth="1.7" strokeLinecap="round">
+                    <div className="flex size-[78px] items-center justify-center rounded-full border border-linha-quente bg-ocre-sof">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="stroke-ocre" strokeWidth="1.7" strokeLinecap="round">
                             <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" />
                         </svg>
                     </div>
@@ -54,8 +50,8 @@ export default async function Aguardando() {
                     </div>
                 )}
 
-                <div className="mt-3.5 flex gap-2.5 rounded-[12px] bg-[#f4f1ea] px-4 py-3.5">
-                    <svg className="shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5f686b" strokeWidth="1.9" strokeLinecap="round">
+                <div className="mt-3.5 flex gap-2.5 rounded-[12px] bg-papel-2 px-4 py-3.5">
+                    <svg className="shrink-0 stroke-tinta-2" width="16" height="16" viewBox="0 0 24 24" fill="none" strokeWidth="1.9" strokeLinecap="round">
                         <circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 8h.01" />
                     </svg>
                     <span className="text-[12.5px] leading-relaxed text-tinta-2">

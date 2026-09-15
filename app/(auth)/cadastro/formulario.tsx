@@ -5,7 +5,7 @@ import { cadastrar, type Resultado } from '@/app/actions/auth';
 import type { Unidade } from '@/lib/tipos';
 
 const inicial: Resultado = {};
-const campo = 'min-h-[46px] rounded-[10px] border border-[#ddd7cc] bg-superficie px-3.5 text-[15px]';
+const campo = 'min-h-[46px] rounded-[10px] border border-linha-campo bg-superficie px-3.5 text-[15px]';
 const rotulo = 'text-xs font-semibold text-tinta-2';
 
 export default function FormularioCadastro({ unidades }: { unidades: Pick<Unidade, 'id' | 'nome' | 'cidade' | 'uf'>[] }) {
@@ -53,7 +53,7 @@ export default function FormularioCadastro({ unidades }: { unidades: Pick<Unidad
             </label>
 
             {estado.erro && (
-                <p role="alert" className="rounded-[10px] border border-[#f2ccc8] bg-vermelho-sof px-3.5 py-3 text-[12.5px] text-[#8f2c25]">
+                <p role="alert" className="rounded-[10px] border border-vermelho-linha bg-vermelho-sof px-3.5 py-3 text-[12.5px] text-vermelho-texto">
                     {estado.erro}
                 </p>
             )}

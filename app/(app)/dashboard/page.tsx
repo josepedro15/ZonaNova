@@ -1,5 +1,6 @@
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { sair } from '@/app/actions/auth';
+import Marca from '@/app/marca';
 
 export default async function Dashboard() {
     const supabase = await criarClienteServidor();
@@ -16,17 +17,7 @@ export default async function Dashboard() {
     return (
         <main className="mx-auto w-full max-w-[430px] px-[18px] pb-10">
             <header className="flex items-center justify-between border-b border-linha py-3.5">
-                <div className="flex items-center gap-2.5">
-                    <div className="flex size-[26px] items-center justify-center rounded-[7px] bg-petroleo">
-                        <span className="display text-[13px] font-bold text-papel">ZN</span>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="display text-sm font-semibold">Zona Nova</span>
-                        <span className="text-[11px] text-tinta-3">
-                            {perfil?.unidades?.nome ?? 'Rede'}
-                        </span>
-                    </div>
-                </div>
+                <Marca legenda={perfil?.unidades?.nome ?? 'Rede'} />
                 <form action={sair}>
                     <button type="submit" className="text-[13px] text-tinta-3">Sair</button>
                 </form>
@@ -38,9 +29,9 @@ export default async function Dashboard() {
                 {conversas ?? 0} conversa{conversas === 1 ? '' : 's'} visível para você
             </p>
 
-            <div className="mt-6 rounded-lg border border-[#f0dfc4] bg-ocre-sof p-[18px]">
-                <span className="display text-[15px] font-semibold text-[#8a5a22]">Fundação no ar</span>
-                <p className="mt-2 text-[13px] leading-relaxed text-[#4a3a26]">
+            <div className="mt-6 rounded-lg border border-linha-quente bg-ocre-sof p-[18px]">
+                <span className="display text-[15px] font-semibold text-ocre-texto">Fundação no ar</span>
+                <p className="mt-2 text-[13px] leading-relaxed text-ocre-texto-2">
                     Auth, papéis e isolamento por unidade estão de pé e testados. O dashboard
                     de verdade chega na Fase 6 — falta primeiro conectar o WhatsApp (Fase 4) e
                     ligar a análise (Fase 5).
