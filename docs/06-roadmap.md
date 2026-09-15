@@ -23,11 +23,12 @@ cadastro com seleção de unidade, aprovação, recuperação de senha, seed.
 mais 3 guardas de privilégio, **35 de 35 a passar**. O teste encontrou quatro bugs reais que a leitura
 do código não pegou; estão descritos em [§8.2](08-fundacao.md).
 
-**Projeto Supabase provisionado**, com `0001`–`0003` aplicadas. Subir para lá
+**Projeto Supabase provisionado**, com `0001`–`0004` aplicadas. Subir para lá
 revelou o quarto bug: os grants estreitos do `0001` não restringiam nada, porque
 o Supabase concede tudo por defeito e GRANT só soma. O `0003` fecha isso.
 
-**Pendente:** aplicar a `0004` no projeto remoto.
+**Sem pendências técnicas.** O ambiente de teste e o Supabase real foram
+reconciliados: mesmas tabelas, mesmas policies, mesmos privilégios.
 
 ## Fase 4 — Conexão e ingestão
 Criação de instância UAZAPI por vendedor, tela de QR, webhook, gravação
