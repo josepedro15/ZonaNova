@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #faf8f4; color: #161b1d;
+      font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    }
+    .dsp { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; }
+    a { color: #0f5c6b; text-decoration: none; }
+    a:hover { color: #0a4450; }
+    .nav { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; font-size: 13.5px; color: #cbd9db; }
+    .nav-on { background: rgba(255,255,255,0.12); color: #ffffff; font-weight: 600; }
+    .num { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; font-weight: 600; letter-spacing: -0.03em; }
+    .kind { padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; }
+    .quote { padding: 9px 12px; border-radius: 8px; background: #faf8f4; border-left: 3px solid #dcae4a; font-size: 12px; color: #3c4548; line-height: 1.45; }
+    .btn { padding: 7px 13px; border-radius: 8px; font-size: 12.5px; font-weight: 600; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 940px; background: #faf8f4; display: flex;">
+
+  <div style="width: 228px; flex-shrink: 0; background: #0d4b58; display: flex; flex-direction: column; padding: 20px 14px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px 22px;">
+      <div style="width: 30px; height: 30px; border-radius: 8px; background: #d9a441; display: flex; align-items: center; justify-content: center;">
+        <span class="dsp" style="color: #0d4b58; font-size: 14px; font-weight: 700; letter-spacing: -0.03em;">ZN</span>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <span class="dsp" style="font-size: 14px; font-weight: 600; color: #ffffff; letter-spacing: -0.02em;">Zona Nova</span>
+        <span style="font-size: 11px; color: #8fb3ba;">Supervisão</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 3px;">
+      <div class="nav"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg><span>Rede</span></div>
+      <div class="nav"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l2 2 4-4"/><path d="M5 4h14v16H5z"/></svg><span>O MEC</span></div>
+      <div class="nav nav-on" style="justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.4 5.6L20 10l-4.4 3.2L16.8 19 12 16l-4.8 3 1.2-5.8L4 10l5.6-1.4z"/></svg>
+          <span>Descobertas</span>
+        </div>
+        <span style="padding: 1px 7px; border-radius: 999px; background: #d9a441; color: #0d4b58; font-size: 11px; font-weight: 700;">6</span>
+      </div>
+      <div class="nav"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.2 2.7-5 6-5s6 1.8 6 5"/></svg><span>Pessoas</span></div>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 8px; border-top: 1px solid rgba(255,255,255,0.12);">
+      <div style="width: 32px; height: 32px; border-radius: 999px; background: #d9a441; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <span class="dsp" style="font-size: 12px; font-weight: 600; color: #0d4b58;">PA</span>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Paulo Amaral</span>
+        <span style="font-size: 11px; color: #8fb3ba;">Supervisor</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+
+    <div style="padding: 22px 28px 0; background: #ffffff; border-bottom: 1px solid #e7e2d9;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h1 class="dsp" style="margin: 0; font-size: 23px; font-weight: 600; letter-spacing: -0.035em;">O que o MEC ainda não diz</h1>
+          <span style="font-size: 13px; color: #8a9296;">Semana de 8 a 14 de setembro · o que você aprovar aqui vira o Book 1 · v2</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="btn" style="background: #ffffff; border: 1px solid #ddd7cc; color: #3c4548;">Aprovadas (4)</div>
+          <div class="btn" style="background: #0f5c6b; color: #faf8f4;">Montar v2</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 4px; margin-top: 16px;">
+        <span style="padding: 9px 14px; font-size: 13.5px; font-weight: 600; color: #0f5c6b; border-bottom: 2px solid #0f5c6b;">Novas · 6</span>
+        <span style="padding: 9px 14px; font-size: 13.5px; color: #5f686b;">Em análise · 2</span>
+        <span style="padding: 9px 14px; font-size: 13.5px; color: #5f686b;">Aprovadas · 4</span>
+        <span style="padding: 9px 14px; font-size: 13.5px; color: #5f686b;">Descartadas · 9</span>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; padding: 20px 28px; display: flex; gap: 18px; min-height: 0;">
+
+      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0;">
+
+        <!-- Descoberta 1 -->
+        <div style="padding: 18px 20px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 7px; flex-grow: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="kind" style="background: #e4f2ea; color: #2f7d52;">FORA DO SCRIPT, DEU CERTO</span>
+                <span style="font-size: 11.5px; color: #8a9296;">Farroupilha e Centro Norte</span>
+              </div>
+              <p class="dsp" style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.35;">
+                Mandar foto do produto no estoque fecha venda que o preço não fechava.
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #5f686b; line-height: 1.5;">
+                Quatro vendedores passaram a fotografar o item na prateleira e mandar junto com o orçamento. Nenhum lugar do Book 1 pede isso. Nas conversas com foto, o cliente para de comparar com a internet — o argumento vira “está aqui, é agora”.
+              </p>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0;">
+              <span class="num" style="font-size: 26px; color: #2f7d52;">+21</span>
+              <span style="font-size: 11px; color: #8a9296; text-align: right;">pontos de conversão<br>41% com · 20% sem</span>
+              <span style="margin-top: 5px; padding: 3px 9px; border-radius: 999px; background: #e4f2ea; color: #2f7d52; font-size: 11px; font-weight: 600;">63 conversas</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 14px; display: flex; gap: 10px;">
+            <div class="quote" style="flex-grow: 1;">“Olha ela aqui ó [foto], tenho 14 latas agora. Separo pra ti?”</div>
+            <div class="quote" style="flex-grow: 1;">“Mandei foto do lote que chegou hoje, é esse mesmo que tu viu no site.”</div>
+          </div>
+
+          <div style="margin-top: 14px; display: flex; align-items: center; gap: 8px;">
+            <div class="btn" style="background: #0f5c6b; color: #faf8f4;">Aprovar para a v2</div>
+            <div class="btn" style="background: #ffffff; border: 1px solid #ddd7cc; color: #3c4548;">Testar numa unidade</div>
+            <div class="btn" style="background: #ffffff; border: 1px solid #ddd7cc; color: #8a9296;">Descartar</div>
+            <div style="flex-grow: 1;"></div>
+            <a href="#" style="font-size: 12.5px; font-weight: 500;">Ver as 63 conversas</a>
+          </div>
+        </div>
+
+        <!-- Descoberta 2 -->
+        <div style="padding: 18px 20px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 7px; flex-grow: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="kind" style="background: #fbf0d8; color: #8a6209;">OBJEÇÃO FORA DO CATÁLOGO</span>
+                <span style="font-size: 11.5px; color: #8a9296;">rede toda</span>
+              </div>
+              <p class="dsp" style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.35;">
+                “Vou esperar o dinheiro entrar” não está nas 8 objeções do Book.
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #5f686b; line-height: 1.5;">
+                É a terceira objeção mais frequente da rede e não tem minhoca prevista. Os vendedores improvisam: metade oferece crediário, metade só diz “fico no aguardo” — e a diferença de conversão entre as duas saídas é grande.
+              </p>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0;">
+              <span class="num" style="font-size: 26px;">147</span>
+              <span style="font-size: 11px; color: #8a9296; text-align: right;">ocorrências<br>na semana</span>
+              <span style="margin-top: 5px; padding: 3px 9px; border-radius: 999px; background: #fbf0d8; color: #8a6209; font-size: 11px; font-weight: 600;">lacuna do cap. 4</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 14px; display: flex; gap: 10px;">
+            <div class="quote" style="flex-grow: 1;">Cliente: “Assim que cair o financiamento eu te chamo.” — vendedor ofereceu crediário: <strong style="font-weight: 600;">fechou em 34%</strong></div>
+            <div class="quote" style="flex-grow: 1;">Cliente: “Só quando entrar o dinheiro.” — vendedor disse “fico no aguardo”: <strong style="font-weight: 600;">fechou em 9%</strong></div>
+          </div>
+
+          <div style="margin-top: 14px; display: flex; align-items: center; gap: 8px;">
+            <div class="btn" style="background: #0f5c6b; color: #faf8f4;">Aprovar para a v2</div>
+            <div class="btn" style="background: #ffffff; border: 1px solid #ddd7cc; color: #3c4548;">Testar numa unidade</div>
+            <div class="btn" style="background: #ffffff; border: 1px solid #ddd7cc; color: #8a9296;">Descartar</div>
+          </div>
+        </div>
+
+        <!-- Descoberta 3 -->
+        <div style="padding: 18px 20px; border-radius: 14px; background: #ffffff; border: 1px solid #f2ccc8;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 7px; flex-grow: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="kind" style="background: #fbe8e6; color: #b3382f;">NO SCRIPT, DEU ERRADO</span>
+                <span style="font-size: 11.5px; color: #8a9296;">rede toda</span>
+              </div>
+              <p class="dsp" style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.35;">
+                O senso de escassez para “vou dar uma pensada” está queimando com cliente recorrente.
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #5f686b; line-height: 1.5;">
+                A minhoca do Book (“estamos vendendo muito, melhor garantir já”) funciona com cliente novo. Com quem compra há mais de um ano, a conversão <strong style="font-weight: 600;">cai</strong> — o cliente já ouviu isso antes e responde pior do que se o vendedor não dissesse nada.
+              </p>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0;">
+              <span class="num" style="font-size: 26px; color: #b3382f;">−11</span>
+              <span style="font-size: 11px; color: #8a9296; text-align: right;">pontos, em cliente<br>recorrente</span>
+              <span style="margin-top: 5px; padding: 3px 9px; border-radius: 999px; background: #fbe8e6; color: #b3382f; font-size: 11px; font-weight: 600;">89 conversas</span>
+            </div>
+          </div>
+          <div style="margin-top: 14px; display: flex; align-items: center; gap: 8px;">
+            <div class="btn" style="background: #0f5c6b; color: #faf8f4;">Revisar o cap. 4 da v2</div>
+            <div class="btn" style="background: #ffffff; border: 1px solid #ddd7cc; color: #8a9296;">Descartar</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Lateral -->
+      <div style="width: 290px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px;">
+
+        <div style="padding: 18px; border-radius: 14px; background: #f4f1ea; border: 1px solid #e7e2d9;">
+          <span style="font-size: 11px; font-weight: 600; color: #8a9296; letter-spacing: 0.05em;">COMO LER ISTO</span>
+          <p style="margin: 10px 0 0; font-size: 12.5px; color: #3c4548; line-height: 1.55;">
+            Cada descoberta nasce de conversas reais da semana, com os trechos anexados. <strong style="font-weight: 600;">Sem trecho, é palpite com cara de dado</strong> — e a fila não deixa passar.
+          </p>
+          <p style="margin: 10px 0 0; font-size: 12.5px; color: #3c4548; line-height: 1.55;">
+            Nada aqui muda o MEC sozinho. Só entra em vigor quando você aprova e a v2 é publicada — e a aderência medida na v1 continua apontando para a v1.
+          </p>
+        </div>
+
+        <div style="padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <h3 class="dsp" style="margin: 0 0 12px; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">Caminho até a v2</h3>
+          <div style="display: flex; flex-direction: column; gap: 11px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 22px; height: 22px; border-radius: 999px; background: #e4f2ea; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="num" style="font-size: 11px; color: #2f7d52;">4</span></div>
+              <span style="font-size: 12.5px; color: #3c4548; flex-grow: 1;">aprovadas, prontas</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 22px; height: 22px; border-radius: 999px; background: #fbf0d8; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="num" style="font-size: 11px; color: #8a6209;">2</span></div>
+              <span style="font-size: 12.5px; color: #3c4548; flex-grow: 1;">em teste numa unidade</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 22px; height: 22px; border-radius: 999px; background: #f2efe8; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="num" style="font-size: 11px; color: #5f686b;">6</span></div>
+              <span style="font-size: 12.5px; color: #3c4548; flex-grow: 1;">esperando sua leitura</span>
+            </div>
+          </div>
+          <p style="margin: 14px 0 0; padding-top: 12px; border-top: 1px solid #f0ece4; font-size: 12px; color: #8a9296; line-height: 1.5;">
+            Última versão publicada: <strong style="font-weight: 600; color: #3c4548;">v1, 2 de junho</strong>. Desde então a aderência da rede subiu 18 pontos.
+          </p>
+        </div>
+
+        <div style="padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; flex-grow: 1;">
+          <h3 class="dsp" style="margin: 0 0 3px; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">Minhocas inventadas</h3>
+          <span style="font-size: 12px; color: #8a9296;">reversões que o vendedor criou e que precederam fechamento</span>
+          <div style="margin-top: 13px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="quote">“O frete nosso vai de guindaste, tu não precisa de gente pra descarregar.” <span style="display: block; margin-top: 4px; color: #8a9296; font-size: 11px;">Letícia · 18× · fechou em 12</span></div>
+            <div class="quote">“Se a marca do teu pedreiro der problema, quem resolve é ele. Aqui a garantia é nossa.” <span style="display: block; margin-top: 4px; color: #8a9296; font-size: 11px;">Rogério · 11× · fechou em 7</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

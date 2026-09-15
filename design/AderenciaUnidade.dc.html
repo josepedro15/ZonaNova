@@ -1,0 +1,339 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #faf8f4; color: #161b1d;
+      font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    }
+    .dsp { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; }
+    a { color: #0f5c6b; text-decoration: none; }
+    a:hover { color: #0a4450; }
+    .nav { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; font-size: 13.5px; color: #cbd9db; }
+    .nav-on { background: rgba(255,255,255,0.12); color: #ffffff; font-weight: 600; }
+    .num { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; font-weight: 600; letter-spacing: -0.03em; }
+    .cel { width: 92px; height: 44px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; flex-shrink: 0; }
+    .hd  { width: 92px; flex-shrink: 0; text-align: center; font-size: 10.5px; font-weight: 600; color: #8a9296; letter-spacing: 0.03em; line-height: 1.25; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 940px; background: #faf8f4; display: flex;">
+
+  <!-- Sidebar -->
+  <div style="width: 228px; flex-shrink: 0; background: #0d4b58; display: flex; flex-direction: column; padding: 20px 14px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px 22px;">
+      <div style="width: 30px; height: 30px; border-radius: 8px; background: #d9a441; display: flex; align-items: center; justify-content: center;">
+        <span class="dsp" style="color: #0d4b58; font-size: 14px; font-weight: 700; letter-spacing: -0.03em;">ZN</span>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <span class="dsp" style="font-size: 14px; font-weight: 600; color: #ffffff; letter-spacing: -0.02em;">Zona Nova</span>
+        <span style="font-size: 11px; color: #8fb3ba;">Gestão</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 3px;">
+      <div class="nav">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.2 2.7-5 6-5s6 1.8 6 5"/><path d="M16 7.2a3 3 0 0 1 0 5.6"/></svg>
+        <span>Minha equipe</span>
+      </div>
+      <div class="nav nav-on">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l2 2 4-4"/><path d="M5 4h14v16H5z"/></svg>
+        <span>Aderência ao MEC</span>
+      </div>
+      <div class="nav">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-3.2-6.4L20 5v5h-5"/></svg>
+        <span>Conversas</span>
+      </div>
+      <div class="nav">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 6-7"/><path d="M14 8h4v4"/></svg>
+        <span>Evolução</span>
+      </div>
+      <div class="nav" style="justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19"/><circle cx="10" cy="7.5" r="3.2"/></svg>
+          <span>Aprovações</span>
+        </div>
+        <span style="padding: 1px 7px; border-radius: 999px; background: #d9a441; color: #0d4b58; font-size: 11px; font-weight: 700;">2</span>
+      </div>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 8px; border-top: 1px solid rgba(255,255,255,0.12);">
+      <div style="width: 32px; height: 32px; border-radius: 999px; background: #d9a441; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <span class="dsp" style="font-size: 12px; font-weight: 600; color: #0d4b58;">CS</span>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Carla Seibert</span>
+        <span style="font-size: 11px; color: #8fb3ba;">Gestora · Centro</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Conteúdo -->
+  <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 22px 28px 18px; border-bottom: 1px solid #e7e2d9; background: #ffffff;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <h1 class="dsp" style="margin: 0; font-size: 23px; font-weight: 600; letter-spacing: -0.035em;">O MEC na Unidade Centro</h1>
+          <span style="padding: 3px 9px; border-radius: 999px; background: #f2efe8; color: #5f686b; font-size: 11px; font-weight: 600;">Book 1 · v1</span>
+        </div>
+        <span style="font-size: 13px; color: #8a9296;">Últimos 7 dias · 412 negociações · só o que cabia em cada conversa entra na conta</span>
+      </div>
+      <div style="display: flex; padding: 3px; border-radius: 9px; background: #f2efe8; border: 1px solid #e7e2d9;">
+        <span style="padding: 6px 13px; font-size: 12.5px; color: #5f686b;">Hoje</span>
+        <span style="padding: 6px 13px; border-radius: 7px; background: #ffffff; font-size: 12.5px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">7 dias</span>
+        <span style="padding: 6px 13px; font-size: 12.5px; color: #5f686b;">30 dias</span>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; padding: 20px 28px; display: flex; gap: 18px; min-height: 0;">
+
+      <!-- Matriz -->
+      <div style="flex-grow: 1; padding: 20px 22px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; display: flex; flex-direction: column; min-width: 0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <h2 class="dsp" style="margin: 0; font-size: 16.5px; font-weight: 600; letter-spacing: -0.025em;">Quem cumpre o quê</h2>
+          <div style="display: flex; align-items: center; gap: 13px;">
+            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 11px; height: 11px; border-radius: 3px; background: #2f7d52;"></div><span style="font-size: 11.5px; color: #5f686b;">80%+</span></div>
+            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 11px; height: 11px; border-radius: 3px; background: #a8ce9a;"></div><span style="font-size: 11.5px; color: #5f686b;">60-79</span></div>
+            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 11px; height: 11px; border-radius: 3px; background: #f2d38a;"></div><span style="font-size: 11.5px; color: #5f686b;">40-59</span></div>
+            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 11px; height: 11px; border-radius: 3px; background: #e39a92;"></div><span style="font-size: 11.5px; color: #5f686b;">abaixo</span></div>
+          </div>
+        </div>
+
+        <!-- Cabeçalho da matriz -->
+        <div style="display: flex; align-items: flex-end; gap: 6px; margin-top: 16px; padding-bottom: 9px; border-bottom: 1px solid #f0ece4;">
+          <div style="width: 160px; flex-shrink: 0;"></div>
+          <span class="hd">ACOLHIDA</span>
+          <span class="hd">SONDAGEM</span>
+          <span class="hd">SOLUÇÃO<br>COMPLETA</span>
+          <span class="hd">CONTORNO<br>OBJEÇÕES</span>
+          <span class="hd">ESTRATÉGIA<br>DE PREÇO</span>
+          <span class="hd">FECHAMENTO</span>
+          <span class="hd">ACOMPA-<br>NHAMENTO</span>
+          <div style="flex-grow: 1;"></div>
+          <span style="width: 60px; flex-shrink: 0; text-align: right; font-size: 10.5px; font-weight: 600; color: #8a9296; letter-spacing: 0.03em;">GERAL</span>
+        </div>
+
+        <!-- Linhas -->
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px;">
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="width: 160px; flex-shrink: 0; display: flex; align-items: center; gap: 9px;">
+              <div style="width: 26px; height: 26px; border-radius: 999px; background: #e4f2ea; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 10.5px; font-weight: 600; color: #2f7d52;">LB</span></div>
+              <span style="font-size: 13.5px; font-weight: 600;">Letícia Brum</span>
+            </div>
+            <div class="cel" style="background: #2f7d52;"><span class="num" style="font-size: 15px; color: #ffffff;">100</span></div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">71</span></div>
+            <div class="cel" style="background: #2f7d52;"><span class="num" style="font-size: 15px; color: #ffffff;">88</span></div>
+            <div class="cel" style="background: #2f7d52;"><span class="num" style="font-size: 15px; color: #ffffff;">83</span></div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">75</span></div>
+            <div class="cel" style="background: #2f7d52;"><span class="num" style="font-size: 15px; color: #ffffff;">92</span></div>
+            <div class="cel" style="background: #2f7d52;"><span class="num" style="font-size: 15px; color: #ffffff;">85</span></div>
+            <div style="flex-grow: 1;"></div>
+            <span class="num" style="width: 60px; flex-shrink: 0; text-align: right; font-size: 17px; color: #2f7d52;">85%</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="width: 160px; flex-shrink: 0; display: flex; align-items: center; gap: 9px;">
+              <div style="width: 26px; height: 26px; border-radius: 999px; background: #ead9c4; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 10.5px; font-weight: 600; color: #8a5a22;">RM</span></div>
+              <span style="font-size: 13.5px; font-weight: 600;">Rafael Moura</span>
+            </div>
+            <div class="cel" style="background: #2f7d52;"><span class="num" style="font-size: 15px; color: #ffffff;">100</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">30</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">33</span></div>
+            <div class="cel" style="background: #f2d38a;"><span class="num" style="font-size: 15px; color: #6b4c08;">40</span></div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">78</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">33</span></div>
+            <div class="cel" style="background: #f2d38a;"><span class="num" style="font-size: 15px; color: #6b4c08;">50</span></div>
+            <div style="flex-grow: 1;"></div>
+            <span class="num" style="width: 60px; flex-shrink: 0; text-align: right; font-size: 17px; color: #b07d10;">52%</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="width: 160px; flex-shrink: 0; display: flex; align-items: center; gap: 9px;">
+              <div style="width: 26px; height: 26px; border-radius: 999px; background: #e3f0f2; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 10.5px; font-weight: 600; color: #0f5c6b;">JP</span></div>
+              <span style="font-size: 13.5px; font-weight: 600;">Juliana Pauli</span>
+            </div>
+            <div class="cel" style="background: #2f7d52;"><span class="num" style="font-size: 15px; color: #ffffff;">96</span></div>
+            <div class="cel" style="background: #f2d38a;"><span class="num" style="font-size: 15px; color: #6b4c08;">54</span></div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">67</span></div>
+            <div class="cel" style="background: #f2d38a;"><span class="num" style="font-size: 15px; color: #6b4c08;">50</span></div>
+            <div class="cel" style="background: #2f7d52;"><span class="num" style="font-size: 15px; color: #ffffff;">82</span></div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">71</span></div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">64</span></div>
+            <div style="flex-grow: 1;"></div>
+            <span class="num" style="width: 60px; flex-shrink: 0; text-align: right; font-size: 17px;">69%</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="width: 160px; flex-shrink: 0; display: flex; align-items: center; gap: 9px;">
+              <div style="width: 26px; height: 26px; border-radius: 999px; background: #f2efe8; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 10.5px; font-weight: 600; color: #5f686b;">ED</span></div>
+              <span style="font-size: 13.5px; font-weight: 600;">Éverton Diniz</span>
+            </div>
+            <div class="cel" style="background: #2f7d52;"><span class="num" style="font-size: 15px; color: #ffffff;">93</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">36</span></div>
+            <div class="cel" style="background: #f2d38a;"><span class="num" style="font-size: 15px; color: #6b4c08;">47</span></div>
+            <div class="cel" style="background: #f2d38a;"><span class="num" style="font-size: 15px; color: #6b4c08;">44</span></div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">70</span></div>
+            <div class="cel" style="background: #f2d38a;"><span class="num" style="font-size: 15px; color: #6b4c08;">53</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">29</span></div>
+            <div style="flex-grow: 1;"></div>
+            <span class="num" style="width: 60px; flex-shrink: 0; text-align: right; font-size: 17px; color: #b07d10;">53%</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="width: 160px; flex-shrink: 0; display: flex; align-items: center; gap: 9px;">
+              <div style="width: 26px; height: 26px; border-radius: 999px; background: #f2efe8; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 10.5px; font-weight: 600; color: #5f686b;">SA</span></div>
+              <span style="font-size: 13.5px; font-weight: 600;">Sandra Alves</span>
+            </div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">77</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">25</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">31</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">27</span></div>
+            <div class="cel" style="background: #f2d38a;"><span class="num" style="font-size: 15px; color: #6b4c08;">58</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">30</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">22</span></div>
+            <div style="flex-grow: 1;"></div>
+            <span class="num" style="width: 60px; flex-shrink: 0; text-align: right; font-size: 17px; color: #b3382f;">39%</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="width: 160px; flex-shrink: 0; display: flex; align-items: center; gap: 9px;">
+              <div style="width: 26px; height: 26px; border-radius: 999px; background: #f2efe8; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 10.5px; font-weight: 600; color: #5f686b;">MK</span></div>
+              <span style="font-size: 13.5px; font-weight: 600;">Mauro Kunz</span>
+            </div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">74</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">21</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">28</span></div>
+            <div class="cel" style="background: #f2d38a;"><span class="num" style="font-size: 15px; color: #6b4c08;">41</span></div>
+            <div class="cel" style="background: #a8ce9a;"><span class="num" style="font-size: 15px; color: #1f4a2e;">66</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">26</span></div>
+            <div class="cel" style="background: #e39a92;"><span class="num" style="font-size: 15px; color: #7a2822;">18</span></div>
+            <div style="flex-grow: 1;"></div>
+            <span class="num" style="width: 60px; flex-shrink: 0; text-align: right; font-size: 17px; color: #b3382f;">39%</span>
+          </div>
+
+          <!-- Média da coluna -->
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 11px; border-top: 1px solid #f0ece4;">
+            <div style="width: 160px; flex-shrink: 0;">
+              <span style="font-size: 12px; font-weight: 600; color: #8a9296; letter-spacing: 0.03em;">MÉDIA DA UNIDADE</span>
+            </div>
+            <div class="cel" style="height: 30px;"><span class="num" style="font-size: 14px; color: #2f7d52;">90</span></div>
+            <div class="cel" style="height: 30px; background: #fbe8e6;"><span class="num" style="font-size: 14px; color: #b3382f;">40</span></div>
+            <div class="cel" style="height: 30px; background: #fbe8e6;"><span class="num" style="font-size: 14px; color: #b3382f;">49</span></div>
+            <div class="cel" style="height: 30px;"><span class="num" style="font-size: 14px; color: #b07d10;">48</span></div>
+            <div class="cel" style="height: 30px;"><span class="num" style="font-size: 14px; color: #2f7d52;">72</span></div>
+            <div class="cel" style="height: 30px;"><span class="num" style="font-size: 14px; color: #b07d10;">51</span></div>
+            <div class="cel" style="height: 30px;"><span class="num" style="font-size: 14px; color: #b07d10;">45</span></div>
+            <div style="flex-grow: 1;"></div>
+            <span class="num" style="width: 60px; flex-shrink: 0; text-align: right; font-size: 17px;">56%</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; padding: 14px 16px; border-radius: 11px; background: #fdf4e7; border: 1px solid #f0dfc4; display: flex; gap: 11px;">
+          <svg style="flex-shrink: 0; margin-top: 1px;" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#b8712a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.4 5.6L20 10l-4.4 3.2L16.8 19 12 16l-4.8 3 1.2-5.8L4 10l5.6-1.4z"/></svg>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <span style="font-size: 13px; font-weight: 600; color: #8a5a22;">Coluna fraca é treino coletivo. Linha fraca é conversa individual.</span>
+            <span style="font-size: 12.5px; color: #4a3a26; line-height: 1.5;">
+              <strong style="font-weight: 600;">Sondagem e solução completa</strong> estão abaixo de 50% na unidade inteira — inclusive na Letícia. Isso não se resolve um a um: é reunião de equipe.
+              <strong style="font-weight: 600;">Sandra e Mauro</strong> estão baixos em tudo menos acolhida e preço — esses dois são conversa de mesa.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lateral -->
+      <div style="width: 318px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px;">
+
+        <div style="padding: 18px; border-radius: 14px; background: #0f5c6b;">
+          <span style="font-size: 11.5px; font-weight: 500; color: #a9cdd4; letter-spacing: 0.03em;">ADERÊNCIA DA UNIDADE</span>
+          <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 4px;">
+            <span class="num" style="font-size: 40px; color: #ffffff; line-height: 1;">56%</span>
+            <span style="font-size: 12.5px; font-weight: 600; color: #8fe0b0;">+4</span>
+          </div>
+          <span style="font-size: 12px; color: #a9cdd4;">rede: 61% · melhor unidade: 74%</span>
+          <div style="margin-top: 14px; padding-top: 13px; border-top: 1px solid rgba(255,255,255,0.15); display: flex; flex-direction: column; gap: 7px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="font-size: 12px; color: #a9cdd4;">“Algo mais?” na semana</span>
+              <span style="font-size: 12px; font-weight: 600; color: #f0b7ae;">61 vezes</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="font-size: 12px; color: #a9cdd4;">Objeções sem o método</span>
+              <span style="font-size: 12px; font-weight: 600; color: #f0b7ae;">104 de 188</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="font-size: 12px; color: #a9cdd4;">Orçamentos sem retorno</span>
+              <span style="font-size: 12px; font-weight: 600; color: #f0b7ae;">37</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <h3 class="dsp" style="margin: 0 0 3px; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">As 7 informações</h3>
+          <span style="font-size: 12px; color: #8a9296;">quanto a unidade captura de cada uma</span>
+          <div style="margin-top: 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 12.5px;">O que está construindo</span><span class="num" style="font-size: 12.5px; color: #2f7d52;">81%</span></div>
+              <div style="height: 5px; border-radius: 999px; background: #f0ece4;"><div style="width: 81%; height: 100%; border-radius: 999px; background: #2f7d52;"></div></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 12.5px;">Uso pretendido</span><span class="num" style="font-size: 12.5px; color: #2f7d52;">74%</span></div>
+              <div style="height: 5px; border-radius: 999px; background: #f0ece4;"><div style="width: 74%; height: 100%; border-radius: 999px; background: #2f7d52;"></div></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 12.5px;">Preço ou condição</span><span class="num" style="font-size: 12.5px; color: #b07d10;">38%</span></div>
+              <div style="height: 5px; border-radius: 999px; background: #f0ece4;"><div style="width: 38%; height: 100%; border-radius: 999px; background: #b07d10;"></div></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 12.5px;">Etapa da obra</span><span class="num" style="font-size: 12.5px; color: #b3382f;">19%</span></div>
+              <div style="height: 5px; border-radius: 999px; background: #f0ece4;"><div style="width: 19%; height: 100%; border-radius: 999px; background: #b3382f;"></div></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 12.5px;">Orientação profissional</span><span class="num" style="font-size: 12.5px; color: #b3382f;">14%</span></div>
+              <div style="height: 5px; border-radius: 999px; background: #f0ece4;"><div style="width: 14%; height: 100%; border-radius: 999px; background: #b3382f;"></div></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 12.5px;">Andamento e prazo</span><span class="num" style="font-size: 12.5px; color: #b3382f;">11%</span></div>
+              <div style="height: 5px; border-radius: 999px; background: #f0ece4;"><div style="width: 11%; height: 100%; border-radius: 999px; background: #b3382f;"></div></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 12.5px;">Mix de categorias</span><span class="num" style="font-size: 12.5px; color: #b3382f;">7%</span></div>
+              <div style="height: 5px; border-radius: 999px; background: #f0ece4;"><div style="width: 7%; height: 100%; border-radius: 999px; background: #b3382f;"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; flex-grow: 1;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h3 class="dsp" style="margin: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">Contestações</h3>
+            <span style="padding: 2px 8px; border-radius: 999px; background: #fbf0d8; color: #8a6209; font-size: 11px; font-weight: 600;">2 abertas</span>
+          </div>
+          <p style="margin: 5px 0 0; font-size: 12px; color: #8a9296; line-height: 1.45;">Discorda de uma marcação? Registre. Vira calibração do sistema, não discussão.</p>
+
+          <div style="margin-top: 13px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="padding: 11px 12px; border-radius: 10px; background: #faf8f4; border: 1px solid #f0ece4;">
+              <span style="font-size: 12.5px; color: #3c4548; line-height: 1.45;">Sandra · <strong style="font-weight: 600;">Acompanhamento</strong> marcado como não feito. Ela ligou para o cliente.</span>
+              <span style="display: block; margin-top: 5px; font-size: 11px; color: #8a9296;">você, ontem · aguardando revisão</span>
+            </div>
+            <div style="padding: 11px 12px; border-radius: 10px; background: #faf8f4; border: 1px solid #f0ece4;">
+              <span style="font-size: 12.5px; color: #3c4548; line-height: 1.45;">Mauro · <strong style="font-weight: 600;">Sondagem</strong> cobrada num cliente que compra toda semana.</span>
+              <span style="display: block; margin-top: 5px; font-size: 11px; color: #8a9296;">você, 12 set · aguardando revisão</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

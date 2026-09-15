@@ -1,0 +1,285 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #faf8f4; color: #161b1d;
+      font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    }
+    .dsp { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; }
+    a { color: #0f5c6b; text-decoration: none; }
+    a:hover { color: #0a4450; }
+    .num { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; font-weight: 600; letter-spacing: -0.03em; }
+    .th { font-size: 10.5px; font-weight: 600; color: #8a9296; letter-spacing: 0.04em; text-align: left; padding: 0 0 9px; }
+    .td { padding: 12px 0; border-top: 1px solid #f0ece4; font-size: 13px; }
+    .tab { padding: 9px 14px; font-size: 13.5px; color: #5f686b; border-bottom: 2px solid transparent; }
+    .tab-on { color: #0f5c6b; font-weight: 600; border-bottom-color: #0f5c6b; }
+    .pill { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 940px; background: #faf8f4; display: flex; flex-direction: column;">
+
+  <div style="background: #ffffff; border-bottom: 1px solid #e7e2d9; padding: 18px 30px 0;">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 22px;">
+      <div style="display: flex; flex-direction: column; gap: 3px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h1 class="dsp" style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.035em;">Unidades e papéis</h1>
+          <span style="padding: 3px 9px; border-radius: 999px; background: #f2efe8; color: #5f686b; font-size: 11px; font-weight: 600;">ADMIN</span>
+        </div>
+        <span style="font-size: 12.5px; color: #8a9296;">Quem pode ver o quê. Toda mudança aqui fica no registro de ações.</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="padding: 8px 14px; border-radius: 9px; background: #ffffff; border: 1px solid #ddd7cc;"><span style="font-size: 12.5px; font-weight: 600; color: #3c4548;">Nova unidade</span></div>
+        <div style="padding: 8px 14px; border-radius: 9px; background: #0f5c6b;"><span style="font-size: 12.5px; font-weight: 600; color: #faf8f4;">Convidar pessoa</span></div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 4px; margin-top: 16px;">
+      <span class="tab">Fila</span>
+      <span class="tab">Custo de IA</span>
+      <span class="tab tab-on">Unidades e papéis</span>
+      <span class="tab">Conexões</span>
+      <span class="tab">Registro de ações</span>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; padding: 22px 30px; display: flex; gap: 18px; min-height: 0;">
+
+    <!-- Unidades -->
+    <div style="flex-grow: 1; padding: 20px 22px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; min-width: 0; display: flex; flex-direction: column;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <h2 class="dsp" style="margin: 0; font-size: 16.5px; font-weight: 600; letter-spacing: -0.025em;">5 unidades</h2>
+        <span style="font-size: 12.5px; color: #8a9296;">34 pessoas no total</span>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; margin-top: 14px;">
+        <thead>
+          <tr>
+            <th class="th" style="width: 22%;">UNIDADE</th>
+            <th class="th" style="width: 22%;">GESTOR</th>
+            <th class="th" style="text-align: center;">VEND.</th>
+            <th class="th" style="text-align: center;">CONECTADOS</th>
+            <th class="th" style="text-align: center;">PENDENTES</th>
+            <th class="th" style="text-align: center;">SITUAÇÃO</th>
+            <th class="th" style="text-align: right;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 600;">Centro</span>
+                <span style="font-size: 11.5px; color: #8a9296;">Caxias do Sul · RS</span>
+              </div>
+            </td>
+            <td class="td" style="color: #3c4548;">Carla Seibert</td>
+            <td class="td" style="text-align: center;">7</td>
+            <td class="td" style="text-align: center; color: #2f7d52; font-weight: 600;">6 / 7</td>
+            <td class="td" style="text-align: center; color: #b07d10; font-weight: 600;">2</td>
+            <td class="td" style="text-align: center;"><span class="pill" style="background: #e4f2ea; color: #2f7d52;">Ativa</span></td>
+            <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b;">Gerir</span></td>
+          </tr>
+          <tr>
+            <td class="td">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 600;">Centro Norte</span>
+                <span style="font-size: 11.5px; color: #8a9296;">Caxias do Sul · RS</span>
+              </div>
+            </td>
+            <td class="td" style="color: #3c4548;">Denis Farias</td>
+            <td class="td" style="text-align: center;">8</td>
+            <td class="td" style="text-align: center; color: #2f7d52; font-weight: 600;">8 / 8</td>
+            <td class="td" style="text-align: center; color: #8a9296;">0</td>
+            <td class="td" style="text-align: center;"><span class="pill" style="background: #e4f2ea; color: #2f7d52;">Ativa</span></td>
+            <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b;">Gerir</span></td>
+          </tr>
+          <tr>
+            <td class="td">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 600;">Bento Gonçalves</span>
+                <span style="font-size: 11.5px; color: #8a9296;">Bento Gonçalves · RS</span>
+              </div>
+            </td>
+            <td class="td" style="color: #3c4548;">Simone Radaelli</td>
+            <td class="td" style="text-align: center;">7</td>
+            <td class="td" style="text-align: center; color: #b07d10; font-weight: 600;">6 / 7</td>
+            <td class="td" style="text-align: center; color: #8a9296;">0</td>
+            <td class="td" style="text-align: center;"><span class="pill" style="background: #e4f2ea; color: #2f7d52;">Ativa</span></td>
+            <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b;">Gerir</span></td>
+          </tr>
+          <tr>
+            <td class="td">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 600;">Farroupilha</span>
+                <span style="font-size: 11.5px; color: #8a9296;">Farroupilha · RS</span>
+              </div>
+            </td>
+            <td class="td" style="color: #3c4548;">Rogério Tessaro</td>
+            <td class="td" style="text-align: center;">6</td>
+            <td class="td" style="text-align: center; color: #2f7d52; font-weight: 600;">6 / 6</td>
+            <td class="td" style="text-align: center; color: #8a9296;">0</td>
+            <td class="td" style="text-align: center;"><span class="pill" style="background: #e4f2ea; color: #2f7d52;">Ativa</span></td>
+            <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b;">Gerir</span></td>
+          </tr>
+          <tr style="background: #fdf9f0;">
+            <td class="td">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 600;">Garibaldi</span>
+                <span style="font-size: 11.5px; color: #8a9296;">Garibaldi · RS</span>
+              </div>
+            </td>
+            <td class="td" style="color: #b8712a; font-weight: 600;">sem gestor há 3 semanas</td>
+            <td class="td" style="text-align: center;">6</td>
+            <td class="td" style="text-align: center; color: #b3382f; font-weight: 600;">5 / 6</td>
+            <td class="td" style="text-align: center; color: #b3382f; font-weight: 600;">3</td>
+            <td class="td" style="text-align: center;"><span class="pill" style="background: #fbf0d8; color: #8a6209;">Sem gestor</span></td>
+            <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 600; color: #b8712a;">Nomear</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top: 16px; padding: 13px 15px; border-radius: 11px; background: #fbf0d8; border: 1px solid #f0dfc4; display: flex; gap: 11px;">
+        <svg style="flex-shrink: 0; margin-top: 1px;" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#b07d10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
+        <span style="font-size: 12.5px; color: #8a6209; line-height: 1.5;">
+          <strong style="font-weight: 600;">Garibaldi está sem gestor.</strong> Os 3 cadastros pendentes de lá caem para o supervisor, e ninguém está olhando os alertas daquela unidade.
+        </span>
+      </div>
+
+      <!-- Papéis -->
+      <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid #f0ece4; flex-grow: 1;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <h2 class="dsp" style="margin: 0; font-size: 16.5px; font-weight: 600; letter-spacing: -0.025em;">Quem tem poder além do próprio dado</h2>
+          <span style="font-size: 12.5px; color: #8a9296;">vendedores não aparecem aqui</span>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-top: 13px;">
+          <thead>
+            <tr>
+              <th class="th" style="width: 24%;">PESSOA</th>
+              <th class="th" style="width: 16%;">PAPEL</th>
+              <th class="th">VÊ</th>
+              <th class="th" style="text-align: right;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td" style="font-weight: 600;">Paulo Amaral</td>
+              <td class="td"><span class="pill" style="background: #e3f0f2; color: #0f5c6b;">Supervisor</span></td>
+              <td class="td" style="color: #5f686b;">todas as 5 unidades · aprova quem não tem gestor</td>
+              <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b;">Editar</span></td>
+            </tr>
+            <tr>
+              <td class="td" style="font-weight: 600;">Carla Seibert</td>
+              <td class="td"><span class="pill" style="background: #f2efe8; color: #5f686b;">Gestora</span></td>
+              <td class="td" style="color: #5f686b;">Centro</td>
+              <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b;">Editar</span></td>
+            </tr>
+            <tr>
+              <td class="td" style="font-weight: 600;">Denis Farias</td>
+              <td class="td"><span class="pill" style="background: #f2efe8; color: #5f686b;">Gestor</span></td>
+              <td class="td" style="color: #5f686b;">Centro Norte</td>
+              <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b;">Editar</span></td>
+            </tr>
+            <tr>
+              <td class="td" style="font-weight: 600;">Rogério Tessaro</td>
+              <td class="td"><span class="pill" style="background: #f2efe8; color: #5f686b;">Gestor</span></td>
+              <td class="td" style="color: #5f686b;">Farroupilha <span style="color: #b8712a;">+ Garibaldi (temporário)</span></td>
+              <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b;">Editar</span></td>
+            </tr>
+            <tr>
+              <td class="td" style="font-weight: 600;">José Pedro</td>
+              <td class="td"><span class="pill" style="background: #fbf0d8; color: #8a6209;">Admin</span></td>
+              <td class="td" style="color: #5f686b;">tudo · fila, custos, reprocessamento</td>
+              <td class="td" style="text-align: right;"><span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b;">Editar</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Lateral: conexões -->
+    <div style="width: 330px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px;">
+
+      <div style="padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <h3 class="dsp" style="margin: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">Conexões da rede</h3>
+          <a href="#" style="font-size: 12px; font-weight: 500;">Ver aba</a>
+        </div>
+        <div style="margin-top: 12px; display: flex; align-items: baseline; gap: 8px;">
+          <span class="num" style="font-size: 30px;">31</span>
+          <span style="font-size: 13.5px; color: #8a9296;">de 34 conectados</span>
+        </div>
+        <div style="margin-top: 11px; display: flex; gap: 3px;">
+          <div style="flex-grow: 31; height: 8px; border-radius: 999px 0 0 999px; background: #2f7d52;"></div>
+          <div style="flex-grow: 2; height: 8px; background: #b07d10;"></div>
+          <div style="flex-grow: 1; height: 8px; border-radius: 0 999px 999px 0; background: #b3382f;"></div>
+        </div>
+        <div style="margin-top: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 8px; height: 8px; border-radius: 999px; background: #b07d10; flex-shrink: 0;"></div>
+            <div style="display: flex; flex-direction: column; flex-grow: 1;">
+              <span style="font-size: 12.5px; color: #3c4548;">Tiago Feltrin</span>
+              <span style="font-size: 11.5px; color: #8a9296;">Centro · caiu 13 set, 16h04</span>
+            </div>
+            <span style="font-size: 12px; font-weight: 600; color: #0f5c6b; flex-shrink: 0;">Avisar</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 8px; height: 8px; border-radius: 999px; background: #b07d10; flex-shrink: 0;"></div>
+            <div style="display: flex; flex-direction: column; flex-grow: 1;">
+              <span style="font-size: 12.5px; color: #3c4548;">Ivete Pozzobon</span>
+              <span style="font-size: 11.5px; color: #8a9296;">Bento · caiu 14 set, 08h51</span>
+            </div>
+            <span style="font-size: 12px; font-weight: 600; color: #0f5c6b; flex-shrink: 0;">Avisar</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 8px; height: 8px; border-radius: 999px; background: #b3382f; flex-shrink: 0;"></div>
+            <div style="display: flex; flex-direction: column; flex-grow: 1;">
+              <span style="font-size: 12.5px; color: #3c4548;">Nelson Bertuol</span>
+              <span style="font-size: 11.5px; color: #8a9296;">Garibaldi · nunca conectou</span>
+            </div>
+            <span style="font-size: 12px; font-weight: 600; color: #0f5c6b; flex-shrink: 0;">Avisar</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 18px; border-radius: 14px; background: #f4f1ea; border: 1px solid #e7e2d9;">
+        <span style="font-size: 11px; font-weight: 600; color: #8a9296; letter-spacing: 0.05em;">POR QUE ISSO É TELA DE ADMIN</span>
+        <p style="margin: 11px 0 0; font-size: 12.5px; color: #3c4548; line-height: 1.55;">
+          Mudar papel muda o que a pessoa enxerga das conversas de clientes. Um gestor não pode se promover a supervisor — por isso a RLS não deixa, e a mudança passa por aqui.
+        </p>
+        <p style="margin: 10px 0 0; font-size: 12.5px; color: #3c4548; line-height: 1.55;">
+          Transferir vendedor de unidade <strong style="font-weight: 600;">não move o histórico</strong>: o que ele fez na unidade antiga continua contando lá.
+        </p>
+      </div>
+
+      <div style="padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; flex-grow: 1;">
+        <h3 class="dsp" style="margin: 0 0 12px; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">Desligamento</h3>
+        <p style="margin: 0; font-size: 12.5px; color: #5f686b; line-height: 1.55;">
+          Desligar alguém desconecta o WhatsApp e tira a pessoa das médias a partir da data — <strong style="font-weight: 600; color: #3c4548;">sem apagar o histórico</strong>.
+        </p>
+        <div style="margin-top: 13px; display: flex; flex-direction: column; gap: 9px;">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #faf8f4; border: 1px solid #f0ece4;">
+            <div style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1;">
+              <span style="font-size: 12.5px; font-weight: 500;">Cleber Manfroi</span>
+              <span style="font-size: 11.5px; color: #8a9296;">Bento · desligado em 28 ago</span>
+            </div>
+            <span style="font-size: 12px; font-weight: 500; color: #0f5c6b; flex-shrink: 0;">Reativar</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

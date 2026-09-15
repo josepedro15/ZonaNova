@@ -1,0 +1,312 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Telas do sistema"
+    },
+    {
+      "id": "page-2",
+      "name": "MEC e aderência"
+    },
+    {
+      "id": "page-3",
+      "name": "Direções alternativas"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Cadastro.dc.html",
+      "page": "page-1",
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 1060,
+      "title": "1 · Cadastro"
+    },
+    {
+      "file": "Aguardando.dc.html",
+      "page": "page-1",
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "2 · Aguardando aprovação"
+    },
+    {
+      "file": "Conectar.dc.html",
+      "page": "page-1",
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 1320,
+      "title": "3 · Conectar WhatsApp"
+    },
+    {
+      "file": "Main.dc.html",
+      "page": "page-1",
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 2200,
+      "title": "4 · Dashboard do vendedor"
+    },
+    {
+      "file": "Conversa.dc.html",
+      "page": "page-1",
+      "x": 0,
+      "y": 2330,
+      "w": 1180,
+      "h": 1060,
+      "title": "5 · Conversa e análise"
+    },
+    {
+      "file": "Equipe.dc.html",
+      "page": "page-1",
+      "x": 1260,
+      "y": 2330,
+      "w": 1440,
+      "h": 940,
+      "title": "6 · Unidade (gestor e supervisor)"
+    },
+    {
+      "file": "VendedorGestor.dc.html",
+      "page": "page-1",
+      "x": 2780,
+      "y": 2330,
+      "w": 1180,
+      "h": 940,
+      "title": "7 · Vendedor visto pelo gestor"
+    },
+    {
+      "file": "Rede.dc.html",
+      "page": "page-1",
+      "x": 0,
+      "y": 3900,
+      "w": 1440,
+      "h": 940,
+      "title": "8 · Rede (supervisor)"
+    },
+    {
+      "file": "Admin.dc.html",
+      "page": "page-1",
+      "x": 1520,
+      "y": 3900,
+      "w": 1440,
+      "h": 940,
+      "title": "9 · Operação (admin)"
+    },
+    {
+      "file": "DirecaoB.dc.html",
+      "page": "page-3",
+      "x": 0,
+      "y": 0,
+      "w": 620,
+      "h": 720,
+      "title": "Direção B · Placar"
+    },
+    {
+      "file": "DirecaoC.dc.html",
+      "page": "page-3",
+      "x": 700,
+      "y": 0,
+      "w": 620,
+      "h": 850,
+      "title": "Direção C · Caderno"
+    },
+    {
+      "file": "MeuMec.dc.html",
+      "page": "page-2",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 2180,
+      "title": "10 · Meu MEC (vendedor)"
+    },
+    {
+      "file": "AderenciaUnidade.dc.html",
+      "page": "page-2",
+      "x": 470,
+      "y": 0,
+      "w": 1440,
+      "h": 940,
+      "title": "11 · Aderência da unidade (gestor)"
+    },
+    {
+      "file": "MecRede.dc.html",
+      "page": "page-2",
+      "x": 470,
+      "y": 1060,
+      "w": 1440,
+      "h": 940,
+      "title": "12 · O MEC está pegando? (supervisor)"
+    },
+    {
+      "file": "Descobertas.dc.html",
+      "page": "page-2",
+      "x": 1990,
+      "y": 0,
+      "w": 1440,
+      "h": 940,
+      "title": "13 · Descobertas (supervisor)"
+    },
+    {
+      "file": "Login.dc.html",
+      "page": "page-1",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "0 · Login"
+    },
+    {
+      "file": "Conversas.dc.html",
+      "page": "page-1",
+      "x": 4040,
+      "y": 2330,
+      "w": 390,
+      "h": 1180,
+      "title": "5b · Conversas (lista)"
+    },
+    {
+      "file": "Evolucao.dc.html",
+      "page": "page-1",
+      "x": 4510,
+      "y": 2330,
+      "w": 390,
+      "h": 1280,
+      "title": "5c · Evolução"
+    },
+    {
+      "file": "Perfil.dc.html",
+      "page": "page-1",
+      "x": 4980,
+      "y": 2330,
+      "w": 390,
+      "h": 1420,
+      "title": "5d · Perfil"
+    },
+    {
+      "file": "Aprovacoes.dc.html",
+      "page": "page-1",
+      "x": 3040,
+      "y": 3900,
+      "w": 1440,
+      "h": 940,
+      "title": "6b · Aprovações (gestor)"
+    },
+    {
+      "file": "AdminUnidades.dc.html",
+      "page": "page-1",
+      "x": 4560,
+      "y": 3900,
+      "w": 1440,
+      "h": 940,
+      "title": "9b · Unidades e papéis (admin)"
+    },
+    {
+      "file": "Vazios.dc.html",
+      "page": "page-1",
+      "x": 0,
+      "y": 4960,
+      "w": 1180,
+      "h": 1220,
+      "title": "Estados vazios e de erro"
+    },
+    {
+      "file": "Senha.dc.html",
+      "page": "page-1",
+      "x": 2350,
+      "y": 0,
+      "w": 1300,
+      "h": 960,
+      "title": "0b · Recuperar senha"
+    },
+    {
+      "file": "Contestacao.dc.html",
+      "page": "page-2",
+      "x": 1990,
+      "y": 1060,
+      "w": 1240,
+      "h": 1180,
+      "title": "14 · Contestação (gestor → supervisor)"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "marca",
+      "page": "page-1",
+      "x": 0,
+      "y": -250,
+      "w": 700,
+      "text": "ZONA NOVA É REDEMAC — MATERIAL DE CONSTRUÇÃO\n\nOs dados de exemplo falam de obra: tinta, argamassa, laje, rejunte, crediário, frete com guindaste. Nomes e números são fictícios.\n\nMARCA É PLACEHOLDER\n\nNão tenho logo, cores nem tipografia da Zona Nova. O \"ZN\" e toda a paleta aqui são invenção minha, para as telas existirem.\n\nDireção escolhida (A · Papel e petróleo): base de papel quente, tinta petróleo #0f5c6b, acento ocre #b8712a. Bricolage Grotesque nos títulos e números, Instrument Sans no texto.\n\nDeliberadamente fora do azul do MetricsIA — e fora da faixa vermelho/âmbar/verde, que aqui significa nota boa ou ruim. Se a marca primária morasse nessa faixa, brand e semântica brigariam em toda tela."
+    },
+    {
+      "id": "fluxo-vendedor",
+      "page": "page-1",
+      "x": 780,
+      "y": -250,
+      "w": 560,
+      "text": "FLUXO DO VENDEDOR · celular (390px)\n\nCadastro → espera → conexão → dashboard.\n\nA tela 3 é a mais crítica do sistema: se o QR falhar, não existe dado nenhum depois dela. Por isso ela carrega os quatro estados (aguardando, conectado, expirado, caiu) e o aviso de monitoramento ANTES de conectar, não depois."
+    },
+    {
+      "id": "nota-gestao",
+      "page": "page-1",
+      "x": 0,
+      "y": 2180,
+      "w": 620,
+      "text": "GESTÃO · desktop (1440px)\n\nA tela 6 serve gestor E supervisor — é a mesma tela, muda só o escopo que a RLS deixa passar. Não desenhei uma \"tela de unidade\" separada de propósito.\n\nCada tela responde a uma pergunta: com quem eu falo hoje (6), o que aconteceu com essa pessoa (7), qual unidade precisa de mim (8)."
+    },
+    {
+      "id": "nota-evidencia",
+      "page": "page-1",
+      "x": 0,
+      "y": 3800,
+      "w": 620,
+      "text": "A tela 5 é a que sustenta a confiança no sistema.\n\nCada afirmação da IA fica ligada ao trecho da conversa que a gerou — o destaque ocre no transcript e a lista \"de onde a análise tirou isso\". Sem esse vínculo visível, a nota vira opinião de robô e o vendedor para de acreditar na primeira vez que discordar."
+    },
+    {
+      "id": "nota-direcoes",
+      "page": "page-3",
+      "x": 0,
+      "y": -230,
+      "w": 700,
+      "text": "Construí tudo na direção A. Estas duas são alternativas de baixa fidelidade para você redirecionar antes de eu refinar.\n\nB (Placar) e C (Caderno) exploram eixos opostos: competição visível vs. leitura de mentor. Cada uma traz a aposta e o risco escritos embaixo.\n\nDá para misturar: o vendedor recebe o tom C e o gestor um painel mais próximo de B."
+    },
+    {
+      "id": "nota-mec",
+      "page": "page-2",
+      "x": 470,
+      "y": -300,
+      "w": 720,
+      "text": "ADERÊNCIA AO MEC · Book 1, Do atendimento ao fechamento\n\nA regra que sustenta estas telas: aderência é aplicadas ÷ APLICÁVEIS, nunca ÷ 6. Cliente que só pergunta se tem cimento não tem sondagem a fazer.\n\nO que o sistema NÃO vê aparece marcado como tal, nunca como descumprimento: ligação (o MEC pede acompanhamento por telefone), atendimento de balcão, e o desconto real aplicado no Carrinho.\n\nA tela 13 fecha o ciclo: o que o supervisor aprova ali vira o Book v2, e a aderência medida na v1 continua apontando para a v1."
+    },
+    {
+      "id": "nota-correlacao",
+      "page": "page-2",
+      "x": 3310,
+      "y": 1060,
+      "w": 620,
+      "text": "O cruzamento etapa × conversão da tela 12 é CORRELAÇÃO, e a própria tela diz isso.\n\nVendedor bom aplica mais o MEC e converte mais — parte do efeito é a pessoa, não a etapa. Serve para priorizar treino, nunca para cortar um capítulo do Book."
+    },
+    {
+      "id": "nota-vazios",
+      "page": "page-1",
+      "x": 1260,
+      "y": 4960,
+      "w": 620,
+      "text": "ESTADOS VAZIOS\n\nFaltavam. O doc de design dizia \"estado vazio é tela de verdade\" e eu não tinha desenhado nenhum.\n\nRegra dos nove: cada um diz o que aconteceu, se é problema da pessoa, e qual é o próximo passo. Nenhum mostra zero nem gráfico vazio — o vendedor abre isso no dia em que está mal, e a tela não pode parecer que ele fracassou quando só não houve movimento."
+    },
+    {
+      "id": "nota-contestacao",
+      "page": "page-2",
+      "x": 1990,
+      "y": 2320,
+      "w": 700,
+      "text": "QUEM REVISA: O SUPERVISOR\n\nContestar uma marcação é julgamento de negócio, não questão técnica — o admin mexe em fila e custo, não em nota de gente. O gestor não revisa a própria contestação, e o vendedor não contesta direto: fala com o gestor, que decide se registra.\n\nO número que importa na tela do supervisor: 7 de 14 contestações são sobre a MESMA etapa, pelo mesmo motivo — o sistema não enxerga ligação. Isso não é a IA errando, é limite do WhatsApp. Ou o acompanhamento passa a ser registrado em algum lugar, ou a etapa fica não verificável por padrão."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}

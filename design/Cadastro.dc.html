@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #faf8f4; color: #161b1d;
+      font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    }
+    .dsp { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; }
+    a { color: #0f5c6b; text-decoration: none; }
+    a:hover { color: #0a4450; }
+    .lbl { font-size: 12px; font-weight: 600; color: #5f686b; letter-spacing: 0.01em; }
+    .fld { padding: 12px 14px; border-radius: 10px; background: #ffffff; border: 1px solid #ddd7cc; font-size: 15px; color: #161b1d; min-height: 46px; display: flex; align-items: center; }
+    .ph { color: #a8afb2; }
+  </style>
+</helmet>
+
+<div style="width: 390px; min-height: 900px; background: #faf8f4; display: flex; flex-direction: column; padding: 0 22px 34px;">
+
+  <!-- Marca -->
+  <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 52px 0 30px;">
+    <div style="width: 46px; height: 46px; border-radius: 13px; background: #0f5c6b; display: flex; align-items: center; justify-content: center;">
+      <span class="dsp" style="color: #faf8f4; font-size: 19px; font-weight: 700; letter-spacing: -0.03em;">ZN</span>
+    </div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+      <span class="dsp" style="font-size: 18px; font-weight: 600; letter-spacing: -0.03em;">Zona Nova</span>
+      <span style="font-size: 12px; color: #8a9296;">Análise de atendimento</span>
+    </div>
+  </div>
+
+  <h1 class="dsp" style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.15;">Criar sua conta</h1>
+  <p style="margin: 7px 0 26px; font-size: 14px; color: #5f686b; line-height: 1.5;">Leva um minuto. Depois é só conectar seu WhatsApp comercial.</p>
+
+  <div style="display: flex; flex-direction: column; gap: 16px;">
+
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <span class="lbl">Nome completo</span>
+      <div class="fld">Rafael Moura</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <span class="lbl">E-mail</span>
+      <div class="fld">rafael.moura@zonanova.com.br</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <span class="lbl">WhatsApp comercial</span>
+      <div class="fld">(54) 9 9711-3082</div>
+    </div>
+
+    <!-- Unidade: o campo que define tudo -->
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">
+        <span class="lbl">Unidade onde você trabalha</span>
+        <span style="font-size: 11px; color: #b8712a; font-weight: 600;">obrigatório</span>
+      </div>
+      <div style="padding: 4px; border-radius: 12px; background: #ffffff; border: 1.5px solid #0f5c6b;">
+        <div style="display: flex; align-items: center; gap: 9px; padding: 9px 11px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a9296" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+          <span style="font-size: 14px; color: #161b1d;">Cen</span><span style="width: 1px; height: 16px; background: #0f5c6b;"></span>
+        </div>
+        <div style="display: flex; flex-direction: column; padding: 4px; border-top: 1px solid #f0ece4;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 11px; border-radius: 8px; background: #e3f0f2;">
+            <div style="display: flex; flex-direction: column;">
+              <span style="font-size: 14px; font-weight: 600; color: #0f5c6b;">Unidade Centro</span>
+              <span style="font-size: 12px; color: #5a7f86;">Caxias do Sul · RS</span>
+            </div>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0f5c6b" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <div style="display: flex; flex-direction: column; padding: 11px;">
+            <span style="font-size: 14px;">Centro Norte</span>
+            <span style="font-size: 12px; color: #8a9296;">Caxias do Sul · RS</span>
+          </div>
+          <div style="display: flex; flex-direction: column; padding: 11px;">
+            <span style="font-size: 14px;">Shopping Centro Sul</span>
+            <span style="font-size: 12px; color: #8a9296;">Bento Gonçalves · RS</span>
+          </div>
+        </div>
+      </div>
+      <span style="font-size: 12px; color: #8a9296; line-height: 1.45;">Seu gestor precisa aprovar antes de você entrar. Escolha com cuidado.</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <span class="lbl">Senha</span>
+      <div class="fld" style="justify-content: space-between;">
+        <span style="letter-spacing: 0.18em; color: #161b1d;">••••••••••</span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8a9296" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></svg>
+      </div>
+      <span style="font-size: 12px; color: #8a9296;">Mínimo de 8 caracteres.</span>
+    </div>
+
+  </div>
+
+  <div style="margin-top: 26px; display: flex; flex-direction: column; gap: 14px;">
+    <div style="display: flex; align-items: center; justify-content: center; padding: 15px; border-radius: 11px; background: #0f5c6b; min-height: 50px;">
+      <span class="dsp" style="font-size: 15px; font-weight: 600; color: #faf8f4; letter-spacing: -0.01em;">Criar conta</span>
+    </div>
+    <p style="margin: 0; font-size: 12px; color: #8a9296; text-align: center; line-height: 1.5;">
+      Já tem conta? <a href="#" style="font-weight: 600;">Entrar</a>
+    </p>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

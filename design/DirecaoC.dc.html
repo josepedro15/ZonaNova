@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Work+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #f7f5f0; color: #23211d;
+      font-family: 'Work Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+    }
+    .srf { font-family: 'Newsreader', Georgia, 'Times New Roman', serif; }
+    a { color: #7a5230; text-decoration: none; }
+    a:hover { color: #5d3d22; }
+    .lab { font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #9b948a; }
+    .rule { height: 1px; background: #ddd8ce; }
+  </style>
+</helmet>
+
+<div style="width: 620px; background: #f7f5f0; padding: 26px 30px 30px;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px;">
+    <span class="lab" style="color: #7a5230;">Direção C · Caderno</span>
+    <span class="lab">baixa fidelidade</span>
+  </div>
+  <div class="rule"></div>
+
+  <div style="margin-top: 24px;">
+    <span class="lab">Terça, 14 de setembro</span>
+    <h1 class="srf" style="margin: 8px 0 0; font-size: 30px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.2;">
+      Foi um dia bom, Rafael — com uma venda que escapou por falta de pergunta.
+    </h1>
+  </div>
+
+  <div style="margin-top: 22px; display: flex; align-items: flex-end; gap: 28px;">
+    <div style="display: flex; flex-direction: column;">
+      <span class="lab">Nota</span>
+      <div style="display: flex; align-items: baseline; gap: 7px;">
+        <span class="srf" style="font-size: 52px; font-weight: 500; letter-spacing: -0.03em; line-height: 1;">78</span>
+        <span style="font-size: 14px; color: #5a8a5f; font-weight: 600;">+6</span>
+      </div>
+    </div>
+    <div style="flex-grow: 1; display: flex; gap: 24px; padding-bottom: 6px;">
+      <div style="display: flex; flex-direction: column;">
+        <span class="lab">Leads</span>
+        <span class="srf" style="font-size: 22px; font-weight: 500;">14</span>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <span class="lab">Vendas</span>
+        <span class="srf" style="font-size: 22px; font-weight: 500;">3</span>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <span class="lab">Perdidas</span>
+        <span class="srf" style="font-size: 22px; font-weight: 500;">2</span>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <span class="lab">Resposta</span>
+        <span class="srf" style="font-size: 22px; font-weight: 500;">4 min</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 22px;" class="rule"></div>
+
+  <div style="margin-top: 20px;">
+    <span class="lab">O que dá para treinar</span>
+    <div style="margin-top: 13px; display: flex; flex-direction: column; gap: 15px;">
+      <div style="display: flex; gap: 13px;">
+        <span class="srf" style="flex-shrink: 0; font-size: 19px; color: #c0b8a9; line-height: 1.1;">01</span>
+        <p class="srf" style="margin: 0; font-size: 16px; font-weight: 400; line-height: 1.5;">
+          Seis conversas acabaram sem machadada. <em>“Qualquer dúvida estou à disposição”</em> encerra o assunto em vez de puxar o pedido.
+        </p>
+      </div>
+      <div style="display: flex; gap: 13px;">
+        <span class="srf" style="flex-shrink: 0; font-size: 19px; color: #c0b8a9; line-height: 1.1;">02</span>
+        <p class="srf" style="margin: 0; font-size: 16px; font-weight: 400; line-height: 1.5;">
+          Com a Márcia, o desconto veio um minuto depois da objeção. Ela tinha dito que a laje estava acabando: prazo era o argumento, não preço.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 22px; padding: 18px 20px; background: #efece4; border-left: 2px solid #7a5230;">
+    <span class="lab" style="color: #7a5230;">O que funcionou</span>
+    <p class="srf" style="margin: 7px 0 0; font-size: 16px; line-height: 1.5;">
+      O áudio que você mandou para o Joel mudou o tom. Ele tinha sumido por dois dias com a obra parada e respondeu em dois minutos.
+    </p>
+  </div>
+
+  <div style="margin-top: 22px;" class="rule"></div>
+
+  <div style="margin-top: 18px; display: flex; align-items: baseline; gap: 10px;">
+    <span class="lab" style="flex-shrink: 0;">Amanhã</span>
+    <p class="srf" style="margin: 0; font-size: 17px; font-weight: 500; line-height: 1.45;">
+      Pergunte em que etapa está a obra. Uma pergunta, em toda negociação.
+    </p>
+  </div>
+
+  <p style="margin: 26px 0 0; font-size: 12px; color: #9b948a; line-height: 1.55;">
+    <strong style="color: #6e685f;">Aposta:</strong> a análise chega como carta de um mentor, não como painel. Serifa, texto longo, nenhuma métrica competindo com a leitura.<br>
+    <strong style="color: #6e685f;">Risco:</strong> gestor e supervisor precisam varrer números rápido — este tom serve o vendedor e atrapalha os outros dois níveis.
+  </p>
+
+</div>
+</x-dc>
+</body>
+</html>

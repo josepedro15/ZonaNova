@@ -1,0 +1,364 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #faf8f4; color: #161b1d;
+      font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    }
+    .dsp { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; }
+    a { color: #0f5c6b; text-decoration: none; }
+    a:hover { color: #0a4450; }
+    .nav { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; font-size: 13.5px; color: #cbd9db; }
+    .nav-on { background: rgba(255,255,255,0.12); color: #ffffff; font-weight: 600; }
+    .th { font-size: 11px; font-weight: 600; color: #8a9296; letter-spacing: 0.04em; text-align: left; padding: 0 0 10px; }
+    .td { padding: 13px 0; border-top: 1px solid #f0ece4; font-size: 13.5px; }
+    .num { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; font-weight: 600; letter-spacing: -0.02em; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 940px; background: #faf8f4; display: flex;">
+
+  <!-- Sidebar -->
+  <div style="width: 228px; flex-shrink: 0; background: #0d4b58; display: flex; flex-direction: column; padding: 20px 14px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px 22px;">
+      <div style="width: 30px; height: 30px; border-radius: 8px; background: #d9a441; display: flex; align-items: center; justify-content: center;">
+        <span class="dsp" style="color: #0d4b58; font-size: 14px; font-weight: 700; letter-spacing: -0.03em;">ZN</span>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <span class="dsp" style="font-size: 14px; font-weight: 600; color: #ffffff; letter-spacing: -0.02em;">Zona Nova</span>
+        <span style="font-size: 11px; color: #8fb3ba;">Gestão</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 3px;">
+      <div class="nav nav-on">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.2 2.7-5 6-5s6 1.8 6 5"/><path d="M16 7.2a3 3 0 0 1 0 5.6"/><path d="M18 19c0-2.4-1-4-2.6-4.6"/></svg>
+        <span>Minha equipe</span>
+      </div>
+      <div class="nav">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-3.2-6.4L20 5v5h-5"/></svg>
+        <span>Conversas</span>
+      </div>
+      <div class="nav">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 6-7"/><path d="M14 8h4v4"/></svg>
+        <span>Evolução</span>
+      </div>
+      <div class="nav" style="justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19"/><circle cx="10" cy="7.5" r="3.2"/><path d="M18 8h4"/><path d="M20 6v4"/></svg>
+          <span>Aprovações</span>
+        </div>
+        <span style="padding: 1px 7px; border-radius: 999px; background: #d9a441; color: #0d4b58; font-size: 11px; font-weight: 700;">2</span>
+      </div>
+      <div class="nav">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.84 2.83l-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 0 1-4 0v-.1A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.88 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.56-1.1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.88.34H9a1.7 1.7 0 0 0 1-1.56V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88V9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        <span>Configurações</span>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1;"></div>
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 8px; border-top: 1px solid rgba(255,255,255,0.12);">
+      <div style="width: 32px; height: 32px; border-radius: 999px; background: #d9a441; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <span class="dsp" style="font-size: 12px; font-weight: 600; color: #0d4b58;">CS</span>
+      </div>
+      <div style="display: flex; flex-direction: column; min-width: 0;">
+        <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Carla Seibert</span>
+        <span style="font-size: 11px; color: #8fb3ba;">Gestora · Centro</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Conteúdo -->
+  <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+
+    <!-- Header -->
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 24px 30px 20px; border-bottom: 1px solid #e7e2d9; background: #ffffff;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <h1 class="dsp" style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.035em;">Unidade Centro</h1>
+          <span style="padding: 3px 9px; border-radius: 999px; background: #e3f0f2; color: #0f5c6b; font-size: 11.5px; font-weight: 600;">7 vendedores</span>
+        </div>
+        <span style="font-size: 13px; color: #8a9296;">Terça, 14 de setembro · relatório fechado às 23h30</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; padding: 3px; border-radius: 9px; background: #f2efe8; border: 1px solid #e7e2d9;">
+          <span style="padding: 6px 13px; border-radius: 7px; background: #ffffff; font-size: 12.5px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">Hoje</span>
+          <span style="padding: 6px 13px; font-size: 12.5px; color: #5f686b;">7 dias</span>
+          <span style="padding: 6px 13px; font-size: 12.5px; color: #5f686b;">30 dias</span>
+        </div>
+        <div style="padding: 8px 14px; border-radius: 9px; background: #0f5c6b;">
+          <span style="font-size: 12.5px; font-weight: 600; color: #faf8f4;">Exportar</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; padding: 22px 30px; display: flex; flex-direction: column; gap: 20px; overflow: hidden;">
+
+      <!-- Alertas -->
+      <div style="display: flex; gap: 12px;">
+        <div style="flex-grow: 1; display: flex; align-items: center; gap: 11px; padding: 13px 15px; border-radius: 11px; background: #fbf0d8; border: 1px solid #f0dfc4;">
+          <svg style="flex-shrink: 0;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#b07d10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
+          <div style="display: flex; flex-direction: column; flex-grow: 1;">
+            <span style="font-size: 13px; font-weight: 600; color: #8a6209;">WhatsApp do Tiago caiu ontem às 16h</span>
+            <span style="font-size: 12px; color: #a37d2c;">Nenhuma conversa dele foi capturada desde então</span>
+          </div>
+          <span style="font-size: 12.5px; font-weight: 600; color: #8a6209;">Avisar</span>
+        </div>
+        <div style="flex-grow: 1; display: flex; align-items: center; gap: 11px; padding: 13px 15px; border-radius: 11px; background: #fbe8e6; border: 1px solid #f2ccc8;">
+          <svg style="flex-shrink: 0;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#b3382f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16.2h.01"/></svg>
+          <div style="display: flex; flex-direction: column; flex-grow: 1;">
+            <span style="font-size: 13px; font-weight: 600; color: #8f2c25;">9 clientes esperando resposta</span>
+            <span style="font-size: 12px; color: #a8564e;">4 deles há mais de 2 horas</span>
+          </div>
+          <span style="font-size: 12.5px; font-weight: 600; color: #8f2c25;">Ver lista</span>
+        </div>
+        <div style="flex-grow: 1; display: flex; align-items: center; gap: 11px; padding: 13px 15px; border-radius: 11px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <svg style="flex-shrink: 0;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f5c6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19"/><circle cx="10" cy="7.5" r="3.2"/><path d="M18 8h4"/><path d="M20 6v4"/></svg>
+          <div style="display: flex; flex-direction: column; flex-grow: 1;">
+            <span style="font-size: 13px; font-weight: 600;">2 cadastros aguardando você</span>
+            <span style="font-size: 12px; color: #8a9296;">Vera Klein e Anderson Pires</span>
+          </div>
+          <span style="font-size: 12.5px; font-weight: 600; color: #0f5c6b;">Aprovar</span>
+        </div>
+      </div>
+
+      <!-- KPIs da unidade -->
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;">
+        <div style="padding: 16px 18px; border-radius: 13px; background: #0f5c6b;">
+          <span style="font-size: 11.5px; color: #a9cdd4; font-weight: 500;">Nota da unidade</span>
+          <div style="display: flex; align-items: baseline; gap: 9px; margin-top: 3px;">
+            <span class="dsp" style="font-size: 32px; font-weight: 600; letter-spacing: -0.045em; color: #ffffff;">74</span>
+            <span style="font-size: 12.5px; font-weight: 600; color: #8fe0b0;">+3</span>
+          </div>
+          <span style="font-size: 11.5px; color: #a9cdd4;">rede: 71</span>
+        </div>
+        <div style="padding: 16px 18px; border-radius: 13px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <span style="font-size: 11.5px; color: #8a9296; font-weight: 500;">Leads atendidos</span>
+          <div class="dsp" style="margin-top: 3px; font-size: 32px; font-weight: 600; letter-spacing: -0.045em;">86</div>
+          <span style="font-size: 11.5px; color: #8a9296;">12 por vendedor</span>
+        </div>
+        <div style="padding: 16px 18px; border-radius: 13px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <span style="font-size: 11.5px; color: #8a9296; font-weight: 500;">Conversões</span>
+          <div style="display: flex; align-items: baseline; gap: 9px; margin-top: 3px;">
+            <span class="dsp" style="font-size: 32px; font-weight: 600; letter-spacing: -0.045em; color: #2f7d52;">17</span>
+            <span style="font-size: 12.5px; font-weight: 600; color: #2f7d52;">+4</span>
+          </div>
+          <span style="font-size: 11.5px; color: #8a9296;">19,8% dos leads</span>
+        </div>
+        <div style="padding: 16px 18px; border-radius: 13px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <span style="font-size: 11.5px; color: #8a9296; font-weight: 500;">Oportunidades perdidas</span>
+          <div style="display: flex; align-items: baseline; gap: 9px; margin-top: 3px;">
+            <span class="dsp" style="font-size: 32px; font-weight: 600; letter-spacing: -0.045em; color: #b3382f;">11</span>
+            <span style="font-size: 12.5px; font-weight: 600; color: #b3382f;">+3</span>
+          </div>
+          <span style="font-size: 11.5px; color: #8a9296;">pior que ontem</span>
+        </div>
+        <div style="padding: 16px 18px; border-radius: 13px; background: #ffffff; border: 1px solid #e7e2d9;">
+          <span style="font-size: 11.5px; color: #8a9296; font-weight: 500;">Tempo de resposta</span>
+          <div class="dsp" style="margin-top: 3px; font-size: 32px; font-weight: 600; letter-spacing: -0.045em;">7<span style="font-size: 17px; font-weight: 500; color: #5f686b;">min</span></div>
+          <span style="font-size: 11.5px; color: #8a9296;">pico: 12h–14h</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 20px; flex-grow: 1; min-height: 0;">
+
+        <!-- Tabela -->
+        <div style="flex-grow: 1; padding: 20px 22px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; display: flex; flex-direction: column; min-width: 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <h2 class="dsp" style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.025em;">Vendedores</h2>
+            <span style="font-size: 12.5px; color: #8a9296;">ordenado por nota</span>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-top: 14px;">
+            <thead>
+              <tr>
+                <th class="th" style="width: 30%;">VENDEDOR</th>
+                <th class="th" style="text-align: right;">NOTA</th>
+                <th class="th" style="text-align: right;">LEADS</th>
+                <th class="th" style="text-align: right;">CONV.</th>
+                <th class="th" style="text-align: right;">RESPOSTA</th>
+                <th class="th" style="text-align: right;">TENDÊNCIA</th>
+                <th class="th" style="text-align: right;">CONEXÃO</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="td">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 28px; height: 28px; border-radius: 999px; background: #e4f2ea; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 11px; font-weight: 600; color: #2f7d52;">LB</span></div>
+                    <span style="font-weight: 600;">Letícia Brum</span>
+                  </div>
+                </td>
+                <td class="td num" style="text-align: right; font-size: 17px; color: #2f7d52;">89</td>
+                <td class="td" style="text-align: right;">16</td>
+                <td class="td" style="text-align: right; font-weight: 600;">5</td>
+                <td class="td" style="text-align: right;">3 min</td>
+                <td class="td" style="text-align: right; color: #2f7d52; font-weight: 600;">↑ 5</td>
+                <td class="td" style="text-align: right;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #2f7d52;"></span></td>
+              </tr>
+              <tr>
+                <td class="td">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 28px; height: 28px; border-radius: 999px; background: #ead9c4; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 11px; font-weight: 600; color: #8a5a22;">RM</span></div>
+                    <span style="font-weight: 600;">Rafael Moura</span>
+                  </div>
+                </td>
+                <td class="td num" style="text-align: right; font-size: 17px;">78</td>
+                <td class="td" style="text-align: right;">14</td>
+                <td class="td" style="text-align: right; font-weight: 600;">3</td>
+                <td class="td" style="text-align: right;">4 min</td>
+                <td class="td" style="text-align: right; color: #2f7d52; font-weight: 600;">↑ 6</td>
+                <td class="td" style="text-align: right;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #2f7d52;"></span></td>
+              </tr>
+              <tr>
+                <td class="td">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 28px; height: 28px; border-radius: 999px; background: #e3f0f2; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 11px; font-weight: 600; color: #0f5c6b;">JP</span></div>
+                    <span style="font-weight: 600;">Juliana Pauli</span>
+                  </div>
+                </td>
+                <td class="td num" style="text-align: right; font-size: 17px;">75</td>
+                <td class="td" style="text-align: right;">11</td>
+                <td class="td" style="text-align: right; font-weight: 600;">3</td>
+                <td class="td" style="text-align: right;">6 min</td>
+                <td class="td" style="text-align: right; color: #8a9296;">→ 0</td>
+                <td class="td" style="text-align: right;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #2f7d52;"></span></td>
+              </tr>
+              <tr>
+                <td class="td">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 28px; height: 28px; border-radius: 999px; background: #f2efe8; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 11px; font-weight: 600; color: #5f686b;">ED</span></div>
+                    <span style="font-weight: 600;">Éverton Diniz</span>
+                  </div>
+                </td>
+                <td class="td num" style="text-align: right; font-size: 17px;">71</td>
+                <td class="td" style="text-align: right;">15</td>
+                <td class="td" style="text-align: right; font-weight: 600;">2</td>
+                <td class="td" style="text-align: right;">9 min</td>
+                <td class="td" style="text-align: right; color: #b3382f; font-weight: 600;">↓ 4</td>
+                <td class="td" style="text-align: right;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #2f7d52;"></span></td>
+              </tr>
+              <tr>
+                <td class="td">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 28px; height: 28px; border-radius: 999px; background: #f2efe8; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 11px; font-weight: 600; color: #5f686b;">SA</span></div>
+                    <span style="font-weight: 600;">Sandra Alves</span>
+                  </div>
+                </td>
+                <td class="td num" style="text-align: right; font-size: 17px; color: #b07d10;">64</td>
+                <td class="td" style="text-align: right;">13</td>
+                <td class="td" style="text-align: right; font-weight: 600;">2</td>
+                <td class="td" style="text-align: right; color: #b3382f;">18 min</td>
+                <td class="td" style="text-align: right; color: #b3382f; font-weight: 600;">↓ 7</td>
+                <td class="td" style="text-align: right;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #2f7d52;"></span></td>
+              </tr>
+              <tr>
+                <td class="td">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 28px; height: 28px; border-radius: 999px; background: #f2efe8; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 11px; font-weight: 600; color: #5f686b;">MK</span></div>
+                    <span style="font-weight: 600;">Mauro Kunz</span>
+                  </div>
+                </td>
+                <td class="td num" style="text-align: right; font-size: 17px; color: #b07d10;">59</td>
+                <td class="td" style="text-align: right;">17</td>
+                <td class="td" style="text-align: right; font-weight: 600;">2</td>
+                <td class="td" style="text-align: right; color: #b3382f;">22 min</td>
+                <td class="td" style="text-align: right; color: #b3382f; font-weight: 600;">↓ 3</td>
+                <td class="td" style="text-align: right;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #2f7d52;"></span></td>
+              </tr>
+              <tr style="opacity: 0.6;">
+                <td class="td">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 28px; height: 28px; border-radius: 999px; background: #f2efe8; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="dsp" style="font-size: 11px; font-weight: 600; color: #5f686b;">TF</span></div>
+                    <span style="font-weight: 600;">Tiago Feltrin</span>
+                  </div>
+                </td>
+                <td class="td" style="text-align: right; color: #8a9296;">—</td>
+                <td class="td" style="text-align: right; color: #8a9296;">0</td>
+                <td class="td" style="text-align: right; color: #8a9296;">0</td>
+                <td class="td" style="text-align: right; color: #8a9296;">—</td>
+                <td class="td" style="text-align: right; color: #8a9296;">sem dado</td>
+                <td class="td" style="text-align: right;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #b07d10;"></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Coluna lateral -->
+        <div style="width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px;">
+
+          <div style="padding: 18px; border-radius: 14px; background: #fdf4e7; border: 1px solid #f0dfc4;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b8712a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.4 5.6L20 10l-4.4 3.2L16.8 19 12 16l-4.8 3 1.2-5.8L4 10l5.6-1.4z"/></svg>
+              <span class="dsp" style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em; color: #8a5a22;">Leitura do dia</span>
+            </div>
+            <p style="margin: 11px 0 0; font-size: 13px; color: #4a3a26; line-height: 1.55;">
+              A unidade subiu 3 pontos, mas as perdas cresceram: 11 oportunidades, quase todas no pico das 12h às 14h, quando Sandra e Mauro sozinhos responderam em mais de 18 minutos. Aderência ao MEC segue em 56% — sondagem e solução completa abaixo de 50% na equipe inteira.
+            </p>
+            <p style="margin: 11px 0 0; font-size: 13px; color: #4a3a26; line-height: 1.55;">
+              <strong style="font-weight: 600;">Com quem falar hoje:</strong> Sandra — caiu 7 pontos em três dias, o tempo de resposta dobrou e a aderência dela está em 39%.
+            </p>
+          </div>
+
+          <div style="padding: 18px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; flex-grow: 1;">
+            <h3 class="dsp" style="margin: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em;">O que trava a venda aqui</h3>
+            <span style="font-size: 12px; color: #8a9296;">objeções do catálogo do MEC · 7 dias</span>
+
+            <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 13px;">
+              <div style="display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <span style="font-size: 13px; font-weight: 500;">Preço maior que o concorrente</span>
+                  <span class="num" style="font-size: 13px; color: #5f686b;">38</span>
+                </div>
+                <div style="height: 6px; border-radius: 999px; background: #f0ece4;"><div style="width: 100%; height: 100%; border-radius: 999px; background: #0f5c6b;"></div></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <span style="font-size: 13px; font-weight: 500;">“Na internet é mais barato”</span>
+                  <span class="num" style="font-size: 13px; color: #5f686b;">24</span>
+                </div>
+                <div style="height: 6px; border-radius: 999px; background: #f0ece4;"><div style="width: 63%; height: 100%; border-radius: 999px; background: #2d7d8c;"></div></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <span style="font-size: 13px; font-weight: 500;">“Vou dar uma pensada”</span>
+                  <span class="num" style="font-size: 13px; color: #5f686b;">19</span>
+                </div>
+                <div style="height: 6px; border-radius: 999px; background: #f0ece4;"><div style="width: 50%; height: 100%; border-radius: 999px; background: #4f9aa8;"></div></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <span style="font-size: 13px; font-weight: 500;">“Só se tu entregar hoje”</span>
+                  <span class="num" style="font-size: 13px; color: #5f686b;">12</span>
+                </div>
+                <div style="height: 6px; border-radius: 999px; background: #f0ece4;"><div style="width: 32%; height: 100%; border-radius: 999px; background: #7fb7c2;"></div></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <span style="font-size: 13px; font-weight: 500;">“Meu pedreiro só usa outra marca”</span>
+                  <span class="num" style="font-size: 13px; color: #5f686b;">8</span>
+                </div>
+                <div style="height: 6px; border-radius: 999px; background: #f0ece4;"><div style="width: 21%; height: 100%; border-radius: 999px; background: #aed3da;"></div></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

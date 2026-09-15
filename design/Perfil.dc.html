@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #faf8f4; color: #161b1d;
+      font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    }
+    .dsp { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; }
+    a { color: #0f5c6b; text-decoration: none; }
+    a:hover { color: #0a4450; }
+    .sec { font-size: 11px; font-weight: 600; color: #8a9296; letter-spacing: 0.05em; }
+    .card { border-radius: 12px; background: #ffffff; border: 1px solid #e7e2d9; overflow: hidden; }
+    .item { display: flex; align-items: center; gap: 12px; padding: 14px; }
+    .sep { height: 1px; background: #f0ece4; margin: 0 14px; }
+    .sw { width: 38px; height: 22px; border-radius: 999px; flex-shrink: 0; display: flex; align-items: center; padding: 2px; }
+    .kn { width: 18px; height: 18px; border-radius: 999px; background: #ffffff; }
+  </style>
+</helmet>
+
+<div style="width: 390px; background: #faf8f4;">
+
+  <div style="padding: 18px; background: #ffffff; border-bottom: 1px solid #e7e2d9;">
+    <h1 class="dsp" style="margin: 0 0 16px; font-size: 20px; font-weight: 600; letter-spacing: -0.03em;">Perfil</h1>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div style="width: 52px; height: 52px; border-radius: 999px; background: #ead9c4; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <span class="dsp" style="font-size: 19px; font-weight: 600; color: #8a5a22;">RM</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span class="dsp" style="font-size: 18px; font-weight: 600; letter-spacing: -0.03em;">Rafael Moura</span>
+        <span style="font-size: 12.5px; color: #8a9296;">Vendedor · Unidade Centro</span>
+        <span style="font-size: 12px; color: #8a9296;">rafael.moura@zonanova.com.br</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 18px; display: flex; flex-direction: column; gap: 20px;">
+
+    <!-- Conexão -->
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <span class="sec">SEU WHATSAPP</span>
+      <div class="card">
+        <div class="item">
+          <div style="width: 38px; height: 38px; border-radius: 10px; background: #e4f2ea; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#2f7d52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-3.2-6.4L20 5v5h-5"/></svg>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1;">
+            <span style="font-size: 14px; font-weight: 600;">(54) 9 9711-3082</span>
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <div style="width: 6px; height: 6px; border-radius: 999px; background: #2f7d52;"></div>
+              <span style="font-size: 12px; color: #2f7d52; font-weight: 500;">Conectado desde 14 set, 08h12</span>
+            </div>
+          </div>
+        </div>
+        <div class="sep"></div>
+        <div class="item">
+          <span style="font-size: 13.5px; color: #b3382f; font-weight: 500; flex-grow: 1;">Desconectar este número</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#c7ccce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </div>
+      </div>
+      <span style="font-size: 12px; color: #8a9296; line-height: 1.45;">Desconectando, suas conversas param de ser analisadas e você some do relatório da unidade.</span>
+    </div>
+
+    <!-- Contatos bloqueados -->
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <span class="sec">CONTATOS FORA DA ANÁLISE</span>
+        <span style="font-size: 11.5px; color: #8a9296;">4 contatos</span>
+      </div>
+      <div class="card">
+        <div class="item">
+          <div style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1;">
+            <span style="font-size: 13.5px; font-weight: 500;">Dona Neusa</span>
+            <span style="font-size: 12px; color: #8a9296;">(54) 9 9120-8834 · pessoal</span>
+          </div>
+          <span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b; flex-shrink: 0;">Remover</span>
+        </div>
+        <div class="sep"></div>
+        <div class="item">
+          <div style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1;">
+            <span style="font-size: 13.5px; font-weight: 500;">Transportadora Bregolin</span>
+            <span style="font-size: 12px; color: #8a9296;">(54) 3 3218-0090 · fornecedor</span>
+          </div>
+          <span style="font-size: 12.5px; font-weight: 500; color: #0f5c6b; flex-shrink: 0;">Remover</span>
+        </div>
+        <div class="sep"></div>
+        <div class="item" style="border-top: 0;">
+          <svg style="flex-shrink: 0;" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0f5c6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          <span style="font-size: 13.5px; font-weight: 600; color: #0f5c6b; flex-grow: 1;">Bloquear outro contato</span>
+        </div>
+      </div>
+      <span style="font-size: 12px; color: #8a9296; line-height: 1.45;">Contato bloqueado não é lido, não é analisado e não aparece para seu gestor. Essa lista é só sua.</span>
+    </div>
+
+    <!-- Notificações -->
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <span class="sec">AVISOS</span>
+      <div class="card">
+        <div class="item">
+          <div style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1;">
+            <span style="font-size: 13.5px; font-weight: 500;">Resumo do dia no WhatsApp</span>
+            <span style="font-size: 12px; color: #8a9296;">todo dia às 23h40</span>
+          </div>
+          <div class="sw" style="background: #0f5c6b; justify-content: flex-end;"><div class="kn"></div></div>
+        </div>
+        <div class="sep"></div>
+        <div class="item">
+          <div style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1;">
+            <span style="font-size: 13.5px; font-weight: 500;">Cliente esperando resposta</span>
+            <span style="font-size: 12px; color: #8a9296;">a partir de 30 minutos parado</span>
+          </div>
+          <div class="sw" style="background: #0f5c6b; justify-content: flex-end;"><div class="kn"></div></div>
+        </div>
+        <div class="sep"></div>
+        <div class="item">
+          <div style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1;">
+            <span style="font-size: 13.5px; font-weight: 500;">Observação do gestor</span>
+            <span style="font-size: 12px; color: #8a9296;">quando a Carla escrever algo para você</span>
+          </div>
+          <div class="sw" style="background: #ddd7cc; justify-content: flex-start;"><div class="kn"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Privacidade -->
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <span class="sec">SEUS DADOS</span>
+      <div class="card">
+        <div class="item">
+          <span style="font-size: 13.5px; font-weight: 500; flex-grow: 1;">O que a Zona Nova vê das suas conversas</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#c7ccce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="sep"></div>
+        <div class="item">
+          <span style="font-size: 13.5px; font-weight: 500; flex-grow: 1;">Ler o MEC · Book 1</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#c7ccce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="sep"></div>
+        <div class="item">
+          <span style="font-size: 13.5px; font-weight: 500; flex-grow: 1;">Trocar senha</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#c7ccce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: center; padding: 14px; border-radius: 11px; background: #ffffff; border: 1px solid #ddd7cc; min-height: 48px;">
+      <span style="font-size: 14px; font-weight: 600; color: #b3382f;">Sair</span>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
