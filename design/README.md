@@ -1,21 +1,28 @@
 # Telas do ZonaNova
 
-Mockups de alta fidelidade das 13 telas do sistema, autorados como artboards
+Mockups de alta fidelidade das 20 telas do sistema, autorados como artboards
 `.dc.html` e publicados como canvas de design.
 
 ## Arquivos
 
 | Arquivo | Tela | Largura |
 |---|---|---|
+| `Login.dc.html` | 0 · Login + 3 estados de erro | 390 |
 | `Cadastro.dc.html` | 1 · Cadastro com seleção de unidade | 390 |
 | `Aguardando.dc.html` | 2 · Aguardando aprovação do gestor | 390 |
 | `Conectar.dc.html` | 3 · Conectar WhatsApp (QR + 4 estados) | 390 |
 | `Main.dc.html` | 4 · Dashboard do vendedor | 390 |
 | `Conversa.dc.html` | 5 · Conversa e análise com evidências | 1180 |
+| `Conversas.dc.html` | 5b · Lista de conversas | 390 |
+| `Evolucao.dc.html` | 5c · Evolução no período | 390 |
+| `Perfil.dc.html` | 5d · Perfil, conexão e contatos bloqueados | 390 |
 | `Equipe.dc.html` | 6 · Unidade — serve gestor **e** supervisor | 1440 |
 | `VendedorGestor.dc.html` | 7 · Vendedor visto pelo gestor | 1180 |
+| `Aprovacoes.dc.html` | 6b · Aprovação de cadastro (gestor) | 1440 |
 | `Rede.dc.html` | 8 · Rede (supervisor) | 1440 |
 | `Admin.dc.html` | 9 · Operação (admin) | 1440 |
+| `AdminUnidades.dc.html` | 9b · Unidades, papéis e conexões | 1440 |
+| `Vazios.dc.html` | 9 estados vazios e de erro | 1180 |
 | `MeuMec.dc.html` | 10 · Meu MEC (vendedor) | 390 |
 | `AderenciaUnidade.dc.html` | 11 · Aderência da unidade (gestor) | 1440 |
 | `MecRede.dc.html` | 12 · O MEC está pegando? (supervisor) | 1440 |
@@ -74,3 +81,16 @@ MetricsIA (`oklch(0.55 0.16 260)`) para os dois produtos não se confundirem.
   que o sistema não vê — ligação, balcão, desconto no Carrinho — aparece como
   não verificável, nunca como descumprimento.
 - O canvas tem três páginas: telas do sistema, MEC e aderência, direções.
+
+## Ainda não desenhadas
+
+Deliberadamente fora, porque reaproveitam tela existente ou dependem de decisão:
+
+| Item de navegação | Por quê |
+|---|---|
+| Supervisor · Pessoas | é a tabela de papéis de `AdminUnidades`, com escopo de supervisor |
+| Supervisor · Comparativo | é o gráfico de `Rede` com seletor de indicador — vira variação, não tela |
+| Gestor · Configurações | é `Perfil` no papel de gestor |
+| Admin · Registro de ações | já existe como cartão em `Admin`; vira tabela cheia na aba |
+| Contestação do MEC (modal) | o fluxo está listado em `AderenciaUnidade`; falta o modal de criar e o de revisar |
+| Recuperar senha | fluxo de 3 telas, secundário |

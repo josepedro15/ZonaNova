@@ -17,7 +17,7 @@
     {
       "file": "Cadastro.dc.html",
       "page": "page-1",
-      "x": 0,
+      "x": 470,
       "y": 0,
       "w": 390,
       "h": 1060,
@@ -26,7 +26,7 @@
     {
       "file": "Aguardando.dc.html",
       "page": "page-1",
-      "x": 470,
+      "x": 940,
       "y": 0,
       "w": 390,
       "h": 844,
@@ -35,7 +35,7 @@
     {
       "file": "Conectar.dc.html",
       "page": "page-1",
-      "x": 940,
+      "x": 1410,
       "y": 0,
       "w": 390,
       "h": 1320,
@@ -44,7 +44,7 @@
     {
       "file": "Main.dc.html",
       "page": "page-1",
-      "x": 1410,
+      "x": 1880,
       "y": 0,
       "w": 390,
       "h": 2200,
@@ -81,7 +81,7 @@
       "file": "Rede.dc.html",
       "page": "page-1",
       "x": 0,
-      "y": 3510,
+      "y": 3900,
       "w": 1440,
       "h": 940,
       "title": "8 · Rede (supervisor)"
@@ -90,7 +90,7 @@
       "file": "Admin.dc.html",
       "page": "page-1",
       "x": 1520,
-      "y": 3510,
+      "y": 3900,
       "w": 1440,
       "h": 940,
       "title": "9 · Operação (admin)"
@@ -148,6 +148,69 @@
       "w": 1440,
       "h": 940,
       "title": "13 · Descobertas (supervisor)"
+    },
+    {
+      "file": "Login.dc.html",
+      "page": "page-1",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "0 · Login"
+    },
+    {
+      "file": "Conversas.dc.html",
+      "page": "page-1",
+      "x": 4040,
+      "y": 2330,
+      "w": 390,
+      "h": 1180,
+      "title": "5b · Conversas (lista)"
+    },
+    {
+      "file": "Evolucao.dc.html",
+      "page": "page-1",
+      "x": 4510,
+      "y": 2330,
+      "w": 390,
+      "h": 1280,
+      "title": "5c · Evolução"
+    },
+    {
+      "file": "Perfil.dc.html",
+      "page": "page-1",
+      "x": 4980,
+      "y": 2330,
+      "w": 390,
+      "h": 1420,
+      "title": "5d · Perfil"
+    },
+    {
+      "file": "Aprovacoes.dc.html",
+      "page": "page-1",
+      "x": 3040,
+      "y": 3900,
+      "w": 1440,
+      "h": 940,
+      "title": "6b · Aprovações (gestor)"
+    },
+    {
+      "file": "AdminUnidades.dc.html",
+      "page": "page-1",
+      "x": 4560,
+      "y": 3900,
+      "w": 1440,
+      "h": 940,
+      "title": "9b · Unidades e papéis (admin)"
+    },
+    {
+      "file": "Vazios.dc.html",
+      "page": "page-1",
+      "x": 0,
+      "y": 4960,
+      "w": 1180,
+      "h": 1220,
+      "title": "Estados vazios e de erro"
     }
   ],
   "annotations": [
@@ -179,7 +242,7 @@
       "id": "nota-evidencia",
       "page": "page-1",
       "x": 0,
-      "y": 3410,
+      "y": 3800,
       "w": 620,
       "text": "A tela 5 é a que sustenta a confiança no sistema.\n\nCada afirmação da IA fica ligada ao trecho da conversa que a gerou — o destaque ocre no transcript e a lista \"de onde a análise tirou isso\". Sem esse vínculo visível, a nota vira opinião de robô e o vendedor para de acreditar na primeira vez que discordar."
     },
@@ -206,10 +269,18 @@
       "y": 1060,
       "w": 620,
       "text": "O cruzamento etapa × conversão da tela 12 é CORRELAÇÃO, e a própria tela diz isso.\n\nVendedor bom aplica mais o MEC e converte mais — parte do efeito é a pessoa, não a etapa. Serve para priorizar treino, nunca para cortar um capítulo do Book."
+    },
+    {
+      "id": "nota-vazios",
+      "page": "page-1",
+      "x": 1260,
+      "y": 4960,
+      "w": 620,
+      "text": "ESTADOS VAZIOS\n\nFaltavam. O doc de design dizia \"estado vazio é tela de verdade\" e eu não tinha desenhado nenhum.\n\nRegra dos nove: cada um diz o que aconteceu, se é problema da pessoa, e qual é o próximo passo. Nenhum mostra zero nem gráfico vazio — o vendedor abre isso no dia em que está mal, e a tela não pode parecer que ele fracassou quando só não houve movimento."
     }
   ],
   "launch": {
     "view": "canvas",
-    "page": "page-2"
+    "page": "page-1"
   }
 }
