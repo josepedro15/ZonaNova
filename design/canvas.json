@@ -211,6 +211,24 @@
       "w": 1180,
       "h": 1220,
       "title": "Estados vazios e de erro"
+    },
+    {
+      "file": "Senha.dc.html",
+      "page": "page-1",
+      "x": 2350,
+      "y": 0,
+      "w": 1300,
+      "h": 960,
+      "title": "0b · Recuperar senha"
+    },
+    {
+      "file": "Contestacao.dc.html",
+      "page": "page-2",
+      "x": 1990,
+      "y": 1060,
+      "w": 1240,
+      "h": 1180,
+      "title": "14 · Contestação (gestor → supervisor)"
     }
   ],
   "annotations": [
@@ -265,7 +283,7 @@
     {
       "id": "nota-correlacao",
       "page": "page-2",
-      "x": 1990,
+      "x": 3310,
       "y": 1060,
       "w": 620,
       "text": "O cruzamento etapa × conversão da tela 12 é CORRELAÇÃO, e a própria tela diz isso.\n\nVendedor bom aplica mais o MEC e converte mais — parte do efeito é a pessoa, não a etapa. Serve para priorizar treino, nunca para cortar um capítulo do Book."
@@ -277,6 +295,14 @@
       "y": 4960,
       "w": 620,
       "text": "ESTADOS VAZIOS\n\nFaltavam. O doc de design dizia \"estado vazio é tela de verdade\" e eu não tinha desenhado nenhum.\n\nRegra dos nove: cada um diz o que aconteceu, se é problema da pessoa, e qual é o próximo passo. Nenhum mostra zero nem gráfico vazio — o vendedor abre isso no dia em que está mal, e a tela não pode parecer que ele fracassou quando só não houve movimento."
+    },
+    {
+      "id": "nota-contestacao",
+      "page": "page-2",
+      "x": 1990,
+      "y": 2320,
+      "w": 700,
+      "text": "QUEM REVISA: O SUPERVISOR\n\nContestar uma marcação é julgamento de negócio, não questão técnica — o admin mexe em fila e custo, não em nota de gente. O gestor não revisa a própria contestação, e o vendedor não contesta direto: fala com o gestor, que decide se registra.\n\nO número que importa na tela do supervisor: 7 de 14 contestações são sobre a MESMA etapa, pelo mesmo motivo — o sistema não enxerga ligação. Isso não é a IA errando, é limite do WhatsApp. Ou o acompanhamento passa a ser registrado em algum lugar, ou a etapa fica não verificável por padrão."
     }
   ],
   "launch": {

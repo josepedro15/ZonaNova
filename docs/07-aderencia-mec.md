@@ -153,7 +153,10 @@ Somam-se ao modelo da [§2](02-modelo-de-dados.md):
   `aplicado` (`sim`/`parcial`/`nao`), `justificativa`, `evidencias jsonb`,
   `itens jsonb` (quais dos 7, qual das 8, qual minhoca), `playbook_versao`.
 - **`aderencia_contestacoes`** — gestor discorda de uma marcação: quem, qual,
-  por quê, e o veredito depois da revisão.
+  por quê, e o veredito depois da revisão. **Revisa o supervisor** — é
+  julgamento de negócio, não questão técnica. O gestor não revisa a própria
+  contestação; o vendedor não contesta direto (fala com o gestor, que decide se
+  registra), senão a fila vira canal de reclamação.
 - **`descobertas`** — saída da §7.4: `tipo`, `hipotese`, `conversas_suporte`,
   `conversao_com`, `conversao_sem`, `evidencias jsonb`, `status`
   (`nova`/`em_analise`/`aprovada`/`descartada`), `avaliada_por`, `virou_versao`.

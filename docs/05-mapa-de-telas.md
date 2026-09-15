@@ -104,6 +104,28 @@ Detalhadas em [§7.7](07-aderencia-mec.md):
 - **Supervisor · Descobertas** — hipótese, força da evidência, trechos, aprovar
   ou descartar. É a porta de entrada do Book 2.
 
+### 15-21. Telas que a navegação exigia
+
+Auditoria da navegação contra o desenho encontrou dez itens de menu apontando
+para telas inexistentes. As que quebravam fluxo foram desenhadas:
+
+- **Login** (`/login`) e **Recuperar senha** — com os três erros que importam:
+  senha errada, cadastro ainda pendente, acesso desativado.
+- **Aprovações** (`/equipe/aprovacoes`) — a que travava o onboarding. Sem ela o
+  vendedor fica pendente para sempre. Mostra o que conferir antes de liberar e o
+  que a pessoa passa a ver depois.
+- **Conversas** (lista), **Evolução** e **Perfil** — os três itens do menu
+  inferior do vendedor. Contatos bloqueados moram no Perfil.
+- **Unidades, papéis e conexões** (`/admin`) — o admin tinha 5 abas e 1 desenhada.
+- **Contestação** — gestor registra, supervisor revisa.
+- **Estados vazios e de erro** — nove, numa folha só.
+
+Seguem sem tela própria, de propósito, porque reaproveitam tela existente:
+Pessoas (supervisor) é a tabela de papéis do admin com outro escopo;
+Comparativo é o gráfico da Rede com seletor de indicador; Configurações do
+gestor é o Perfil noutro papel; Registro de ações já existe como cartão no
+Admin e vira tabela cheia na aba.
+
 ## 5.3 Diretrizes de design
 
 - **Português do Brasil**, linguagem de vendas, não de software.

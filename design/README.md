@@ -1,6 +1,6 @@
 # Telas do ZonaNova
 
-Mockups de alta fidelidade das 20 telas do sistema, autorados como artboards
+Mockups de alta fidelidade das 22 telas do sistema, autorados como artboards
 `.dc.html` e publicados como canvas de design.
 
 ## Arquivos
@@ -8,6 +8,7 @@ Mockups de alta fidelidade das 20 telas do sistema, autorados como artboards
 | Arquivo | Tela | Largura |
 |---|---|---|
 | `Login.dc.html` | 0 · Login + 3 estados de erro | 390 |
+| `Senha.dc.html` | 0b · Recuperar senha (3 passos) | 1300 |
 | `Cadastro.dc.html` | 1 · Cadastro com seleção de unidade | 390 |
 | `Aguardando.dc.html` | 2 · Aguardando aprovação do gestor | 390 |
 | `Conectar.dc.html` | 3 · Conectar WhatsApp (QR + 4 estados) | 390 |
@@ -27,6 +28,7 @@ Mockups de alta fidelidade das 20 telas do sistema, autorados como artboards
 | `AderenciaUnidade.dc.html` | 11 · Aderência da unidade (gestor) | 1440 |
 | `MecRede.dc.html` | 12 · O MEC está pegando? (supervisor) | 1440 |
 | `Descobertas.dc.html` | 13 · Descobertas (supervisor) | 1440 |
+| `Contestacao.dc.html` | 14 · Contestação: gestor → supervisor | 1240 |
 | `DirecaoB.dc.html` | Alternativa · Placar | 620 |
 | `DirecaoC.dc.html` | Alternativa · Caderno | 620 |
 | `canvas.json` | Layout, páginas e anotações do canvas | — |
@@ -92,5 +94,8 @@ Deliberadamente fora, porque reaproveitam tela existente ou dependem de decisão
 | Supervisor · Comparativo | é o gráfico de `Rede` com seletor de indicador — vira variação, não tela |
 | Gestor · Configurações | é `Perfil` no papel de gestor |
 | Admin · Registro de ações | já existe como cartão em `Admin`; vira tabela cheia na aba |
-| Contestação do MEC (modal) | o fluxo está listado em `AderenciaUnidade`; falta o modal de criar e o de revisar |
-| Recuperar senha | fluxo de 3 telas, secundário |
+
+Quem revisa uma contestação: **o supervisor**. É julgamento de negócio, não
+questão técnica — o admin mexe em fila e custo, não em nota de gente. O gestor
+não revisa a própria contestação, e o vendedor não contesta direto: fala com o
+gestor, que decide se registra.

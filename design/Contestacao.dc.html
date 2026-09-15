@@ -1,0 +1,212 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: #faf8f4; color: #161b1d;
+      font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    }
+    .dsp { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; }
+    a { color: #0f5c6b; text-decoration: none; }
+    a:hover { color: #0a4450; }
+    .cap { font-size: 11px; font-weight: 600; color: #a8afb2; letter-spacing: 0.05em; }
+    .lb  { font-size: 11px; font-weight: 600; color: #8a9296; letter-spacing: 0.04em; }
+    .btn { padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600; }
+    .ev  { padding: 10px 12px; border-radius: 9px; background: #faf8f4; border: 1px solid #f0ece4; border-left: 3px solid #dcae4a; font-size: 12.5px; color: #3c4548; line-height: 1.45; }
+    .num { font-family: 'Bricolage Grotesque', 'Helvetica Neue', Helvetica, sans-serif; font-weight: 600; letter-spacing: -0.03em; }
+  </style>
+</helmet>
+
+<div style="width: 1240px; background: #faf8f4; padding: 30px 32px 36px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 20px; border-bottom: 1px solid #e7e2d9;">
+    <h1 class="dsp" style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.035em;">Contestação de uma marcação do MEC</h1>
+    <span style="font-size: 13px; color: #8a9296;">O gestor discorda, o supervisor revisa. A discordância vira calibração do sistema — não discussão perdida no grupo do WhatsApp.</span>
+  </div>
+
+  <div style="margin-top: 26px; display: flex; gap: 28px; align-items: flex-start;">
+
+    <!-- 1. Gestor contesta -->
+    <div style="width: 560px; flex-shrink: 0; display: flex; flex-direction: column;">
+      <span class="cap">1 · O GESTOR CONTESTA</span>
+
+      <div style="margin-top: 11px; padding: 22px 24px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9; box-shadow: 0 18px 42px -28px rgba(22,27,29,0.28);">
+
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            <h2 class="dsp" style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.03em;">Essa marcação está errada?</h2>
+            <span style="font-size: 12.5px; color: #8a9296;">Sandra Alves · conversa com Ademir Boff · 12 set</span>
+          </div>
+          <svg style="flex-shrink: 0; margin-top: 2px;" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#a8afb2" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+        </div>
+
+        <!-- O que o sistema disse -->
+        <div style="margin-top: 20px; padding: 15px 16px; border-radius: 11px; background: #faf8f4; border: 1px solid #f0ece4;">
+          <span class="lb">O QUE O SISTEMA MARCOU</span>
+          <div style="margin-top: 10px; display: flex; align-items: center; gap: 11px;">
+            <span style="padding: 4px 11px; border-radius: 999px; background: #fbe8e6; color: #b3382f; font-size: 12px; font-weight: 600;">Acompanhamento · não feito</span>
+            <span style="font-size: 12.5px; color: #5f686b;">etapa 7 de 7</span>
+          </div>
+          <p style="margin: 11px 0 0; font-size: 12.5px; color: #3c4548; line-height: 1.5;">
+            “O cliente ficou sem retorno no turno seguinte. Não há mensagem do vendedor depois de 12 set, 16h20.”
+          </p>
+        </div>
+
+        <!-- Motivo -->
+        <div style="margin-top: 18px;">
+          <span class="lb">POR QUE VOCÊ DISCORDA</span>
+          <div style="margin-top: 9px; display: flex; flex-direction: column; gap: 7px;">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #e3f0f2; border: 1.5px solid #0f5c6b;">
+              <div style="width: 16px; height: 16px; border-radius: 999px; border: 5px solid #0f5c6b; flex-shrink: 0;"></div>
+              <span style="font-size: 13.5px; font-weight: 600; color: #0f5c6b;">Aconteceu fora do WhatsApp</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #ffffff; border: 1px solid #ddd7cc;">
+              <div style="width: 16px; height: 16px; border-radius: 999px; border: 1.5px solid #c7ccce; flex-shrink: 0;"></div>
+              <span style="font-size: 13.5px; color: #3c4548;">A etapa não cabia nessa conversa</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #ffffff; border: 1px solid #ddd7cc;">
+              <div style="width: 16px; height: 16px; border-radius: 999px; border: 1.5px solid #c7ccce; flex-shrink: 0;"></div>
+              <span style="font-size: 13.5px; color: #3c4548;">A análise entendeu o texto errado</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #ffffff; border: 1px solid #ddd7cc;">
+              <div style="width: 16px; height: 16px; border-radius: 999px; border: 1.5px solid #c7ccce; flex-shrink: 0;"></div>
+              <span style="font-size: 13.5px; color: #3c4548;">O próprio MEC não é claro nesse ponto</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px;">
+          <span class="lb">O QUE ACONTECEU DE VERDADE</span>
+          <div style="margin-top: 9px; padding: 13px 14px; border-radius: 10px; background: #ffffff; border: 1px solid #ddd7cc; min-height: 84px;">
+            <span style="font-size: 13.5px; color: #3c4548; line-height: 1.5;">A Sandra ligou pro Ademir na manhã seguinte, 8h40. Ele confirmou comigo na loja. O MEC pede ligação de preferência — ela fez exatamente o que o Book manda.</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; padding: 13px 15px; border-radius: 11px; background: #fbf0d8; display: flex; gap: 10px;">
+          <svg style="flex-shrink: 0; margin-top: 1px;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b07d10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+          <span style="font-size: 12.5px; color: #8a6209; line-height: 1.5;">Contestar não muda a nota agora. O supervisor revisa e, se der razão, a etapa vira <strong style="font-weight: 600;">não verificável</strong> e o dia é recalculado.</span>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; align-items: center; gap: 10px;">
+          <div class="btn" style="background: #0f5c6b; color: #faf8f4;">Enviar contestação</div>
+          <div class="btn" style="background: #ffffff; border: 1px solid #ddd7cc; color: #5f686b;">Cancelar</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Supervisor revisa -->
+    <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+      <span class="cap">2 · O SUPERVISOR REVISA</span>
+
+      <div style="margin-top: 11px; padding: 22px 24px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2d9;">
+
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 14px;">
+          <h2 class="dsp" style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.03em;">Contestações abertas</h2>
+          <span style="padding: 3px 10px; border-radius: 999px; background: #fbf0d8; color: #8a6209; font-size: 11.5px; font-weight: 600;">5 na rede</span>
+        </div>
+
+        <!-- Item aberto -->
+        <div style="margin-top: 16px; padding: 16px 17px; border-radius: 12px; background: #faf8f4; border: 1.5px solid #0f5c6b;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;">
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <span style="font-size: 14px; font-weight: 600;">Acompanhamento · Sandra Alves</span>
+              <span style="font-size: 12px; color: #8a9296;">contestado por Carla Seibert · Centro · ontem</span>
+            </div>
+            <span style="padding: 3px 9px; border-radius: 999px; background: #e3f0f2; color: #0f5c6b; font-size: 11px; font-weight: 600; flex-shrink: 0;">fora do WhatsApp</span>
+          </div>
+
+          <p style="margin: 12px 0 0; font-size: 13px; color: #3c4548; line-height: 1.5;">
+            “A Sandra ligou pro Ademir na manhã seguinte, 8h40. Ele confirmou comigo na loja.”
+          </p>
+
+          <div style="margin-top: 14px; display: flex; gap: 10px;">
+            <div style="flex-grow: 1; padding: 11px 13px; border-radius: 10px; background: #ffffff; border: 1px solid #f0ece4;">
+              <span class="lb">O SISTEMA VÊ</span>
+              <p style="margin: 6px 0 0; font-size: 12.5px; color: #3c4548; line-height: 1.45;">Última mensagem 12 set 16h20, do cliente. Nenhuma resposta depois.</p>
+            </div>
+            <div style="flex-grow: 1; padding: 11px 13px; border-radius: 10px; background: #ffffff; border: 1px solid #f0ece4;">
+              <span class="lb">O SISTEMA NÃO VÊ</span>
+              <p style="margin: 6px 0 0; font-size: 12.5px; color: #3c4548; line-height: 1.45;">Ligação. O MEC pede acompanhamento por telefone de preferência.</p>
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid #f0ece4; display: flex; align-items: center; gap: 9px;">
+            <div class="btn" style="background: #2f7d52; color: #ffffff;">Dar razão · vira não verificável</div>
+            <div class="btn" style="background: #ffffff; border: 1px solid #ddd7cc; color: #3c4548;">Manter a marcação</div>
+            <div style="flex-grow: 1;"></div>
+            <a href="#" style="font-size: 12.5px; font-weight: 500;">Abrir a conversa</a>
+          </div>
+        </div>
+
+        <!-- Outras -->
+        <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="padding: 13px 15px; border-radius: 11px; background: #ffffff; border: 1px solid #e7e2d9; display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0;">
+              <span style="font-size: 13.5px; font-weight: 600;">Sondagem · Mauro Kunz</span>
+              <span style="font-size: 12px; color: #5f686b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">“Cliente compra toda semana, não tem o que sondar de novo.”</span>
+            </div>
+            <span style="padding: 3px 9px; border-radius: 999px; background: #f2efe8; color: #5f686b; font-size: 11px; font-weight: 600; flex-shrink: 0;">não cabia</span>
+          </div>
+          <div style="padding: 13px 15px; border-radius: 11px; background: #ffffff; border: 1px solid #e7e2d9; display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0;">
+              <span style="font-size: 13.5px; font-weight: 600;">Estratégia de preço · Ivete Pozzobon</span>
+              <span style="font-size: 12px; color: #5f686b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">“O Book não diz o que fazer quando o orçamento do concorrente é de outra praça.”</span>
+            </div>
+            <span style="padding: 3px 9px; border-radius: 999px; background: #fdf4e7; color: #b8712a; font-size: 11px; font-weight: 600; flex-shrink: 0;">MEC não é claro</span>
+          </div>
+        </div>
+
+        <!-- Por que isso importa -->
+        <div style="margin-top: 20px; padding: 16px 18px; border-radius: 12px; background: #fdf4e7; border: 1px solid #f0dfc4;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b8712a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.4 5.6L20 10l-4.4 3.2L16.8 19 12 16l-4.8 3 1.2-5.8L4 10l5.6-1.4z"/></svg>
+            <span class="dsp" style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em; color: #8a5a22;">A contestação é dado, não reclamação</span>
+          </div>
+          <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px;">
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <div style="display: flex; align-items: baseline; gap: 7px;">
+                <span class="num" style="font-size: 22px; color: #8a5a22;">14</span>
+                <span style="font-size: 12px; color: #8a5a22;">contestações no mês</span>
+              </div>
+              <span style="font-size: 11.5px; color: #a3803f;">9 procedentes</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <div style="display: flex; align-items: baseline; gap: 7px;">
+                <span class="num" style="font-size: 22px; color: #8a5a22;">7</span>
+                <span style="font-size: 12px; color: #8a5a22;">são sobre acompanhamento</span>
+              </div>
+              <span style="font-size: 11.5px; color: #a3803f;">metade de tudo</span>
+            </div>
+          </div>
+          <p style="margin: 13px 0 0; padding-top: 12px; border-top: 1px solid #f0dfc4; font-size: 12.5px; color: #4a3a26; line-height: 1.55;">
+            Sete de catorze contestações são sobre a mesma etapa, pelo mesmo motivo: <strong style="font-weight: 600;">o sistema não enxerga ligação.</strong> Isso não é a IA errando — é limite do que o WhatsApp mostra. Ou o acompanhamento passa a ser registrado em algum lugar, ou essa etapa fica marcada como não verificável por padrão.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 28px; padding: 18px 20px; border-radius: 12px; background: #f4f1ea; border: 1px solid #e7e2d9; display: flex; gap: 12px;">
+    <svg style="flex-shrink: 0; margin-top: 1px;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5f686b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <span style="font-size: 13px; font-weight: 600; color: #3c4548;">Quem revisa: o supervisor</span>
+      <span style="font-size: 12.5px; color: #5f686b; line-height: 1.55;">
+        Contestar uma marcação é julgamento de negócio, não questão técnica — o admin mexe em fila e custo, não em nota de gente. O gestor não revisa a própria contestação, e o vendedor não contesta direto: ele fala com o gestor, que decide se registra. Isso evita que a fila vire canal de reclamação e mantém a conversa onde ela resolve.
+      </span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -8,9 +8,12 @@ Entregue neste conjunto de documentos.
 estimado de conversas/dia por vendedor, e quem são o supervisor e os gestores
 iniciais.
 
-## Fase 2 — Design das telas
-Claude Design, na ordem de prioridade do §5.4. Saída: telas aprovadas e um
-design system mínimo (tokens, tipografia, componentes de KPI, tabela, gráfico).
+## Fase 2 — Design das telas ✅
+22 telas desenhadas em `design/`, publicadas como canvas. Direção visual A
+(papel quente, tinta petróleo, acento ocre) com tokens em `design/README.md`.
+
+**Pendência que bloqueia o refino:** a marca é placeholder. Sem logo, cores e
+tipografia reais da Zona Nova, refinar pixel é trabalho que pode ir fora.
 
 ## Fase 3 — Fundação
 Projeto Next + Supabase, migration `0001_init`, auth, middleware por papel,
@@ -77,3 +80,5 @@ o que o gestor vê, ninguém confia no sistema depois.
 | Duas seções incompletas do Book 1 | "estratégia de preço" está *página não editada* e o contorno de objeções *no aguardo de reforço* |
 | Alçada de desconto por vendedor | sem isso não dá para medir estouro de alçada |
 | Peso das etapas do MEC | todas valem igual na aderência? o Book não diz |
+| Identidade visual da Zona Nova | logo, cores e tipografia — bloqueia o refino das telas |
+| Registro de ligação | metade das contestações previstas é sobre acompanhamento que o sistema não vê |
