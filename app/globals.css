@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+/* =============================================================================
+ * Tokens da direção A — papel quente, tinta petróleo, acento ocre.
+ * Os valores saem de design/README.md; a marca da Zona Nova ainda é
+ * placeholder, então isto muda quando chegarem logo e cores reais.
+ * ========================================================================== */
+
+@theme {
+  --color-papel:       #faf8f4;
+  --color-superficie:  #ffffff;
+  --color-tinta:       #161b1d;
+  --color-tinta-2:     #5f686b;
+  --color-tinta-3:     #8a9296;
+  --color-linha:       #e7e2d9;
+  --color-linha-2:     #f0ece4;
+
+  --color-petroleo:      #0f5c6b;
+  --color-petroleo-esc:  #0d4b58;
+  --color-petroleo-sof:  #e3f0f2;
+  --color-ocre:          #b8712a;
+  --color-ocre-sof:      #fdf4e7;
+  --color-dourado:       #d9a441;
+
+  --color-verde:     #2f7d52;  --color-verde-sof:   #e4f2ea;
+  --color-ambar:     #b07d10;  --color-ambar-sof:   #fbf0d8;
+  --color-vermelho:  #b3382f;  --color-vermelho-sof:#fbe8e6;
+
+  /* Preenchidas pelo next/font no layout raiz. */
+  --font-display: var(--fonte-display), 'Helvetica Neue', Helvetica, sans-serif;
+  --font-sans:    var(--fonte-corpo),   'Helvetica Neue', Helvetica, sans-serif;
+
+  --radius-card: 12px;
+  --radius-lg:   14px;
+}
+
+:root { color-scheme: light; }
+
+body {
+  background: var(--color-papel);
+  color: var(--color-tinta);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.display { font-family: var(--font-display); letter-spacing: -0.03em; }

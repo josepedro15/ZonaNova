@@ -217,3 +217,20 @@ drop policy if exists p_descobertas_select on public.descobertas;
 create policy p_descobertas_select on public.descobertas
     for select to authenticated
     using (public.zn_role() in ('supervisor', 'admin'));
+
+-- -----------------------------------------------------------------------------
+-- 6. Privilégios (ver nota no 0001)
+-- -----------------------------------------------------------------------------
+
+grant select on
+    public.playbooks,
+    public.playbook_etapas,
+    public.playbook_itens,
+    public.aderencia_conversa,
+    public.aderencia_diaria,
+    public.aderencia_contestacoes,
+    public.descobertas
+to authenticated;
+
+-- Gestor e supervisor registam contestação (a política confere papel e escopo).
+grant insert on public.aderencia_contestacoes to authenticated;

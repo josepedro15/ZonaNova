@@ -34,10 +34,11 @@ create table if not exists public.profiles (
     aprovado_em  timestamptz,
     created_at   timestamptz not null default now(),
     updated_at   timestamptz not null default now(),
-    -- vendedor e gestor precisam de unidade; supervisor/admin não têm
+    -- Vendedor ATIVO precisa de unidade. Pendente ainda pode não ter — é o
+    -- estado logo após o signup, e derrubar a inserção aqui quebraria o
+    -- cadastro inteiro: o utilizador ficaria em auth.users sem profile.
     constraint ck_profiles_unidade check (
-        (role = 'vendedor' and unidade_id is not null)
-        or role <> 'vendedor'
+        role <> 'vendedor' or status <> 'ativo' or unidade_id is not null
     )
 );
 
@@ -80,6 +81,44 @@ create trigger on_auth_user_created
     after insert on auth.users
     for each row execute function public.handle_new_user();
 
+-- Blindagem das colunas de poder.
+--
+-- A RLS restringe LINHAS, nunca COLUNAS: a política que deixa o utilizador
+-- editar o próprio profile deixaria-o reescrever o próprio `role`. Um gestor
+-- promovia-se a supervisor e passava a ler a rede inteira — encontrado a rodar
+-- tests/rls.sql, não por leitura do código.
+--
+-- Duas camadas, de propósito: o grant por coluna (secção 8) já impede o UPDATE,
+-- e este trigger continua a valer se alguém um dia alargar esse grant.
+create or replace function public.protege_colunas_de_poder()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    -- O service role (cron, server actions, painel de admin) passa livre.
+    if current_user <> 'authenticated' then
+        return new;
+    end if;
+    if new.role         is distinct from old.role
+       or new.unidade_id   is distinct from old.unidade_id
+       or new.status       is distinct from old.status
+       or new.aprovado_por is distinct from old.aprovado_por
+       or new.aprovado_em  is distinct from old.aprovado_em then
+        raise exception
+            'Papel, unidade e situação não se alteram daqui. Passa por aprovação.'
+            using errcode = 'insufficient_privilege';
+    end if;
+    return new;
+end;
+$$;
+
+drop trigger if exists trg_protege_colunas_de_poder on public.profiles;
+create trigger trg_protege_colunas_de_poder
+    before update on public.profiles
+    for each row execute function public.protege_colunas_de_poder();
+
 -- -----------------------------------------------------------------------------
 -- 2. Funções de escopo (base de toda a RLS)
 --    SECURITY DEFINER para não recursar na própria política de profiles.
@@ -105,7 +144,12 @@ as $$
     select coalesce((select status = 'ativo' from public.profiles where id = auth.uid()), false);
 $$;
 
--- Unidades que o utilizador autenticado pode ler.
+-- Unidades onde o utilizador pode ler o dado INDIVIDUAL DE OUTRAS PESSOAS.
+--
+-- Um vendedor NÃO entra aqui: ele vê só o que é dele, e isso vem da condição
+-- `user_id = auth.uid()` nas políticas. Se esta função devolvesse a unidade do
+-- vendedor, todo vendedor leria as conversas dos colegas — que é exatamente o
+-- oposto do que o §1.3 promete.
 create or replace function public.zn_unidades_visiveis()
 returns setof uuid
 language plpgsql
@@ -114,21 +158,30 @@ security definer
 set search_path = public
 as $$
 declare
-    v_role    text;
-    v_unidade uuid;
+    v_role text;
 begin
-    select role, unidade_id into v_role, v_unidade
-    from public.profiles where id = auth.uid();
+    select role into v_role from public.profiles where id = auth.uid();
 
     if v_role in ('supervisor', 'admin') then
         return query select id from public.unidades;
     elsif v_role = 'gestor' then
         return query select unidade_id from public.gestor_unidades where gestor_id = auth.uid();
-    elsif v_role = 'vendedor' and v_unidade is not null then
-        return next v_unidade;
     end if;
     return;
 end;
+$$;
+
+-- A unidade do próprio vendedor, só para ele comparar-se com o AGREGADO dela
+-- (a linha "média da unidade" no dashboard). Nunca dá acesso a dado individual
+-- de colega — por isso é função separada, e não um ramo da de cima.
+create or replace function public.zn_minha_unidade()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+    select unidade_id from public.profiles where id = auth.uid();
 $$;
 
 -- -----------------------------------------------------------------------------
@@ -359,7 +412,6 @@ create policy p_profiles_select on public.profiles
     using (
         id = auth.uid()
         or unidade_id in (select public.zn_unidades_visiveis())
-        or public.zn_role() in ('supervisor', 'admin')
     );
 
 drop policy if exists p_profiles_update_self on public.profiles;
@@ -377,11 +429,18 @@ create policy p_gestor_unidades_select on public.gestor_unidades
     for select to authenticated
     using (gestor_id = auth.uid() or public.zn_role() in ('supervisor', 'admin'));
 
--- Conexões: sem política de SELECT na tabela (token). A UI usa a view.
+-- Conexões: a UI precisa do status (o alerta de número caído depende dele),
+-- mas o token nunca pode sair daqui. Duas camadas:
+--   1. RLS escopa as LINHAS — o vendedor vê a dele, o gestor as da unidade.
+--   2. O grant é POR COLUNA (mais abaixo) e não inclui instance_token, então
+--      nem um `select *` alcança o token. Errar a política não vaza a chave.
 drop policy if exists p_conexoes_select on public.conexoes_whatsapp;
 create policy p_conexoes_select on public.conexoes_whatsapp
     for select to authenticated
-    using (false);
+    using (
+        public.zn_ativo()
+        and (user_id = auth.uid() or unidade_id in (select public.zn_unidades_visiveis()))
+    );
 
 -- Conversas / mensagens / análises: leitura por escopo.
 drop policy if exists p_conversas_select on public.conversas;
@@ -424,10 +483,18 @@ create policy p_rel_diarios_select on public.relatorios_diarios
         and (user_id = auth.uid() or unidade_id in (select public.zn_unidades_visiveis()))
     );
 
+-- O vendedor vê o AGREGADO da própria unidade (para se comparar), o gestor e o
+-- supervisor veem as unidades sob eles.
 drop policy if exists p_rel_unidade_select on public.relatorios_unidade;
 create policy p_rel_unidade_select on public.relatorios_unidade
     for select to authenticated
-    using (public.zn_ativo() and unidade_id in (select public.zn_unidades_visiveis()));
+    using (
+        public.zn_ativo()
+        and (
+            unidade_id in (select public.zn_unidades_visiveis())
+            or unidade_id = public.zn_minha_unidade()
+        )
+    );
 
 -- Relatório da rede: só supervisor e admin.
 drop policy if exists p_rel_rede_select on public.relatorios_rede;
@@ -444,3 +511,51 @@ drop policy if exists p_eventos_select on public.eventos_admin;
 create policy p_eventos_select on public.eventos_admin
     for select to authenticated
     using (public.zn_role() in ('supervisor', 'admin'));
+
+-- -----------------------------------------------------------------------------
+-- 8. Privilégios
+--    RLS e GRANT são dois cadeados diferentes: RLS sem GRANT nega tudo, GRANT
+--    sem RLS abre tudo. O Supabase concede privilégios por defeito a
+--    authenticated, mas depender desse implícito quebra em qualquer outro
+--    ambiente — então aqui está explícito.
+--    A regra: leitura ao authenticated no que a RLS filtra; escrita de dado
+--    operacional fica só com o service role (que ignora RLS).
+-- -----------------------------------------------------------------------------
+
+grant select on
+    public.unidades,
+    public.profiles,
+    public.gestor_unidades,
+    public.conversas,
+    public.mensagens,
+    public.analises_conversa,
+    public.relatorios_diarios,
+    public.relatorios_unidade,
+    public.relatorios_rede,
+    public.fila_processamento,
+    public.eventos_admin
+to authenticated;
+
+grant select on public.vw_conexoes_status to authenticated;
+
+-- O próprio utilizador edita o próprio profile — mas SÓ o que é dele mesmo.
+-- role, unidade_id, status e a trilha de aprovação ficam fora do grant: são as
+-- colunas que definem o que a pessoa enxerga. Quem as muda é o service role,
+-- pela server action de aprovação, que grava em eventos_admin.
+grant update (nome, telefone) on public.profiles to authenticated;
+
+-- A lista de contactos bloqueados é do vendedor: ele cria e apaga.
+grant select, insert, update, delete on public.contatos_bloqueados to authenticated;
+
+-- Supervisor e admin gerem unidades (a política restringe o papel).
+grant insert, update, delete on public.unidades to authenticated;
+
+-- conexoes_whatsapp: grant POR COLUNA. instance_token fica de fora de
+-- propósito — é a credencial do WhatsApp da pessoa, e nenhuma consulta de
+-- utilizador autenticado deve conseguir lê-la, nem por engano numa política
+-- futura mal escrita. Só o service role (que ignora RLS e grants) a usa.
+grant select (id, user_id, unidade_id, instance_name, numero, status,
+              ultimo_evento_em, created_at, updated_at)
+    on public.conexoes_whatsapp to authenticated;
+
+grant usage on schema public to authenticated;

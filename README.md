@@ -39,10 +39,23 @@ Leia nesta ordem:
 5. [Mapa de telas](docs/05-mapa-de-telas.md) — briefing para a fase de design
 6. [Roadmap](docs/06-roadmap.md) — fases de entrega
 7. [Aderência ao MEC](docs/07-aderencia-mec.md) — medir se o padrão comercial está sendo seguido, e descobrir o que ele ainda não diz
+8. [Fundação](docs/08-fundacao.md) — o que está de pé, e os três bugs que o teste de RLS encontrou
+
+## Rodar
+
+```bash
+npm install
+cp .env.example .env.local     # preencher com as credenciais do Supabase
+npm run dev
+
+npm run test:rls               # Postgres local: migrations + seed + 32 testes de RLS
+```
 
 ## Estado atual
 
-**Fase 1 — Planejamento.** Nada implementado ainda. As telas estão desenhadas
-(ver `design/`) e precisam de uma passada para incorporar a aderência ao MEC e
-para corrigir o domínio dos dados de exemplo — Zona Nova é Redemac, material de
-construção.
+**Fase 3 — Fundação concluída.** Auth, papéis e isolamento por unidade de pé e
+testados (`tests/rls.sql`, 32 asserções). As 22 telas estão desenhadas em
+`design/`. Próximo: conectar o WhatsApp (Fase 4).
+
+Duas pendências que bloqueiam: a identidade visual da Zona Nova (as telas usam
+placeholder) e o projeto Supabase real — tudo foi validado em Postgres local.

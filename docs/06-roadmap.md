@@ -15,13 +15,16 @@ iniciais.
 **Pendência que bloqueia o refino:** a marca é placeholder. Sem logo, cores e
 tipografia reais da Zona Nova, refinar pixel é trabalho que pode ir fora.
 
-## Fase 3 — Fundação
-Projeto Next + Supabase, migration `0001_init`, auth, middleware por papel,
-cadastro com seleção de unidade, aprovação pelo gestor. Seed de unidades e
-usuários de teste.
+## Fase 3 — Fundação ✅
+Next 16 + Supabase, migrations `0001`/`0002`, auth, encaminhamento por papel,
+cadastro com seleção de unidade, aprovação, recuperação de senha, seed.
 
-**Critério de pronto:** um vendedor se cadastra, um gestor aprova, e a RLS
-impede que ele veja dado de outra unidade — comprovado por teste.
+**Critério de pronto: atingido.** `tests/rls.sql` — 32 asserções, todas
+passando. O teste encontrou três bugs reais que a leitura do código não pegou;
+estão descritos em [§8.2](08-fundacao.md).
+
+**Pendente:** criar o projeto Supabase e aplicar as migrations lá. Tudo foi
+validado em Postgres local.
 
 ## Fase 4 — Conexão e ingestão
 Criação de instância UAZAPI por vendedor, tela de QR, webhook, gravação
