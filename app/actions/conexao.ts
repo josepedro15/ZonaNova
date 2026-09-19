@@ -81,16 +81,22 @@ export async function conectarWhatsapp(): Promise<EstadoConexao> {
         if (!token) {
             const instancia = await uaz.criarInstancia(`zonanova-${conexaoId.slice(0, 8)}`);
             token = instancia.token;
-            await uaz.configurarWebhook(
-                token,
-                `${APP_URL}/api/webhook/uazapi/${tokenDeRota(conexaoId, segredo)}`,
-            );
             await admin.from('conexoes_whatsapp').update({
                 instance_name: instancia.name,
                 instance_token: paraBytea(cifrar(token)),
                 updated_at: new Date().toISOString(),
             }).eq('id', conexaoId);
         }
+
+        // O webhook é reapontado a CADA conexão, não só na criação. A URL fica
+        // gravada na UAZAPI, e o endereço do app muda: um túnel de teste troca
+        // de domínio a cada reinício, e em produção um domínio novo deixaria
+        // todas as instâncias antigas falando para o endereço morto — sem erro,
+        // só com as mensagens deixando de chegar.
+        await uaz.configurarWebhook(
+            token,
+            `${APP_URL}/api/webhook/uazapi/${tokenDeRota(conexaoId, segredo)}`,
+        );
 
         const i = await uaz.conectar(token);
 

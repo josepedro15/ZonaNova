@@ -11,7 +11,8 @@
     "db:reset": "bash scripts/db-local.sh reset",
     "test:rls": "bash scripts/db-local.sh test",
     "test:unidade": "node --test 'tests/unidade/*.test.ts'",
-    "promover": "node --env-file=.env.local scripts/promover.mjs"
+    "promover": "node --env-file=.env.local scripts/promover.mjs",
+    "tunel": "bash scripts/tunel.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

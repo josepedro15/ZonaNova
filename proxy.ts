@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/env';
 
-const ROTAS_PUBLICAS = ['/login', '/cadastro', '/recuperar-senha'];
+// /auth/callback tem de ser pública: quem chega do link do e-mail ainda NÃO
+// tem sessão — é essa rota que a cria. Protegida, o proxy mandava para o login
+// antes de o código ser trocado, e a confirmação nunca abria sessão.
+const ROTAS_PUBLICAS = ['/login', '/cadastro', '/recuperar-senha', '/auth/callback'];
 const ROTAS_DE_GESTAO = ['/equipe', '/aprovacoes'];
 const ROTAS_DE_REDE = ['/unidades', '/mec'];
 const ROTAS_DE_ADMIN = ['/admin'];

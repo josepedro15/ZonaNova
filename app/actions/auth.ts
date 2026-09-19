@@ -45,18 +45,29 @@ export async function cadastrar(_estado: Resultado, form: FormData): Promise<Res
     const { nome, email, telefone, unidadeId, senha } = parse.data;
 
     const supabase = await criarClienteServidor();
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
         email,
         password: senha,
-        // O trigger on_auth_user_created lê estes campos e cria o profile já
-        // com a unidade escolhida, em status 'pendente'.
-        options: { data: { nome, telefone, unidade_id: unidadeId } },
+        options: {
+            // O trigger on_auth_user_created lê estes campos e cria o profile já
+            // com a unidade escolhida, em status 'pendente'.
+            data: { nome, telefone, unidade_id: unidadeId },
+            // Sem isto o link do e-mail ia para o "Site URL" do projeto, não
+            // para o app — e não havia rota para trocar o código por sessão.
+            emailRedirectTo: `${APP_URL}/auth/callback`,
+        },
     });
 
     if (error) {
         // Também aqui: não confirmamos se o e-mail já existe.
         return { erro: 'Não foi possível criar a conta. Confira os dados e tente de novo.' };
     }
+
+    // O projeto exige confirmar o e-mail: o signUp cria a conta mas não abre
+    // sessão. Redirecionar para /aguardando-aprovacao, como antes, fazia o
+    // proxy devolver a pessoa ao login sem explicação nenhuma — parecia que o
+    // cadastro tinha falhado.
+    if (!data.session) return { enviado: true };
 
     redirect('/aguardando-aprovacao');
 }
