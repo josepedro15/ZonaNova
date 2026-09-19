@@ -8,7 +8,7 @@ export default async function Aguardando() {
 
     const { data: perfil } = await supabase
         .from('profiles')
-        .select('nome, unidade_id, unidades(nome, cidade, uf)')
+        .select('nome, unidade_id, unidades!profiles_unidade_id_fkey(nome, cidade, uf)')
         .eq('id', user!.id)
         .maybeSingle<{ nome: string; unidade_id: string | null; unidades: { nome: string; cidade: string | null; uf: string | null } | null }>();
 

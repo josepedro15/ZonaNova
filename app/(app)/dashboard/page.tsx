@@ -10,7 +10,7 @@ export default async function Dashboard() {
     // Tudo o que esta consulta devolve já passou pela RLS. Um vendedor recebe
     // só as conversas dele; um gestor, as da unidade. Ver tests/rls.sql.
     const [{ data: perfil }, { count: conversas }] = await Promise.all([
-        supabase.from('profiles').select('nome, role, unidades(nome)').eq('id', user!.id)
+        supabase.from('profiles').select('nome, role, unidades!profiles_unidade_id_fkey(nome)').eq('id', user!.id)
             .maybeSingle<{ nome: string; role: string; unidades: { nome: string } | null }>(),
         supabase.from('conversas').select('id', { count: 'exact', head: true }),
     ]);

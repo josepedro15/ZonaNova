@@ -27,7 +27,7 @@ export default async function Aprovacoes({
     const { data: { user } } = await supabase.auth.getUser();
 
     const { data: eu } = await supabase
-        .from('profiles').select('role, unidades(nome)').eq('id', user!.id)
+        .from('profiles').select('role, unidades!profiles_unidade_id_fkey(nome)').eq('id', user!.id)
         .maybeSingle<{ role: string; unidades: { nome: string } | null }>();
 
     // A lista vem pela SESSÃO do gestor, não pelo service role: a RLS já
@@ -35,7 +35,7 @@ export default async function Aprovacoes({
     // tela pedisse mais do que devia, o banco não entregaria.
     const { data } = await supabase
         .from('profiles')
-        .select('id, nome, email, telefone, created_at, unidade_id, unidades(nome)')
+        .select('id, nome, email, telefone, created_at, unidade_id, unidades!profiles_unidade_id_fkey(nome)')
         .eq('status', 'pendente')
         .order('created_at', { ascending: true });
     const pendentes = (data ?? []) as unknown as Pendente[];
