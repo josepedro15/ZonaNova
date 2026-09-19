@@ -11,21 +11,6 @@ const rotulo = 'text-xs font-semibold text-tinta-2';
 export default function FormularioCadastro({ unidades }: { unidades: Pick<Unidade, 'id' | 'nome' | 'cidade' | 'uf'>[] }) {
     const [estado, acao, pendente] = useActionState(cadastrar, inicial);
 
-    if (estado.enviado) {
-        return (
-            <div role="status" className="rounded-lg border border-linha bg-superficie p-5">
-                <p className="display text-[17px] font-semibold">Confira seu e-mail</p>
-                <p className="mt-2 text-[13.5px] leading-relaxed text-tinta-2">
-                    Mandamos um link de confirmação. Depois de clicar nele, seu cadastro vai
-                    para o gestor da unidade aprovar.
-                </p>
-                <p className="mt-3 text-[12.5px] text-tinta-3">
-                    Não chegou em alguns minutos? Olhe a caixa de spam.
-                </p>
-            </div>
-        );
-    }
-
     return (
         <form action={acao} className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">

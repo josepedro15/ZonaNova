@@ -3,6 +3,13 @@ import { criarClienteAdmin } from '@/lib/supabase/admin';
 import FormularioCadastro from './formulario';
 import Marca from '@/app/marca';
 
+// A lista de unidades vem do banco a cada visita. Sem isto o Next gera a
+// página UMA vez, no build: ela lê pelo service role, sem cookies, e o Next
+// conclui que nada nela muda por visita. Em produção a lista ficaria
+// congelada no dia do deploy — unidade cadastrada depois não apareceria para
+// ninguém escolher. Em `npm run dev` tudo é dinâmico, e por isso não se via.
+export const dynamic = 'force-dynamic';
+
 export default async function Cadastro() {
     // Service role de propósito. Quem abre esta tela ainda não tem conta, e
     // portanto é o papel `anon` — que não tem privilégio nenhum em `public`
