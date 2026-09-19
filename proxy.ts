@@ -6,6 +6,12 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/env';
 // tem sessão — é essa rota que a cria. Protegida, o proxy mandava para o login
 // antes de o código ser trocado, e a confirmação nunca abria sessão.
 const ROTAS_PUBLICAS = ['/login', '/cadastro', '/recuperar-senha', '/auth/callback'];
+// /nova-senha fica FORA de ROTAS_PUBLICAS de propósito: pública, ela mandaria
+// quem está ativo para /dashboard — e quem chega do link de recuperação já tem
+// a sessão que o /auth/callback acabou de criar. Ela é aberta a todos, com e
+// sem sessão, e passa antes das regras de pendente e de conexão: um vendedor
+// que esqueceu a senha ainda na fila de aprovação também precisa trocá-la.
+const ROTA_NOVA_SENHA = '/nova-senha';
 const ROTAS_DE_GESTAO = ['/equipe', '/aprovacoes'];
 const ROTAS_DE_REDE = ['/unidades', '/mec'];
 const ROTAS_DE_ADMIN = ['/admin'];
@@ -40,7 +46,8 @@ export async function proxy(request: NextRequest) {
     const publica = comecaCom(caminho, ROTAS_PUBLICAS);
 
     if (!user) {
-        if (publica) return resposta;
+        // Sem sessão a tela mostra "link vencido" e o caminho para pedir outro.
+        if (publica || caminho === ROTA_NOVA_SENHA) return resposta;
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
@@ -61,6 +68,10 @@ export async function proxy(request: NextRequest) {
         await supabase.auth.signOut();
         return NextResponse.redirect(new URL('/login?erro=desativado', request.url));
     }
+
+    // Depois do `inativo` de propósito: conta recusada ou desativada não troca
+    // senha — cai no logout acima, com a mensagem de conta desativada.
+    if (caminho === ROTA_NOVA_SENHA) return resposta;
 
     if (perfil.status === 'pendente') {
         return caminho === '/aguardando-aprovacao'

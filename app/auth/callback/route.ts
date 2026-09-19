@@ -3,7 +3,8 @@ import { criarClienteServidor } from '@/lib/supabase/server';
 import { APP_URL } from '@/lib/env';
 
 /**
- * Destino do link de confirmação de e-mail.
+ * Destino do link de confirmação de e-mail — e do de recuperação de senha,
+ * que chega com `next=/nova-senha`.
  *
  * O projeto Supabase exige confirmar o e-mail (mailer_autoconfirm = false). O
  * link do e-mail passa pelo Supabase, que confirma a conta e manda para cá com
@@ -28,6 +29,14 @@ export async function GET(request: Request) {
         const supabase = await criarClienteServidor();
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (!error) return NextResponse.redirect(new URL(destino, APP_URL));
+    }
+
+    // Link de recuperação vencido ou já usado: volta para /nova-senha, que
+    // explica e oferece outro link. O `?erro` é o que manda — se o navegador já
+    // tivesse outra sessão aberta, sem ele a tela mostraria o formulário e a
+    // pessoa trocaria a senha da conta errada.
+    if (destino === '/nova-senha') {
+        return NextResponse.redirect(new URL('/nova-senha?erro=link', APP_URL));
     }
 
     // Link vencido ou já usado: a conta pode até estar confirmada — o login resolve.

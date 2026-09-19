@@ -5,10 +5,10 @@ import { revalidatePath } from 'next/cache';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { APP_URL } from '@/lib/env';
-import { schemaAprovacao, schemaCadastro, schemaLogin } from '@/lib/validators/auth';
+import { schemaAprovacao, schemaCadastro, schemaLogin, schemaNovaSenha } from '@/lib/validators/auth';
 import { podeResolver, type Papel } from '@/lib/aprovacao';
 
-export type Resultado = { erro?: string; campo?: string; enviado?: boolean };
+export type Resultado = { erro?: string; campo?: string; enviado?: boolean; vencido?: boolean };
 
 export async function entrar(_estado: Resultado, form: FormData): Promise<Resultado> {
     const parse = schemaLogin.safeParse({
@@ -91,13 +91,62 @@ export async function pedirLinkDeSenha(_estado: Resultado, form: FormData): Prom
 
     const supabase = await criarClienteServidor();
     await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${APP_URL}/nova-senha`,
+        // Passa pelo /auth/callback, que troca o `code` do PKCE por sessão — a
+        // mesma troca da confirmação de cadastro, num lugar só. Mandar direto
+        // para /nova-senha deixava o `code` sem ninguém para o trocar.
+        redirectTo: `${APP_URL}/auth/callback?next=/nova-senha`,
     });
 
     // Responde igual com e-mail existente ou não, e ignora o erro de propósito:
     // diferenciar aqui transformaria a tela num jeito de descobrir quem
     // trabalha na rede.
     return { enviado: true };
+}
+
+/**
+ * Grava a senha nova de quem chegou pelo link de recuperação.
+ *
+ * Não pede a senha antiga porque o link do e-mail É a prova de identidade: a
+ * sessão que chega aqui foi criada pelo /auth/callback minutos antes. Quem
+ * impede uma sessão roubada e antiga de trocar a senha é a opção "Secure
+ * password change" do Supabase, não esta tela — o updateUser funciona a partir
+ * de qualquer sessão, com ou sem ela.
+ */
+export async function definirNovaSenha(_estado: Resultado, form: FormData): Promise<Resultado> {
+    const parse = schemaNovaSenha.safeParse({
+        senha: form.get('senha'), confirmacao: form.get('confirmacao'),
+    });
+    if (!parse.success) {
+        const p = parse.error.issues[0];
+        return { erro: p.message, campo: String(p.path[0]) };
+    }
+
+    const supabase = await criarClienteServidor();
+    const { data: { user } } = await supabase.auth.getUser();
+    // A sessão do link expirou com a tela aberta: gravar não tem como, e o
+    // caminho certo é pedir outro link, não "tente de novo".
+    if (!user) return { vencido: true };
+
+    const { error } = await supabase.auth.updateUser({ password: parse.data.senha });
+    if (error) {
+        if (error.code === 'same_password') {
+            return { erro: 'Essa é a senha que você já usa. Escolha outra.', campo: 'senha' };
+        }
+        if (error.code === 'weak_password') {
+            return { erro: 'Senha fraca demais. Use letras e números, com pelo menos 8 caracteres.', campo: 'senha' };
+        }
+        // `reauthentication_needed` é o "Secure password change" recusando uma
+        // sessão velha: um link novo gera sessão nova, então a saída é a mesma.
+        if (['session_expired', 'session_not_found', 'reauthentication_needed'].includes(error.code ?? '')) {
+            return { vencido: true };
+        }
+        return { erro: 'Não foi possível salvar a senha agora. Tente de novo.' };
+    }
+
+    // "Depois disso você entra direto" (design/Senha.dc.html): a sessão do link
+    // continua valendo. Quem ainda está pendente, o proxy leva para a tela de
+    // espera — o /dashboard aqui é só o destino de quem já está ativo.
+    redirect('/dashboard');
 }
 
 export async function sair() {

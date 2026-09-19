@@ -15,6 +15,16 @@ export const schemaLogin = z.object({
     senha: z.string().min(1, 'Digite sua senha.'),
 });
 
+// A regra da senha vem do cadastro, não é copiada: se o mínimo subir lá e não
+// aqui, a recuperação vira o atalho para criar uma senha mais fraca.
+export const schemaNovaSenha = z.object({
+    senha: schemaCadastro.shape.senha,
+    confirmacao: z.string(),
+}).refine((d) => d.senha === d.confirmacao, {
+    message: 'As duas senhas não são iguais.',
+    path: ['confirmacao'],
+});
+
 export const schemaAprovacao = z.object({
     profileId: z.string().uuid(),
     papel: z.enum(['vendedor', 'gestor']),
