@@ -1,4 +1,5 @@
 import { criarClienteServidor } from '@/lib/supabase/server';
+import Link from 'next/link';
 import { sair } from '@/app/actions/auth';
 import Marca from '@/app/marca';
 
@@ -14,6 +15,12 @@ export default async function Dashboard() {
         supabase.from('conversas').select('id', { count: 'exact', head: true }),
     ]);
 
+    // Pela sessão: a RLS já limita aos pendentes das unidades de quem olha.
+    const gere = ['gestor', 'supervisor', 'admin'].includes(perfil?.role ?? '');
+    const { count: pendentes } = gere
+        ? await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'pendente')
+        : { count: 0 };
+
     return (
         <main className="mx-auto w-full max-w-[430px] px-[18px] pb-10">
             <header className="flex items-center justify-between border-b border-linha py-3.5">
@@ -28,6 +35,23 @@ export default async function Dashboard() {
                 {perfil?.role === 'vendedor' ? 'Vendedor' : perfil?.role} ·{' '}
                 {conversas ?? 0} conversa{conversas === 1 ? '' : 's'} visível para você
             </p>
+
+            {gere && (
+                <Link href="/aprovacoes"
+                      className="mt-6 flex items-center justify-between rounded-lg border border-linha bg-superficie p-[18px]">
+                    <span>
+                        <span className="display block text-[15px] font-semibold">Aprovações</span>
+                        <span className="text-[12.5px] text-tinta-3">
+                            {pendentes ? `${pendentes} esperando você` : 'ninguém esperando'}
+                        </span>
+                    </span>
+                    {!!pendentes && (
+                        <span className="flex size-7 items-center justify-center rounded-full bg-petroleo text-[13px] font-semibold text-papel">
+                            {pendentes}
+                        </span>
+                    )}
+                </Link>
+            )}
 
             <div className="mt-6 rounded-lg border border-linha-quente bg-ocre-sof p-[18px]">
                 <span className="display text-[15px] font-semibold text-ocre-texto">Fundação no ar</span>

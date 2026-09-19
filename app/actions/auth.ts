@@ -6,6 +6,7 @@ import { criarClienteServidor } from '@/lib/supabase/server';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { APP_URL } from '@/lib/env';
 import { schemaAprovacao, schemaCadastro, schemaLogin } from '@/lib/validators/auth';
+import { podeResolver, type Papel } from '@/lib/aprovacao';
 
 export type Resultado = { erro?: string; campo?: string; enviado?: boolean };
 
@@ -82,12 +83,40 @@ export async function sair() {
 }
 
 /**
+ * Quem resolve cadastro: carrega o aprovador pela SESSÃO dele (não por um id
+ * vindo do formulário) e o candidato pelo service role.
+ */
+async function contextoDeAprovacao(profileId: string) {
+    const supabase = await criarClienteServidor();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { erro: 'Sessão expirada. Entre de novo.' } as const;
+
+    const { data: perfil } = await supabase
+        .from('profiles').select('role, status').eq('id', user.id)
+        .maybeSingle<{ role: Papel; status: string }>();
+
+    const { data: minhas } = await supabase
+        .from('gestor_unidades').select('unidade_id').eq('gestor_id', user.id);
+
+    const admin = criarClienteAdmin();
+    const { data: candidato } = await admin
+        .from('profiles').select('id, unidade_id, status').eq('id', profileId)
+        .maybeSingle<{ id: string; unidade_id: string | null; status: string }>();
+
+    const quem = perfil
+        ? { ...perfil, unidades: (minhas ?? []).map((u) => u.unidade_id as string) }
+        : null;
+
+    return { user, quem, candidato, admin } as const;
+}
+
+/**
  * Aprovar um cadastro pendente.
  *
  * Usa o service role porque a RLS e o trigger de colunas de poder proíbem
  * mudar `role`/`status` a partir de uma sessão de utilizador — e é isso que
  * impede um gestor de se promover (tests/rls.sql). Por isso a autorização é
- * conferida AQUI, em código, e a ação fica registada em eventos_admin.
+ * conferida AQUI, em código (lib/aprovacao.ts), e fica em eventos_admin.
  */
 export async function aprovarCadastro(_estado: Resultado, form: FormData): Promise<Resultado> {
     const parse = schemaAprovacao.safeParse({
@@ -97,61 +126,78 @@ export async function aprovarCadastro(_estado: Resultado, form: FormData): Promi
     if (!parse.success) return { erro: 'Pedido inválido.' };
     const { profileId, papel } = parse.data;
 
-    const supabase = await criarClienteServidor();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { erro: 'Sessão expirada. Entre de novo.' };
+    const ctx = await contextoDeAprovacao(profileId);
+    if ('erro' in ctx) return { erro: ctx.erro };
+    const { user, quem, candidato, admin } = ctx;
 
-    const { data: quemAprova } = await supabase
-        .from('profiles').select('role, status').eq('id', user.id).maybeSingle();
+    const recusa = podeResolver(quem, candidato, papel);
+    if (recusa) return { erro: recusa };
 
-    if (!quemAprova || quemAprova.status !== 'ativo'
-        || !['gestor', 'supervisor', 'admin'].includes(quemAprova.role)) {
-        return { erro: 'Você não tem permissão para aprovar cadastros.' };
-    }
-
-    const admin = criarClienteAdmin();
-    const { data: candidato } = await admin
-        .from('profiles').select('id, unidade_id, status').eq('id', profileId).maybeSingle();
-
-    if (!candidato) return { erro: 'Cadastro não encontrado.' };
-    if (candidato.status !== 'pendente') return { erro: 'Esse cadastro já foi resolvido.' };
-    if (!candidato.unidade_id) return { erro: 'O cadastro não tem unidade. Peça para a pessoa escolher.' };
-
-    // Um gestor só aprova para as unidades dele. O supervisor aprova em qualquer.
-    if (quemAprova.role === 'gestor') {
-        const { data: minhas } = await supabase
-            .from('gestor_unidades').select('unidade_id').eq('gestor_id', user.id);
-        const permitidas = (minhas ?? []).map((u) => u.unidade_id);
-        if (!permitidas.includes(candidato.unidade_id)) {
-            return { erro: 'Esse cadastro é de outra unidade.' };
-        }
-    }
-    // Só o supervisor cria outro gestor.
-    if (papel === 'gestor' && !['supervisor', 'admin'].includes(quemAprova.role)) {
-        return { erro: 'Só o supervisor pode aprovar alguém como gestor.' };
-    }
-
-    const { error } = await admin.from('profiles').update({
+    // `.eq('status', 'pendente')` no próprio UPDATE: dois gestores clicando ao
+    // mesmo tempo passam os dois pela conferência acima, mas só um encontra a
+    // linha ainda pendente. Sem isto, o segundo sobrescrevia o papel dado pelo
+    // primeiro e ficavam dois registos de aprovação para a mesma pessoa.
+    const { data: atualizados, error } = await admin.from('profiles').update({
         status: 'ativo',
         role: papel,
         aprovado_por: user.id,
         aprovado_em: new Date().toISOString(),
-    }).eq('id', profileId);
+    }).eq('id', profileId).eq('status', 'pendente').select('id');
 
     if (error) return { erro: 'Não foi possível aprovar agora. Tente de novo.' };
+    if (!atualizados?.length) return { erro: 'Esse cadastro já foi resolvido por outra pessoa.' };
 
     if (papel === 'gestor') {
         await admin.from('gestor_unidades')
-            .upsert({ gestor_id: profileId, unidade_id: candidato.unidade_id });
+            .upsert({ gestor_id: profileId, unidade_id: candidato!.unidade_id });
     }
 
     await admin.from('eventos_admin').insert({
         actor_id: user.id,
         acao: 'aprovou_cadastro',
         alvo_id: profileId,
-        detalhes: { papel, unidade_id: candidato.unidade_id },
+        detalhes: { papel, unidade_id: candidato!.unidade_id },
     });
 
     revalidatePath('/aprovacoes');
-    return {};
+    return { enviado: true };
+}
+
+/**
+ * Recusar um cadastro. Existia só o caminho do "sim" — quem se cadastrasse
+ * sem trabalhar na rede ficava pendente para sempre, na fila do gestor.
+ *
+ * Recusa vira `inativo`, não apagar: a conta continua em auth.users, e apagar
+ * o perfil deixaria uma conta órfã que o proxy tira do app em todo login. Com
+ * `inativo` o proxy desloga com mensagem clara, e fica o registo de quem
+ * recusou e porquê.
+ */
+export async function recusarCadastro(_estado: Resultado, form: FormData): Promise<Resultado> {
+    const profileId = String(form.get('profileId') ?? '');
+    const motivo = String(form.get('motivo') ?? '').trim().slice(0, 300) || null;
+    if (!/^[0-9a-f-]{36}$/i.test(profileId)) return { erro: 'Pedido inválido.' };
+
+    const ctx = await contextoDeAprovacao(profileId);
+    if ('erro' in ctx) return { erro: ctx.erro };
+    const { user, quem, candidato, admin } = ctx;
+
+    const recusa = podeResolver(quem, candidato);
+    if (recusa) return { erro: recusa };
+
+    const { data: atualizados, error } = await admin.from('profiles')
+        .update({ status: 'inativo' })
+        .eq('id', profileId).eq('status', 'pendente').select('id');
+
+    if (error) return { erro: 'Não foi possível recusar agora. Tente de novo.' };
+    if (!atualizados?.length) return { erro: 'Esse cadastro já foi resolvido por outra pessoa.' };
+
+    await admin.from('eventos_admin').insert({
+        actor_id: user.id,
+        acao: 'recusou_cadastro',
+        alvo_id: profileId,
+        detalhes: { unidade_id: candidato!.unidade_id, motivo },
+    });
+
+    revalidatePath('/aprovacoes');
+    return { enviado: true };
 }
