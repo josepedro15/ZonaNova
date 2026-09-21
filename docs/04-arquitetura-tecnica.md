@@ -60,12 +60,21 @@ Quem agenda é o **pg_cron do Supabase**, não o Vercel. As rotas `/api/cron/*`
 continuam rotas HTTP comuns; o que mudou é quem aperta o botão — o banco chama
 cada uma pelo `pg_net`, levando o `Authorization: Bearer ${CRON_SECRET}`.
 
-| Job | Horário (UTC) | Rota |
-|---|---|---|
-| fechar o dia | `30 2 * * *` | `/api/cron/fechar-dia` |
-| processar a fila | `*/5 * * * *` | `/api/cron/processar-fila` |
-| checar conexões | `0 */2 * * *` | `/api/cron/checar-conexoes` |
-| expurgo | `0 5 1 * *` | `/api/cron/expurgo` |
+| Job | Horário (UTC) | Rota | Agendado |
+|---|---|---|---|
+| processar a fila | `*/5 * * * *` | `/api/cron/processar-fila` | sim |
+| checar conexões | `0 */2 * * *` | `/api/cron/checar-conexoes` | sim |
+| fechar o dia | `30 2 * * *` | `/api/cron/fechar-dia` | a rota não existe |
+| expurgo | `0 5 1 * *` | `/api/cron/expurgo` | a rota não existe |
+
+Os dois últimos ficam fora do `cron.schedule` até as rotas existirem:
+agendar o que ainda não foi escrito faz o banco bater numa 404 todo dia e dá,
+no painel de jobs, a impressão de que estão cobertos.
+
+Os segredos (`cron_secret` e `app_url`) vivem no Vault do Supabase, não na
+migration — ela é versionada. São lidos em tempo de execução, dentro de
+`public.disparar_rota_cron`: trocar o segredo ou o domínio é um update no
+Vault, sem remarcar job nenhum.
 
 O plano Hobby do Vercel só permite cron diário, e a fila precisa rodar de 5 em 5
 minutos — esse é o motivo prático. O motivo de fundo é melhor: o agendamento
