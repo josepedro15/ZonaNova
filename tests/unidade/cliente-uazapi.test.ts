@@ -76,10 +76,18 @@ test('o webhook não exclui mensagem mandada pela API', async () => {
     const { f, chamadas } = falso({ '/webhook': {} });
     await new Uazapi('https://uaz', 'admin', f).configurarWebhook('tk-nossa', 'https://zn/hook/abc');
     const c = chamadas.find((x) => x.url === '/webhook')!;
-    const corpo = c.corpo as { excludeMessages: string[]; url: string; enabled: boolean };
+    const corpo = c.corpo as { excludeMessages: string[]; url: string; enabled: boolean; events: string[] };
     assert.deepEqual(corpo.excludeMessages, []);
     assert.equal(corpo.url, 'https://zn/hook/abc');
     assert.equal(corpo.enabled, true);
+    assert.ok(corpo.events.includes('history'));
+});
+
+test('baixa mídia por id e devolve a URL temporária', async () => {
+    const { f, chamadas } = falso({ '/message/download': { fileURL: 'https://cdn/audio.mp3', mimetype: 'audio/mpeg' } });
+    const r = await new Uazapi('https://uaz', 'admin', f).baixarMidia('tk', 'MSG1');
+    assert.equal(r.fileURL, 'https://cdn/audio.mp3');
+    assert.deepEqual(chamadas.find((x) => x.url === '/message/download')?.corpo, { id: 'MSG1' });
 });
 
 test('erro HTTP da UAZAPI vira exceção com o status', async () => {

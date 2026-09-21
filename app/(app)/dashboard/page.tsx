@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { sair } from '@/app/actions/auth';
 import Marca from '@/app/marca';
+import AppShell from '@/components/app-shell';
 import {
     esperaDoCliente, esperaEmTexto, foiRespondido,
     respostaMediaEmMinutos, telefoneBonito, temposDeResposta, type Msg,
@@ -103,7 +104,8 @@ export default async function Dashboard() {
 
     // Tudo já passou pela RLS. Vendedor vê as próprias conversas; gestor, as da
     // unidade. Ver tests/rls.sql.
-    const [{ data: perfil }, { data: conexao }, { data: conversas }] = await Promise.all([
+    const dataRef = new Intl.DateTimeFormat('en-CA', { timeZone: FUSO, year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora);
+    const [{ data: perfil }, { data: conexao }, { data: conversas }, { data: relatorios }, { data: aderencia }] = await Promise.all([
         supabase.from('profiles')
             .select('nome, role, unidades!profiles_unidade_id_fkey(nome)')
             .eq('id', user!.id)
@@ -117,6 +119,11 @@ export default async function Dashboard() {
             .gte('ultima_mensagem_em', janela.toISOString())
             .order('ultima_mensagem_em', { ascending: false })
             .returns<ConversaComMensagens[]>(),
+        supabase.from('relatorios_diarios')
+            .select('data_ref,score_geral,leads_atendidos,conversoes_confirmadas,oportunidades_perdidas,tempo_medio_resposta_s,taxa_resposta,payload')
+            .eq('user_id', user!.id).order('data_ref', { ascending: false }).limit(30),
+        supabase.from('aderencia_diaria').select('data_ref,aderencia_geral,por_etapa,sondagem_itens,frases_proibidas')
+            .eq('user_id', user!.id).order('data_ref', { ascending: false }).limit(1).maybeSingle(),
     ]);
 
     const todas = conversas ?? [];
@@ -143,8 +150,14 @@ export default async function Dashboard() {
         : { count: 0 };
 
     const ligado = conexao?.status === 'conectada';
+    const relatorio = (relatorios ?? []).find((r) => r.data_ref === dataRef) ?? relatorios?.[0] ?? null;
+    const historico = [...(relatorios ?? [])].reverse();
+    const coaching = (relatorio?.payload ?? {}) as {
+        resumo?: string; melhorias?: string[]; elogio?: string; desafio?: string;
+    };
 
     return (
+        <AppShell papel="vendedor" nome={perfil?.nome ?? ''} unidade={perfil?.unidades?.nome} atual="/dashboard">
         <main className="mx-auto w-full max-w-[430px] px-[18px] pb-10 lg:max-w-[1120px] lg:px-10 lg:pb-16">
             <header className="flex items-center justify-between border-b border-linha py-3.5 lg:py-5">
                 <Marca legenda={perfil?.unidades?.nome ?? 'Rede'} />
@@ -179,6 +192,34 @@ export default async function Dashboard() {
                 {dataPorExtenso(agora)}
                 {deHoje.length > 0 && ` · última mensagem às ${horaBrasilia(deHoje[0].ultima_mensagem_em)}`}
             </p>
+
+            {relatorio && (
+                <>
+                    <section className="mt-6 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+                        <div className="rounded-card bg-petroleo p-5 text-papel">
+                            <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-white/65">Nota do dia</p>
+                            <p className="display mt-2 text-5xl font-semibold">{relatorio.score_geral === null ? '—' : Math.round(Number(relatorio.score_geral))}<span className="text-base font-medium text-white/55">/100</span></p>
+                            <p className="mt-3 text-[11.5px] leading-relaxed text-white/70">Só negociações entram na nota. Suporte e social ficam fora.</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+                            {[['Leads', relatorio.leads_atendidos], ['Conversões', relatorio.conversoes_confirmadas], ['Perdidas', relatorio.oportunidades_perdidas], ['Resposta', relatorio.tempo_medio_resposta_s == null ? '—' : `${Math.round(Number(relatorio.tempo_medio_resposta_s) / 60)} min`]].map(([rotulo, valor]) => (
+                                <div key={String(rotulo)} className="rounded-card border border-linha bg-superficie p-4"><p className="display text-2xl font-semibold">{String(valor)}</p><p className="mt-1 text-[11.5px] text-tinta-2">{rotulo}</p></div>
+                            ))}
+                        </div>
+                    </section>
+                    <section className="mt-4 rounded-card border border-linha-quente bg-ocre-sof p-5">
+                        <p className="display text-lg font-semibold text-ocre-texto">Seu treino de hoje</p>
+                        {coaching.resumo && <p className="mt-2 text-[13px] leading-relaxed text-ocre-texto-2">{coaching.resumo}</p>}
+                        <ol className="mt-3 space-y-2">{(coaching.melhorias ?? []).map((m, i) => <li key={m} className="flex gap-2 text-[12.5px] leading-relaxed"><span className="font-bold text-ocre">{i + 1}.</span>{m}</li>)}</ol>
+                        {coaching.elogio && <p className="mt-4 border-t border-linha-quente pt-3 text-[12.5px]"><strong>O que funcionou:</strong> {coaching.elogio}</p>}
+                        {coaching.desafio && <p className="mt-2 text-[12.5px]"><strong>Desafio:</strong> {coaching.desafio}</p>}
+                    </section>
+                    <section className="mt-4 grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-card border border-linha bg-superficie p-5"><p className="text-[11px] font-bold uppercase tracking-[.12em] text-tinta-3">Seu MEC</p><p className="display mt-2 text-3xl font-semibold">{aderencia?.aderencia_geral == null ? '—' : `${Math.round(Number(aderencia.aderencia_geral))}%`}</p><Link href="/meu-mec" className="mt-3 inline-block text-[12.5px] font-semibold text-petroleo">Ver as sete etapas →</Link></div>
+                        <div className="rounded-card border border-linha bg-superficie p-5"><p className="text-[11px] font-bold uppercase tracking-[.12em] text-tinta-3">Últimos dias</p><div className="mt-4 flex h-16 items-end gap-1.5">{historico.slice(-14).map((r) => <div key={r.data_ref} title={`${r.data_ref}: ${r.score_geral ?? 'sem nota'}`} className="min-w-2 flex-1 rounded-t bg-petroleo/70" style={{ height: `${Math.max(8, Number(r.score_geral ?? 0))}%` }} />)}</div></div>
+                    </section>
+                </>
+            )}
 
             {/* O proxy já manda vendedor sem conexão para /conectar. Isto aqui é
                 para gestor e supervisor, que ele não desvia — e para o caso de o
@@ -352,17 +393,15 @@ export default async function Dashboard() {
             )}
             </div>
 
-            {/* O que ainda não existe, dito uma vez e em voz baixa — não um
-                aviso de obra ocupando o meio da tela a cada visita. */}
-            <p className="mt-5 flex gap-2.5 rounded-[11px] lg:mt-8 border border-linha bg-papel-2 px-3.5 py-3 text-[11.5px] leading-relaxed text-tinta-2">
+            {!relatorio && <p className="mt-5 flex gap-2.5 rounded-[11px] lg:mt-8 border border-linha bg-papel-2 px-3.5 py-3 text-[11.5px] leading-relaxed text-tinta-2">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                      className="mt-px shrink-0" aria-hidden="true">
                     <circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 8h.01" />
                 </svg>
-                Nota do dia, treino e aderência ao MEC entram quando a análise for ligada. O que
-                está aqui vem direto das suas conversas.
-            </p>
+                O relatório do dia ainda não fechou. Enquanto isso, estes indicadores vêm direto das suas conversas.
+            </p>}
         </main>
+        </AppShell>
     );
 }

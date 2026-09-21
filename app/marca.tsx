@@ -14,10 +14,12 @@ export default function Marca({
     tamanho = 'sm',
     orientacao = 'horizontal',
     legenda,
+    invertida = false,
 }: {
     tamanho?: 'sm' | 'md';
     orientacao?: 'horizontal' | 'vertical';
     legenda?: string;
+    invertida?: boolean;
 }) {
     const grande = tamanho === 'md';
 
@@ -35,11 +37,11 @@ export default function Marca({
 
     const nome = (
         <div className={`flex flex-col ${orientacao === 'vertical' ? 'items-center gap-0.5' : ''}`}>
-            <span className={`display font-semibold ${grande ? 'text-[18px]' : 'text-sm'}`}>
+            <span className={`display font-semibold ${invertida ? 'text-papel' : ''} ${grande ? 'text-[18px]' : 'text-sm'}`}>
                 Zona Nova
             </span>
             {legenda && (
-                <span className={`text-tinta-3 ${grande ? 'text-xs' : 'text-[11px]'}`}>{legenda}</span>
+                <span className={`${invertida ? 'text-white/55' : 'text-tinta-3'} ${grande ? 'text-xs' : 'text-[11px]'}`}>{legenda}</span>
             )}
         </div>
     );

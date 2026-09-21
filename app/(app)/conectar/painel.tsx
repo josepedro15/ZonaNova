@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { conectarWhatsapp, statusConexao, type EstadoConexao } from '@/app/actions/conexao';
+import { aceitarMonitoramento, conectarWhatsapp, statusConexao, type EstadoConexao } from '@/app/actions/conexao';
 
 /**
  * Quanto tempo o "WhatsApp conectado" fica à frente antes de a tela seguir
@@ -22,6 +22,7 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
     const [estado, setEstado] = useState<EstadoConexao>(inicial);
     const [pendente, iniciar] = useTransition();
     const [expirou, setExpirou] = useState(false);
+    const [aceitou, setAceitou] = useState(false);
     const router = useRouter();
 
     const aguardando = estado.status === 'aguardando_qr' && !!estado.qrcode;
@@ -52,6 +53,10 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
 
     const pedirQr = () => iniciar(async () => {
         setExpirou(false);
+        if (estado.precisaAceite) {
+            const aceite = await aceitarMonitoramento();
+            if (aceite.erro) return setEstado({ ...estado, erro: aceite.erro });
+        }
         setEstado(await conectarWhatsapp());
     });
 
@@ -69,8 +74,8 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
                     <p className="mt-1.5 text-[13px] text-tinta-2">Número {estado.numero}</p>
                 )}
                 <p className="mt-3 text-[12.5px] leading-relaxed text-tinta-3">
-                    Suas conversas passam a ser analisadas a partir de agora. O relatório
-                    do dia sai à noite.
+                    As mensagens novas já entram na análise. O WhatsApp também pode enviar
+                    parte do histórico recente em segundo plano. O relatório do dia sai à noite.
                 </p>
                 {/* Fica sempre, inclusive nos instantes que antecedem o desvio
                     automático: se o router falhar, a tela não volta a ser um
@@ -119,11 +124,18 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
             )}
 
             <button
-                type="button" onClick={pedirQr} disabled={pendente}
+                type="button" onClick={pedirQr} disabled={pendente || (!!estado.precisaAceite && !aceitou)}
                 className="display mt-6 min-h-[50px] w-full rounded-[11px] bg-petroleo text-[15px] font-semibold text-papel disabled:opacity-60"
             >
                 {pendente ? 'Preparando…' : aguardando ? 'Gerar outro código' : 'Gerar código'}
             </button>
+
+            {estado.precisaAceite && (
+                <label className="mt-4 flex items-start gap-2.5 rounded-[12px] border border-linha-quente bg-ocre-sof px-4 py-3.5 text-[12px] leading-relaxed text-ocre-texto-2">
+                    <input type="checkbox" className="mt-0.5" checked={aceitou} onChange={(e) => setAceitou(e.target.checked)} />
+                    <span>Estou conectando um número comercial e fui informado de que suas conversas serão armazenadas e analisadas para gestão e treinamento. Grupos, status e contatos bloqueados ficam de fora.</span>
+                </label>
+            )}
 
             <div className="mt-4 flex gap-2.5 rounded-[12px] bg-papel-2 px-4 py-3.5">
                 <svg className="shrink-0 stroke-tinta-2" width="16" height="16" viewBox="0 0 24 24"
@@ -131,8 +143,8 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
                     <circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 8h.01" />
                 </svg>
                 <span className="text-[12.5px] leading-relaxed text-tinta-2">
-                    Só as conversas do seu número comercial são lidas. Conversa de grupo e
-                    status ficam de fora, e você pode marcar contatos para nunca analisar.
+                    Mensagens novas e o histórico que o próprio WhatsApp disponibilizar podem ser lidos.
+                    A importação antiga não é garantida. Grupos, status e contatos bloqueados ficam de fora.
                 </span>
             </div>
         </section>

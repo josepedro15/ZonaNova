@@ -6,12 +6,14 @@ import { cifrar, decifrar } from '@/lib/crypto';
 import { tokenDeRota } from '@/lib/uazapi/rota';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { APP_URL } from '@/lib/env';
+import { revalidatePath } from 'next/cache';
 
 export type EstadoConexao = {
     status?: 'desconectada' | 'aguardando_qr' | 'conectada' | 'caida';
     qrcode?: string;
     numero?: string | null;
     erro?: string;
+    precisaAceite?: boolean;
 };
 
 function uazapi() {
@@ -41,6 +43,10 @@ export async function conectarWhatsapp(): Promise<EstadoConexao> {
     if (!user) return { erro: 'Sessão expirada. Entre de novo.' };
 
     const admin = criarClienteAdmin();
+
+    const { data: aceite } = await admin.from('aceites_privacidade').select('id')
+        .eq('user_id', user.id).eq('versao', 'monitoramento-v1').maybeSingle();
+    if (!aceite) return { erro: 'Confirme o aviso de monitoramento antes de conectar.', precisaAceite: true };
 
     const { data: perfil } = await admin
         .from('profiles').select('id, unidade_id, status')
@@ -104,6 +110,7 @@ export async function conectarWhatsapp(): Promise<EstadoConexao> {
         await admin.from('conexoes_whatsapp').update({
             status,
             ...(i.owner ? { numero: i.owner } : {}),
+            historico_status: status === 'conectada' ? 'recebendo' : 'nao_solicitado',
             ultimo_evento_em: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         }).eq('id', conexaoId);
@@ -122,10 +129,84 @@ export async function statusConexao(): Promise<EstadoConexao> {
     if (!user) return { erro: 'Sessão expirada.' };
 
     // A view não tem o token — é de propósito (ver grant por coluna no 0001).
-    const { data } = await supabase
+    const [{ data }, { data: aceite }] = await Promise.all([supabase
         .from('vw_conexoes_status').select('status, numero')
         .eq('user_id', user.id)
-        .maybeSingle<{ status: EstadoConexao['status']; numero: string | null }>();
+        .maybeSingle<{ status: EstadoConexao['status']; numero: string | null }>(),
+        supabase.from('aceites_privacidade').select('id').eq('user_id', user.id).eq('versao', 'monitoramento-v1').maybeSingle(),
+    ]);
 
-    return { status: data?.status ?? 'desconectada', numero: data?.numero ?? null };
+    return { status: data?.status ?? 'desconectada', numero: data?.numero ?? null, precisaAceite: !aceite };
+}
+
+export async function aceitarMonitoramento(): Promise<{ ok?: boolean; erro?: string }> {
+    const supabase = await criarClienteServidor();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { erro: 'Sessão expirada.' };
+    const admin = criarClienteAdmin();
+    const { error } = await admin.from('aceites_privacidade').upsert({ user_id: user.id, versao: 'monitoramento-v1' }, { onConflict: 'user_id,versao' });
+    if (error) return { erro: 'Não foi possível registrar o aceite.' };
+    await admin.from('eventos_admin').insert({ actor_id: user.id, acao: 'aceitou_monitoramento', alvo_id: user.id, detalhes: { versao: 'monitoramento-v1' } });
+    return { ok: true };
+}
+
+/**
+ * Desliga a instância sem apagar mensagens, análises ou o vínculo local.
+ * O cliente UAZAPI confere o `systemName` antes da operação destrutiva.
+ */
+export async function desconectarWhatsapp(): Promise<EstadoConexao> {
+    const supabase = await criarClienteServidor();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { erro: 'Sessão expirada. Entre de novo.' };
+
+    const admin = criarClienteAdmin();
+    const { data: conexao } = await admin.from('conexoes_whatsapp')
+        .select('id, instance_token, numero')
+        .eq('user_id', user.id)
+        .maybeSingle<{ id: string; instance_token: string | null; numero: string | null }>();
+
+    if (!conexao?.instance_token) return { status: 'desconectada', numero: conexao?.numero ?? null };
+
+    try {
+        const token = decifrar(deBytea(conexao.instance_token));
+        await uazapi().desconectar(token);
+        await admin.from('conexoes_whatsapp').update({
+            status: 'desconectada',
+            ultimo_evento_em: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }).eq('id', conexao.id);
+        await admin.from('eventos_admin').insert({
+            actor_id: user.id,
+            acao: 'desconectou_whatsapp',
+            alvo_id: conexao.id,
+            detalhes: { numero: conexao.numero },
+        });
+        revalidatePath('/perfil');
+        revalidatePath('/dashboard');
+        return { status: 'desconectada', numero: conexao.numero };
+    } catch (e) {
+        console.error('desconectarWhatsapp', e);
+        return { erro: 'Não foi possível desconectar agora. Tente novamente.' };
+    }
+}
+
+export async function bloquearContato(form: FormData) {
+    const supabase = await criarClienteServidor();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const telefone = String(form.get('telefone') ?? '').replace(/\D/g, '').slice(0, 20);
+    const motivo = String(form.get('motivo') ?? '').trim().slice(0, 300) || null;
+    if (telefone.length < 8) return;
+    await criarClienteAdmin().from('contatos_bloqueados').upsert({ user_id: user.id, telefone, motivo }, { onConflict: 'user_id,telefone' });
+    revalidatePath('/perfil');
+}
+
+export async function desbloquearContato(form: FormData) {
+    const supabase = await criarClienteServidor();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const id = String(form.get('id') ?? '');
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return;
+    await criarClienteAdmin().from('contatos_bloqueados').delete().eq('id', id).eq('user_id', user.id);
+    revalidatePath('/perfil');
 }

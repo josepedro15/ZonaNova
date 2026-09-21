@@ -9,7 +9,14 @@
 export type EventoUazapi = {
     EventType?: string;
     event?: string;
-    message?: {
+    token?: string;
+    message?: MensagemUazapi;
+    messages?: MensagemUazapi[] | null;
+    instance?: { status?: string; token?: string; name?: string };
+    status?: string;
+};
+
+export type MensagemUazapi = {
         id?: string;
         messageid?: string;
         chatid?: string;
@@ -28,9 +35,7 @@ export type EventoUazapi = {
         senderName?: string;
         pushName?: string;
         fromApi?: boolean;
-    };
-    instance?: { status?: string; token?: string; name?: string };
-    status?: string;
+        wasSentByApi?: boolean;
 };
 
 export type MensagemNormalizada = {
@@ -108,9 +113,15 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
         // Mensagem disparada pela API é template/bot, não o vendedor digitando.
         // O doc 3 exige distinguir: disparo em massa não pode contar como
         // atendimento.
-        automatica: m.fromApi === true,
+        automatica: m.fromApi === true || m.wasSentByApi === true,
         enviadaEm: paraData(m.messageTimestamp ?? m.timestamp),
     };
+}
+
+/** Eventos ao vivo trazem `message`; histórico traz lotes em `messages`. */
+export function mensagensDoEvento(ev: EventoUazapi): MensagemUazapi[] {
+    if (ev.message) return [ev.message];
+    return Array.isArray(ev.messages) ? ev.messages : [];
 }
 
 /** Eventos de conexão viram o `status` de conexoes_whatsapp. */

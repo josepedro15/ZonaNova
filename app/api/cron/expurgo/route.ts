@@ -1,0 +1,2 @@
+import{criarClienteAdmin}from'@/lib/supabase/admin';import{cronAutorizado}from'@/lib/cron';
+export async function GET(req:Request){if(!cronAutorizado(req))return Response.json({erro:'não autorizado'},{status:401});const limite=new Date();limite.setUTCMonth(limite.getUTCMonth()-12);const supabase=criarClienteAdmin();const{data,error}=await supabase.from('mensagens').delete().lt('enviada_em',limite.toISOString()).select('id');if(error)return Response.json({erro:error.message},{status:500});return Response.json({removidas:data?.length??0,anteriores_a:limite.toISOString()})}

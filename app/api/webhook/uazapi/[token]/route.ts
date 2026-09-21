@@ -2,7 +2,7 @@ import { after } from 'next/server';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { decifrar, segredoIgual } from '@/lib/crypto';
 import { conexaoDoToken } from '@/lib/uazapi/rota';
-import { normalizarMensagem, statusDeConexao, type EventoUazapi } from '@/lib/uazapi/normalizar';
+import { mensagensDoEvento, normalizarMensagem, statusDeConexao, type EventoUazapi, type MensagemUazapi } from '@/lib/uazapi/normalizar';
 
 /**
  * Ingestão do WhatsApp (doc 3 §3.2).
@@ -50,7 +50,7 @@ export async function POST(
     // token de rota prova de quem é a URL; este prova de quem é a instância.
     // Quem tivesse a URL de um vendedor não conseguiria empurrar tráfego de
     // outra instância por ela.
-    const tokenPayload = evento.instance?.token;
+    const tokenPayload = evento.token ?? evento.instance?.token;
     if (tokenPayload && conexao.instance_token) {
         let guardado: string;
         try {
@@ -80,12 +80,24 @@ async function processar(evento: EventoUazapi, conexao: Conexao) {
     const status = statusDeConexao(evento);
     if (status && !evento.message) {
         await supabase.from('conexoes_whatsapp')
-            .update({ status, ultimo_evento_em: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .update({ status, ...(status === 'conectada' ? { historico_status: 'recebendo' } : {}), ultimo_evento_em: new Date().toISOString(), updated_at: new Date().toISOString() })
             .eq('id', conexao.id);
         return;
     }
 
-    const m = normalizarMensagem(evento);
+    const mensagens = mensagensDoEvento(evento);
+    if (!mensagens.length) return;
+    for (const mensagem of mensagens) await processarMensagem(mensagem, conexao);
+    if (evento.EventType?.toLowerCase() === 'history') {
+        await supabase.from('conexoes_whatsapp').update({
+            historico_status: 'recebido', historico_ultimo_em: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }).eq('id', conexao.id);
+    }
+}
+
+async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
+    const supabase = criarClienteAdmin();
+    const m = normalizarMensagem({ message: mensagem });
     if ('descartar' in m) return;
 
     // Contato bloqueado é escolha do vendedor: "isto não é atendimento".

@@ -27,7 +27,8 @@ export async function entrar(_estado: Resultado, form: FormData): Promise<Result
     // errada" transforma a tela num jeito de descobrir quem trabalha na rede.
     if (error) return { erro: 'E-mail ou senha incorretos.' };
 
-    redirect('/dashboard');
+    // O proxy resolve o destino pelo papel (vendedor/equipe/rede/admin).
+    redirect('/');
 }
 
 export async function cadastrar(_estado: Resultado, form: FormData): Promise<Resultado> {
@@ -146,7 +147,7 @@ export async function definirNovaSenha(_estado: Resultado, form: FormData): Prom
     // "Depois disso você entra direto" (design/Senha.dc.html): a sessão do link
     // continua valendo. Quem ainda está pendente, o proxy leva para a tela de
     // espera — o /dashboard aqui é só o destino de quem já está ativo.
-    redirect('/dashboard');
+    redirect('/');
 }
 
 export async function sair() {

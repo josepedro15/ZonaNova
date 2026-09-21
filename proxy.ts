@@ -14,8 +14,15 @@ const ROTAS_PUBLICAS = ['/login', '/cadastro', '/recuperar-senha', '/auth/callba
 // que esqueceu a senha ainda na fila de aprovação também precisa trocá-la.
 const ROTA_NOVA_SENHA = '/nova-senha';
 const ROTAS_DE_GESTAO = ['/equipe', '/aprovacoes'];
-const ROTAS_DE_REDE = ['/unidades', '/mec'];
+const ROTAS_DE_REDE = ['/unidades', '/mec', '/descobertas'];
 const ROTAS_DE_ADMIN = ['/admin'];
+
+function inicioPorPapel(papel: string): string {
+    if (papel === 'gestor') return '/equipe';
+    if (papel === 'supervisor') return '/unidades';
+    if (papel === 'admin') return '/admin';
+    return '/dashboard';
+}
 
 function comecaCom(caminho: string, prefixos: string[]) {
     return prefixos.some((p) => caminho === p || caminho.startsWith(`${p}/`));
@@ -80,12 +87,19 @@ export async function proxy(request: NextRequest) {
             : NextResponse.redirect(new URL('/aguardando-aprovacao', request.url));
     }
 
-    // Ativo: as telas de entrada e a de espera já não servem.
+    const papel = perfil.role as string;
+    const inicio = inicioPorPapel(papel);
+
+    // Ativo: as telas de entrada e a de espera já não servem. Cada papel cai
+    // no painel que responde à decisão dele; misturar toda a unidade no
+    // dashboard de vendedor produz indicadores semanticamente errados.
     if (publica || caminho === '/aguardando-aprovacao' || caminho === '/') {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+        return NextResponse.redirect(new URL(inicio, request.url));
     }
 
-    const papel = perfil.role as string;
+    if (caminho === '/dashboard' && papel !== 'vendedor') {
+        return NextResponse.redirect(new URL(inicio, request.url));
+    }
 
     // Vendedor ativo sem WhatsApp ligado não tem o que ver no dashboard: sem
     // conexão não entra mensagem, sem mensagem não há análise. Mandar para
@@ -100,13 +114,13 @@ export async function proxy(request: NextRequest) {
     }
 
     if (comecaCom(caminho, ROTAS_DE_ADMIN) && papel !== 'admin') {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+        return NextResponse.redirect(new URL(inicio, request.url));
     }
     if (comecaCom(caminho, ROTAS_DE_REDE) && !['supervisor', 'admin'].includes(papel)) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+        return NextResponse.redirect(new URL(inicio, request.url));
     }
     if (comecaCom(caminho, ROTAS_DE_GESTAO) && !['gestor', 'supervisor', 'admin'].includes(papel)) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+        return NextResponse.redirect(new URL(inicio, request.url));
     }
 
     return resposta;

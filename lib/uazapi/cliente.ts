@@ -118,11 +118,27 @@ export class Uazapi {
             corpo: {
                 enabled: true,
                 url,
-                events: ['messages', 'connection'],
+                events: ['messages', 'history', 'connection'],
                 excludeMessages: [],
                 addUrlEvents: false,
                 addUrlTypesMessages: false,
             },
+        });
+    }
+
+    /** Gera uma URL temporária (2 dias) para uma mídia já recebida. */
+    async baixarMidia(token: string, mensagemId: string): Promise<{ fileURL: string; mimetype?: string }> {
+        const r = await this.chamar<{ fileURL?: string; mimetype?: string }>('/message/download', {
+            metodo: 'POST', token, corpo: { id: mensagemId },
+        });
+        if (!r.fileURL) throw new ErroUazapi('a UAZAPI não devolveu a URL da mídia');
+        return { fileURL: r.fileURL, mimetype: r.mimetype };
+    }
+
+    /** Pede até `count` mensagens anteriores; a resposta chega depois no webhook `history`. */
+    async sincronizarHistorico(token: string, jid: string, count = 50): Promise<void> {
+        await this.chamar('/message/history-sync', {
+            metodo: 'POST', token, corpo: { number: jid, mode: 'history', count: Math.min(Math.max(count, 1), 100) },
         });
     }
 

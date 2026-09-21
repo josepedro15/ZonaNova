@@ -2,18 +2,22 @@ import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { cronAutorizado } from '@/lib/cron';
 import { aposFalha } from '@/lib/fila';
 import { transcrever } from '@/lib/transcricao';
+import { analisarConversa, consolidarVendedor } from '@/lib/openai-analise';
+import { custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
+import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
+import { decifrar } from '@/lib/crypto';
+import { Uazapi } from '@/lib/uazapi/cliente';
 
 export const maxDuration = 300;
 
-const LOTE = 20;
+// Quatro análises reais levaram ~40s. O pg_net espera no máximo 60s; lote
+// maior fazia o banco registrar timeout apesar de a Vercel continuar rodando.
+const LOTE = 4;
 
 /**
  * Worker da fila (doc 3 §3.4). Roda a cada 5 minutos.
  *
- * Nesta fase trata apenas `transcricao` — os outros tipos entram com a Fase 5.
- * Item de tipo ainda não suportado fica quieto na fila: não se marca `falhou`
- * o que ninguém tentou processar, senão ele queima as tentativas antes de o
- * worker dele existir.
+ * Trata a cadeia inteira: transcrição → análise → relatório → unidade → rede.
  */
 export async function GET(req: Request) {
     if (!cronAutorizado(req)) {
@@ -26,18 +30,18 @@ export async function GET(req: Request) {
 
     const { data: candidatos, error } = await supabase
         .from('fila_processamento')
-        .select('id, tipo, referencia_id, tentativas')
+        .select('id, tipo, referencia_id, data_ref, tentativas')
         .eq('status', 'pendente')
-        .eq('tipo', 'transcricao')
+        .in('tipo', ['transcricao', 'analise_conversa', 'relatorio_vendedor', 'rollup_unidade', 'rollup_rede'])
         .lte('proxima_tentativa_em', agora.toISOString())
         .order('proxima_tentativa_em')
         .limit(LOTE)
-        .returns<{ id: string; tipo: string; referencia_id: string; tentativas: number }[]>();
+        .returns<{ id: string; tipo: ItemTipo; referencia_id: string; data_ref: string; tentativas: number }[]>();
 
     if (error) return Response.json({ erro: error.message }, { status: 500 });
     if (!candidatos?.length) return Response.json({ pegos: 0, concluidos: 0, falhados: 0 });
 
-    if (!apiKey) {
+    if (!apiKey && candidatos.some((c) => ['transcricao', 'analise_conversa', 'relatorio_vendedor'].includes(c.tipo))) {
         // Sem chave não há como transcrever. Deixar na fila é melhor que
         // gastar tentativa: quando a chave chegar, o áudio ainda está lá.
         return Response.json({ pegos: 0, concluidos: 0, falhados: 0, aguardando: 'OPENAI_API_KEY' });
@@ -58,12 +62,24 @@ export async function GET(req: Request) {
 
     for (const item of candidatos.filter((c) => meus.has(c.id))) {
         try {
-            await transcreverMensagem(supabase, item.referencia_id, apiKey);
+            if (item.tipo === 'transcricao') await transcreverMensagem(supabase, item.referencia_id, apiKey!);
+            else if (item.tipo === 'analise_conversa') await analisarItem(supabase, item.referencia_id, item.data_ref);
+            else if (item.tipo === 'relatorio_vendedor') await consolidarItem(supabase, item.referencia_id, item.data_ref);
+            else if (item.tipo === 'rollup_unidade') await rollupUnidade(supabase, item.referencia_id, item.data_ref);
+            else if (item.tipo === 'rollup_rede') await rollupRede(supabase, item.data_ref);
             await supabase.from('fila_processamento')
                 .update({ status: 'concluido', processado_em: new Date().toISOString() })
                 .eq('id', item.id);
+            await encadear(supabase, item.tipo, item.referencia_id, item.data_ref);
             concluidos++;
         } catch (e) {
+            if (e instanceof IgnorarItem) {
+                await supabase.from('fila_processamento').update({
+                    status: 'ignorado', ultimo_erro: e.message, processado_em: new Date().toISOString(),
+                }).eq('id', item.id);
+                await encadear(supabase, item.tipo, item.referencia_id, item.data_ref);
+                continue;
+            }
             const desfecho = aposFalha(item.tentativas);
             await supabase.from('fila_processamento').update({
                 status: desfecho.status,
@@ -81,19 +97,34 @@ export async function GET(req: Request) {
 }
 
 type Admin = ReturnType<typeof criarClienteAdmin>;
+type ItemTipo = 'transcricao' | 'analise_conversa' | 'relatorio_vendedor' | 'rollup_unidade' | 'rollup_rede';
+class IgnorarItem extends Error {}
 
 async function transcreverMensagem(supabase: Admin, mensagemId: string, apiKey: string) {
     const { data: msg } = await supabase
         .from('mensagens')
-        .select('id, midia_url, transcricao')
+        .select('id, conversa_id, wa_message_id, midia_url, transcricao')
         .eq('id', mensagemId)
-        .maybeSingle<{ id: string; midia_url: string | null; transcricao: string | null }>();
+        .maybeSingle<{ id: string; conversa_id: string; wa_message_id: string; midia_url: string | null; transcricao: string | null }>();
 
     if (!msg) throw new Error('mensagem não existe mais');
     if (msg.transcricao) return;          // já transcrita: nada a fazer
-    if (!msg.midia_url) throw new Error('mensagem de áudio sem midia_url');
+    let midiaUrl = msg.midia_url;
+    if (!midiaUrl) {
+        const { data: conversa } = await supabase.from('conversas').select('user_id').eq('id', msg.conversa_id)
+            .maybeSingle<{ user_id: string }>();
+        const { data: conexao } = conversa ? await supabase.from('conexoes_whatsapp').select('instance_token')
+            .eq('user_id', conversa.user_id).maybeSingle<{ instance_token: string | null }>() : { data: null };
+        const apiUrl = process.env.UAZAPI_API_URL;
+        const adminToken = process.env.UAZAPI_ADMIN_TOKEN;
+        if (!conexao?.instance_token || !apiUrl || !adminToken) throw new Error('não foi possível recuperar a mídia do áudio');
+        const token = decifrar(Buffer.from(conexao.instance_token.replace(/^\\x/, ''), 'hex'));
+        const midia = await new Uazapi(apiUrl, adminToken).baixarMidia(token, msg.wa_message_id);
+        midiaUrl = midia.fileURL;
+        await supabase.from('mensagens').update({ midia_url: midiaUrl }).eq('id', msg.id);
+    }
 
-    const { texto, hash } = await transcrever(msg.midia_url, {
+    const { texto, hash } = await transcrever(midiaUrl, {
         apiKey,
         modelo: process.env.OPENAI_MODELO_AUDIO,
         procurarCache: async (h) => {
@@ -108,4 +139,177 @@ async function transcreverMensagem(supabase: Admin, mensagemId: string, apiKey: 
     await supabase.from('mensagens')
         .update({ transcricao: texto, midia_hash: hash })
         .eq('id', msg.id);
+}
+
+async function doutrinaMec(supabase: Admin): Promise<{ texto: string; playbookId: string | null }> {
+    const { data: playbook } = await supabase.from('playbooks').select('id,nome,versao').is('vigente_ate', null)
+        .maybeSingle<{ id: string; nome: string; versao: string }>();
+    if (!playbook) return { playbookId: null, texto: 'Avalie acolhida, sondagem, solução completa, contorno de objeções, estratégia de preço, fechamento e acompanhamento conforme aplicabilidade.' };
+    const { data: etapas } = await supabase.from('playbook_etapas').select('id,chave,nome,descricao,criterios,ordem').eq('playbook_id', playbook.id).order('ordem');
+    const ids = (etapas ?? []).map((e) => e.id as string);
+    const { data: itens } = ids.length ? await supabase.from('playbook_itens').select('etapa_id,chave,rotulo,detalhe,ordem').in('etapa_id', ids).order('ordem') : { data: [] };
+    return {
+        playbookId: playbook.id,
+        texto: `${playbook.nome} (${playbook.versao})\n${(etapas ?? []).map((e) => {
+            const seus = (itens ?? []).filter((i) => i.etapa_id === e.id).map((i) => `- ${i.rotulo}${i.detalhe ? `: ${i.detalhe}` : ''}`).join('\n');
+            return `${e.nome}: ${e.descricao}\n${seus}`;
+        }).join('\n\n')}`,
+    };
+}
+
+async function analisarItem(supabase: Admin, conversaId: string, dataRef: string) {
+    const { inicio, fim } = janelaDoDia(dataRef);
+    const { data: conversa } = await supabase.from('conversas').select('id,user_id,unidade_id')
+        .eq('id', conversaId).maybeSingle<{ id: string; user_id: string; unidade_id: string }>();
+    if (!conversa) throw new IgnorarItem('conversa não existe mais');
+    const { data: mensagens, error } = await supabase.from('mensagens')
+        .select('direcao,tipo,conteudo,transcricao,automatica,enviada_em')
+        .eq('conversa_id', conversaId).gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString())
+        .order('enviada_em').returns<MensagemAnalise[]>();
+    if (error) throw error;
+    if (!mensagens?.length) throw new IgnorarItem('sem mensagens no dia');
+    if (!mensagens.some((m) => m.direcao === 'entrada')) throw new IgnorarItem('disparo sem resposta do cliente');
+    if (mensagens.some((m) => /feliz anivers[aá]rio|parab[eé]ns pelo seu dia/i.test(m.conteudo ?? '')))
+        throw new IgnorarItem('conversa de aniversário');
+
+    const primeiraEntrada = mensagens.findIndex((m) => m.direcao === 'entrada');
+    const recorte = primeiraEntrada > 0 && mensagens.slice(0, primeiraEntrada).every((m) => m.automatica)
+        ? mensagens.slice(primeiraEntrada) : mensagens;
+    const transcript = montarTranscript(recorte);
+    const hash = hashTranscript(transcript);
+    const { data: existente } = await supabase.from('analises_conversa').select('id,transcript_hash')
+        .eq('conversa_id', conversaId).eq('data_ref', dataRef).maybeSingle<{ id: string; transcript_hash: string | null }>();
+    if (existente?.transcript_hash === hash) return;
+
+    const doutrina = await doutrinaMec(supabase);
+    const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto });
+    const { error: erroAnalise } = await supabase.from('analises_conversa').upsert({
+        conversa_id: conversaId, user_id: conversa.user_id, unidade_id: conversa.unidade_id, data_ref: dataRef,
+        tipo_conversa: resultado.tipo_conversa, status: resultado.status, sentiment: resultado.sentiment,
+        score_atendimento: resultado.score_atendimento, score_oportunidade: resultado.score_oportunidade,
+        score_risco: resultado.score_risco, estagio_funil: resultado.estagio_funil,
+        potencial_venda: resultado.potencial_venda, urgencia: resultado.urgencia,
+        payload: resultado, modelo, tokens_entrada: entrada, tokens_saida: saida,
+        custo_estimado: custoEstimado(modelo, entrada, saida), transcript_hash: hash, updated_at: new Date().toISOString(),
+    }, { onConflict: 'conversa_id,data_ref' });
+    if (erroAnalise) throw erroAnalise;
+
+    if (doutrina.playbookId && resultado.tipo_conversa === 'negociacao') {
+        await supabase.from('aderencia_conversa').upsert(resultado.mec.map((m) => ({
+            conversa_id: conversaId, user_id: conversa.user_id, unidade_id: conversa.unidade_id,
+            data_ref: dataRef, playbook_id: doutrina.playbookId, etapa: m.etapa,
+            aplicavel: m.aplicavel, aplicado: m.aplicado, justificativa: m.justificativa,
+            evidencias: m.evidencias, itens: m.itens,
+        })), { onConflict: 'conversa_id,data_ref,etapa' });
+    }
+}
+
+async function consolidarItem(supabase: Admin, userId: string, dataRef: string) {
+    const { data: analises, error } = await supabase.from('analises_conversa')
+        .select('conversa_id,unidade_id,tipo_conversa,status,score_atendimento,payload')
+        .eq('user_id', userId).eq('data_ref', dataRef);
+    if (error) throw error;
+    if (!analises?.length) throw new IgnorarItem('nenhuma análise para consolidar');
+    const negociacoes = analises.filter((a) => a.tipo_conversa === 'negociacao');
+    const conversaIds = analises.map((a) => a.conversa_id as string);
+    const { inicio, fim } = janelaDoDia(dataRef);
+    const { data: mensagens } = await supabase.from('mensagens')
+        .select('conversa_id,direcao,automatica,enviada_em').in('conversa_id', conversaIds)
+        .gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString())
+        .returns<(Msg & { conversa_id: string })[]>();
+    const porConversa = new Map<string, Msg[]>();
+    for (const m of mensagens ?? []) porConversa.set(m.conversa_id, [...(porConversa.get(m.conversa_id) ?? []), m]);
+    const tempos = [...porConversa.values()].flatMap(temposDeResposta);
+    const respostas = [...porConversa.values()].map(foiRespondido).filter((v): v is boolean => v !== null);
+    const metricas = {
+        score_geral: negociacoes.length ? negociacoes.reduce((s, a) => s + Number(a.score_atendimento ?? 0), 0) / negociacoes.length : null,
+        leads_atendidos: porConversa.size,
+        conversoes_confirmadas: negociacoes.filter((a) => a.status === 'venda_feita').length,
+        oportunidades_perdidas: negociacoes.filter((a) => a.status === 'perdida' || a.status === 'lead_frio').length,
+        tempo_medio_resposta_s: respostaMediaEmMinutos(tempos) === null ? null : respostaMediaEmMinutos(tempos)! * 60,
+        taxa_resposta: respostas.length ? respostas.filter(Boolean).length / respostas.length * 100 : null,
+    };
+    const consolidado = await consolidarVendedor(analises.map((a) => a.payload), metricas);
+    const unidadeId = String(analises[0].unidade_id);
+    const { error: erroRel } = await supabase.from('relatorios_diarios').upsert({
+        user_id: userId, unidade_id: unidadeId, data_ref: dataRef, ...metricas,
+        pontos_positivos: [consolidado.resultado.elogio, ...consolidado.resultado.padroes_sucesso],
+        pontos_negativos: consolidado.resultado.melhorias,
+        payload: { ...consolidado.resultado, uso: { modelo: consolidado.modelo, entrada: consolidado.entrada, saida: consolidado.saida, custo: custoEstimado(consolidado.modelo, consolidado.entrada, consolidado.saida) } },
+        updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,data_ref' });
+    if (erroRel) throw erroRel;
+    await consolidarAderenciaDiaria(supabase, userId, unidadeId, dataRef);
+}
+
+async function consolidarAderenciaDiaria(supabase: Admin, userId: string, unidadeId: string, dataRef: string) {
+    const { data: linhas } = await supabase.from('aderencia_conversa').select('playbook_id,etapa,aplicavel,aplicado,itens')
+        .eq('user_id', userId).eq('data_ref', dataRef);
+    if (!linhas?.length) return;
+    const aplicaveis = linhas.filter((l) => l.aplicavel);
+    const valor = (a: string | null) => a === 'sim' ? 1 : a === 'parcial' ? 0.5 : 0;
+    const etapas = [...new Set(aplicaveis.map((l) => String(l.etapa)))];
+    const porEtapa = Object.fromEntries(etapas.map((etapa) => {
+        const xs = aplicaveis.filter((l) => l.etapa === etapa);
+        return [etapa, xs.length ? Math.round(xs.reduce((s, x) => s + valor(x.aplicado), 0) / xs.length * 100) : null];
+    }));
+    await supabase.from('aderencia_diaria').upsert({
+        user_id: userId, unidade_id: unidadeId, data_ref: dataRef, playbook_id: linhas[0].playbook_id,
+        aderencia_geral: aplicaveis.length ? aplicaveis.reduce((s, x) => s + valor(x.aplicado), 0) / aplicaveis.length * 100 : null,
+        por_etapa: porEtapa,
+    }, { onConflict: 'user_id,data_ref' });
+}
+
+const mediaPonderada = (linhas: Record<string, unknown>[], campo: string, peso = 'leads_atendidos') => {
+    const validas = linhas.filter((l) => l[campo] !== null && l[campo] !== undefined);
+    const total = validas.reduce((s, l) => s + Math.max(1, Number(l[peso] ?? 1)), 0);
+    return total ? validas.reduce((s, l) => s + Number(l[campo]) * Math.max(1, Number(l[peso] ?? 1)), 0) / total : null;
+};
+
+async function rollupUnidade(supabase: Admin, unidadeId: string, dataRef: string) {
+    const { data: relatorios, error } = await supabase.from('relatorios_diarios').select('*').eq('unidade_id', unidadeId).eq('data_ref', dataRef);
+    if (error) throw error;
+    if (!relatorios?.length) throw new IgnorarItem('unidade sem relatórios');
+    const r = relatorios as Record<string, unknown>[];
+    await supabase.from('relatorios_unidade').upsert({
+        unidade_id: unidadeId, data_ref: dataRef, vendedores_ativos: r.length,
+        score_geral: mediaPonderada(r, 'score_geral'), leads_atendidos: r.reduce((s, x) => s + Number(x.leads_atendidos ?? 0), 0),
+        conversoes_confirmadas: r.reduce((s, x) => s + Number(x.conversoes_confirmadas ?? 0), 0),
+        oportunidades_perdidas: r.reduce((s, x) => s + Number(x.oportunidades_perdidas ?? 0), 0),
+        tempo_medio_resposta_s: mediaPonderada(r, 'tempo_medio_resposta_s'), taxa_resposta: mediaPonderada(r, 'taxa_resposta'),
+        resumo_ia: `A unidade fechou o dia com ${r.length} vendedor${r.length === 1 ? '' : 'es'} com movimento.`, updated_at: new Date().toISOString(),
+    }, { onConflict: 'unidade_id,data_ref' });
+}
+
+async function rollupRede(supabase: Admin, dataRef: string) {
+    const { data: unidades, error } = await supabase.from('relatorios_unidade').select('*').eq('data_ref', dataRef);
+    if (error) throw error;
+    if (!unidades?.length) throw new IgnorarItem('rede sem unidades consolidadas');
+    const r = unidades as Record<string, unknown>[];
+    await supabase.from('relatorios_rede').upsert({
+        data_ref: dataRef, unidades_ativas: r.length, vendedores_ativos: r.reduce((s, x) => s + Number(x.vendedores_ativos ?? 0), 0),
+        score_geral: mediaPonderada(r, 'score_geral'), leads_atendidos: r.reduce((s, x) => s + Number(x.leads_atendidos ?? 0), 0),
+        conversoes_confirmadas: r.reduce((s, x) => s + Number(x.conversoes_confirmadas ?? 0), 0),
+        oportunidades_perdidas: r.reduce((s, x) => s + Number(x.oportunidades_perdidas ?? 0), 0),
+        tempo_medio_resposta_s: mediaPonderada(r, 'tempo_medio_resposta_s'), taxa_resposta: mediaPonderada(r, 'taxa_resposta'),
+        resumo_ia: `A rede fechou ${r.length} unidade${r.length === 1 ? '' : 's'} com movimento.`, updated_at: new Date().toISOString(),
+    }, { onConflict: 'data_ref' });
+}
+
+async function encadear(supabase: Admin, tipo: ItemTipo, referenciaId: string, dataRef: string) {
+    if (tipo === 'analise_conversa') {
+        const { data: conversa } = await supabase.from('conversas').select('user_id').eq('id', referenciaId).maybeSingle<{ user_id: string }>();
+        if (!conversa) return;
+        const { count } = await supabase.from('fila_processamento').select('id', { count: 'exact', head: true })
+            .eq('tipo', 'analise_conversa').eq('data_ref', dataRef).in('status', ['pendente','processando'])
+            .in('referencia_id', (await supabase.from('conversas').select('id').eq('user_id', conversa.user_id)).data?.map((c) => c.id) ?? []);
+        if (!count) await supabase.from('fila_processamento').upsert({ tipo: 'relatorio_vendedor', referencia_id: conversa.user_id, data_ref: dataRef }, { onConflict: 'tipo,referencia_id,data_ref', ignoreDuplicates: true });
+    } else if (tipo === 'relatorio_vendedor') {
+        const { data: perfil } = await supabase.from('profiles').select('unidade_id').eq('id', referenciaId).maybeSingle<{ unidade_id: string | null }>();
+        if (perfil?.unidade_id) await supabase.from('fila_processamento').upsert({ tipo: 'rollup_unidade', referencia_id: perfil.unidade_id, data_ref: dataRef }, { onConflict: 'tipo,referencia_id,data_ref', ignoreDuplicates: true });
+    } else if (tipo === 'rollup_unidade') {
+        const { count } = await supabase.from('fila_processamento').select('id', { count: 'exact', head: true })
+            .eq('tipo', 'rollup_unidade').eq('data_ref', dataRef).in('status', ['pendente','processando']);
+        if (!count) await supabase.from('fila_processamento').upsert({ tipo: 'rollup_rede', referencia_id: '00000000-0000-0000-0000-000000000000', data_ref: dataRef }, { onConflict: 'tipo,referencia_id,data_ref', ignoreDuplicates: true });
+    }
 }

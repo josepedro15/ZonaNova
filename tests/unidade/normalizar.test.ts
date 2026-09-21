@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    normalizarMensagem, statusDeConexao, soDigitos, paraData,
+    mensagensDoEvento, normalizarMensagem, statusDeConexao, soDigitos, paraData,
     type EventoUazapi, type MensagemNormalizada,
 } from '../../lib/uazapi/normalizar.ts';
 
@@ -81,6 +81,13 @@ test('tipo desconhecido vira "outro", não quebra a ingestão', () => {
 
 test('mensagem disparada pela API é marcada automatica', () => {
     assert.equal(ok(normalizarMensagem(base({ fromMe: true, fromApi: true }))).automatica, true);
+    assert.equal(ok(normalizarMensagem(base({ fromMe: true, wasSentByApi: true }))).automatica, true);
+});
+
+test('extrai todas as mensagens de um lote de histórico', () => {
+    const messages = [{ id: '1' }, { id: '2' }];
+    assert.deepEqual(mensagensDoEvento({ EventType: 'history', event: 'messages', messages }), messages);
+    assert.deepEqual(mensagensDoEvento(base()), [base().message]);
 });
 
 test('texto vazio vira null, não string vazia', () => {
