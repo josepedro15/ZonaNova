@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { conectarWhatsapp, statusConexao, type EstadoConexao } from '@/app/actions/conexao';
@@ -24,11 +24,6 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
     const [expirou, setExpirou] = useState(false);
     const router = useRouter();
 
-    // Quem ABRIU a tela já conectado não é levado embora: pode ter vindo
-    // conferir o número ou pedir outro QR porque trocou de celular. Só a
-    // transição — conectou agora, com a tela aberta — continua para o painel.
-    const jaChegouConectado = useRef(inicial.status === 'conectada');
-
     const aguardando = estado.status === 'aguardando_qr' && !!estado.qrcode;
 
     useEffect(() => {
@@ -41,10 +36,16 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
         return () => { clearInterval(relogio); clearTimeout(validade); };
     }, [aguardando, estado.qrcode]);
 
-    // O ramo de sucesso era um beco sem saída: dizia "suas conversas passam a
-    // ser analisadas" e não levava a lugar nenhum.
+    // Conectado não tem nada que fazer aqui, tenha acabado de escanear o código
+    // ou tenha caído nesta URL por engano: a tela segue sozinha para o painel.
+    //
+    // Não se distingue os dois casos. A distinção existiu por um tempo, para
+    // preservar quem viesse pedir outro QR com o número no ar — mas não há
+    // botão de desconectar em lugar nenhum, e um número que cai de verdade
+    // volta para cá pelo proxy, por causa do `status`. Era uma porta guardada
+    // para uma sala que não existe.
     useEffect(() => {
-        if (estado.status !== 'conectada' || jaChegouConectado.current) return;
+        if (estado.status !== 'conectada') return;
         const saida = setTimeout(() => router.replace('/dashboard'), PAUSA_ANTES_DO_PAINEL_MS);
         return () => clearTimeout(saida);
     }, [estado.status, router]);
