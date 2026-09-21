@@ -1,6 +1,0 @@
-{
-  "crons": [
-    { "path": "/api/cron/processar-fila", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/checar-conexoes", "schedule": "0 */2 * * *" }
-  ]
-}

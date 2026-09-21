@@ -10,7 +10,8 @@
 | Dados | Supabase (Postgres, Auth, RLS) | RLS resolve a hierarquia no banco, não na aplicação |
 | WhatsApp | UAZAPI (QR) | número comercial do vendedor sem migrar para a Meta |
 | LLM | OpenAI `gpt-4.1-mini` | structured outputs + custo baixo por conversa |
-| Deploy | Vercel + Vercel Cron | crons declarados em `vercel.json` |
+| Deploy | Vercel | só a aplicação; nenhum cron declarado aqui |
+| Agendamento | pg_cron + pg_net (Supabase) | o horário mora no mesmo banco que os dados |
 
 ## 4.2 Estrutura de pastas
 
@@ -47,7 +48,7 @@ docs/
 | `/unidades/*` | `supervisor`, `admin` | server-side + RLS |
 | `/admin/*` | `admin` | server-side |
 | `/api/webhook/uazapi` | UAZAPI | token de rota + confere instância |
-| `/api/cron/*` | Vercel Cron | `Authorization: Bearer ${CRON_SECRET}` |
+| `/api/cron/*` | pg_cron do Supabase | `Authorization: Bearer ${CRON_SECRET}` |
 
 O middleware trata redirecionamento por status (pendente → espera; ativo sem
 conexão → `/conectar`). **A autorização de verdade é a RLS** — o middleware só
@@ -55,16 +56,21 @@ melhora a navegação; ele não é a barreira.
 
 ## 4.4 Crons
 
-```json
-{
-  "crons": [
-    { "path": "/api/cron/fechar-dia",      "schedule": "30 2 * * *" },
-    { "path": "/api/cron/processar-fila",  "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/checar-conexoes", "schedule": "0 */2 * * *" },
-    { "path": "/api/cron/expurgo",         "schedule": "0 5 1 * *" }
-  ]
-}
-```
+Quem agenda é o **pg_cron do Supabase**, não o Vercel. As rotas `/api/cron/*`
+continuam rotas HTTP comuns; o que mudou é quem aperta o botão — o banco chama
+cada uma pelo `pg_net`, levando o `Authorization: Bearer ${CRON_SECRET}`.
+
+| Job | Horário (UTC) | Rota |
+|---|---|---|
+| fechar o dia | `30 2 * * *` | `/api/cron/fechar-dia` |
+| processar a fila | `*/5 * * * *` | `/api/cron/processar-fila` |
+| checar conexões | `0 */2 * * *` | `/api/cron/checar-conexoes` |
+| expurgo | `0 5 1 * *` | `/api/cron/expurgo` |
+
+O plano Hobby do Vercel só permite cron diário, e a fila precisa rodar de 5 em 5
+minutos — esse é o motivo prático. O motivo de fundo é melhor: o agendamento
+passa a viver junto do estado que ele mexe, dá para ler `cron.job_run_details`
+quando um dia não fecha, e mudar horário deixa de exigir deploy.
 
 Horários em UTC. `fechar-dia` às 02:30 UTC = **23:30 BRT** do dia anterior.
 `checar-conexoes` bate o status real na UAZAPI e corrige `caida` — webhook de
@@ -102,7 +108,7 @@ tabela que o guarda não tem política de SELECT para usuário autenticado.
 | LLM devolve JSON inválido | análise perdida | structured outputs `strict` + retry + item `falhou` visível |
 | Disparo em massa | média do vendedor destruída | filtro de disparo antes da fila |
 | Vendedor troca de unidade | histórico migra junto e distorce a unidade antiga | `unidade_id` carimbada na conversa e na análise |
-| Cron da Vercel não dispara | dia sem relatório | fila persiste; próximo `processar-fila` pega o atraso |
+| Cron do Supabase não dispara | dia sem relatório | fila persiste; próximo `processar-fila` pega o atraso |
 | Reprocessamento em massa | custo inesperado de LLM | teto diário + custo por análise gravado + ação só de admin |
 
 ## 4.7 Ambientes

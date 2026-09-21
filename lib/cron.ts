@@ -1,7 +1,7 @@
 /**
  * Autenticação das rotas de cron.
  *
- * O Vercel Cron chama por HTTP público — a URL não é segredo, e quem a
+ * O pg_cron do Supabase chama por HTTP público — a URL não é segredo, e quem a
  * descobrisse poderia disparar o fechamento do dia à vontade. Quem separa é o
  * `Authorization: Bearer ${CRON_SECRET}`.
  *
