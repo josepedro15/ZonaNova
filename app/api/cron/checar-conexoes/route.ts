@@ -2,6 +2,7 @@ import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { cronAutorizado } from '@/lib/cron';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi, ehNossa } from '@/lib/uazapi/cliente';
+import { mudancasDaChecagem } from '@/lib/conexao';
 
 export const maxDuration = 60;
 
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
 
     if (error) return Response.json({ erro: error.message }, { status: 500 });
 
-    let conferidas = 0, corrigidas = 0, ilegiveis = 0, alheias = 0;
+    let conferidas = 0, corrigidas = 0, numerados = 0, ilegiveis = 0, alheias = 0;
 
     for (const c of conexoes ?? []) {
         let token: string;
@@ -56,23 +57,20 @@ export async function GET(req: Request) {
             // não se mexe nela nem se conclui nada sobre ela.
             if (!ehNossa(i)) { alheias++; continue; }
 
-            const real = i.status === 'connected' ? 'conectada'
-                : i.status === 'connecting' ? 'aguardando_qr'
-                : 'caida';
-
-            // Conexão que nunca foi ligada é 'desconectada', não 'caida' — cair
-            // é ter estado no ar antes. A diferença importa: a tela alerta
-            // número caído, e alertar quem nunca conectou é ruído.
-            const destino = real === 'caida' && c.status === 'desconectada' ? 'desconectada' : real;
-
-            if (destino !== c.status) {
+            const mudancas = mudancasDaChecagem({ status: c.status, numero: c.numero }, i);
+            if (mudancas) {
+                const agora = new Date().toISOString();
                 await supabase.from('conexoes_whatsapp').update({
-                    status: destino,
-                    ...(i.owner ? { numero: i.owner } : {}),
-                    ultimo_evento_em: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
+                    ...mudancas,
+                    // Só mudança de STATUS é "algo aconteceu". Gravar o número
+                    // que a UAZAPI acabou de revelar não é evento: mexer no
+                    // relógio por causa disso faria o painel do gestor mostrar
+                    // atividade onde não houve nenhuma.
+                    ...(mudancas.status ? { ultimo_evento_em: agora } : {}),
+                    updated_at: agora,
                 }).eq('id', c.id);
-                corrigidas++;
+                if (mudancas.status) corrigidas++;
+                if (mudancas.numero) numerados++;
             }
         } catch (e) {
             console.error(`checar-conexoes: ${c.id}`, e);
@@ -80,6 +78,6 @@ export async function GET(req: Request) {
     }
 
     return Response.json({
-        total: conexoes?.length ?? 0, conferidas, corrigidas, ilegiveis, alheias,
+        total: conexoes?.length ?? 0, conferidas, corrigidas, numerados, ilegiveis, alheias,
     });
 }
