@@ -1,7 +1,16 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { conectarWhatsapp, statusConexao, type EstadoConexao } from '@/app/actions/conexao';
+
+/**
+ * Quanto tempo o "WhatsApp conectado" fica à frente antes de a tela seguir
+ * para o painel. Conectar é o momento de pagamento de todo o cadastro: mandar
+ * embora no mesmo quadro em que o visto aparece faz parecer que algo falhou.
+ */
+const PAUSA_ANTES_DO_PAINEL_MS = 1800;
 
 /**
  * O QR da UAZAPI expira em cerca de um minuto, e quem está com o celular na
@@ -13,6 +22,12 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
     const [estado, setEstado] = useState<EstadoConexao>(inicial);
     const [pendente, iniciar] = useTransition();
     const [expirou, setExpirou] = useState(false);
+    const router = useRouter();
+
+    // Quem ABRIU a tela já conectado não é levado embora: pode ter vindo
+    // conferir o número ou pedir outro QR porque trocou de celular. Só a
+    // transição — conectou agora, com a tela aberta — continua para o painel.
+    const jaChegouConectado = useRef(inicial.status === 'conectada');
 
     const aguardando = estado.status === 'aguardando_qr' && !!estado.qrcode;
 
@@ -25,6 +40,14 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
         const validade = setTimeout(() => setExpirou(true), 60_000);
         return () => { clearInterval(relogio); clearTimeout(validade); };
     }, [aguardando, estado.qrcode]);
+
+    // O ramo de sucesso era um beco sem saída: dizia "suas conversas passam a
+    // ser analisadas" e não levava a lugar nenhum.
+    useEffect(() => {
+        if (estado.status !== 'conectada' || jaChegouConectado.current) return;
+        const saida = setTimeout(() => router.replace('/dashboard'), PAUSA_ANTES_DO_PAINEL_MS);
+        return () => clearTimeout(saida);
+    }, [estado.status, router]);
 
     const pedirQr = () => iniciar(async () => {
         setExpirou(false);
@@ -48,6 +71,15 @@ export default function PainelConexao({ inicial }: { inicial: EstadoConexao }) {
                     Suas conversas passam a ser analisadas a partir de agora. O relatório
                     do dia sai à noite.
                 </p>
+                {/* Fica sempre, inclusive nos instantes que antecedem o desvio
+                    automático: se o router falhar, a tela não volta a ser um
+                    beco sem saída. */}
+                <Link
+                    href="/dashboard"
+                    className="display mt-4 flex min-h-[46px] items-center justify-center rounded-[11px] bg-petroleo text-[15px] font-semibold text-papel"
+                >
+                    Ir para o painel
+                </Link>
             </section>
         );
     }
