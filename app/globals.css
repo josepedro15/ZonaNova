@@ -38,9 +38,9 @@
   --color-vermelho-linha: #f2ccc8;  /* borda sobre vermelho-sof */
   --color-vermelho-texto: #8f2c25;  /* texto sobre vermelho-sof */
 
-  /* Preenchidas pelo next/font no layout raiz. */
-  --font-display: var(--fonte-display), 'Helvetica Neue', Helvetica, sans-serif;
-  --font-sans:    var(--fonte-corpo),   'Helvetica Neue', Helvetica, sans-serif;
+  /* Pilhas locais: o build de produção não depende da disponibilidade do Google Fonts. */
+  --font-display: 'Avenir Next', Avenir, 'Helvetica Neue', Helvetica, sans-serif;
+  --font-sans:    Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
 
   --radius-card: 12px;
   --radius-lg:   14px;
