@@ -229,7 +229,11 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
         tempo_medio_resposta_s: respostaMediaEmMinutos(tempos) === null ? null : respostaMediaEmMinutos(tempos)! * 60,
         taxa_resposta: respostas.length ? respostas.filter(Boolean).length / respostas.length * 100 : null,
     };
-    const consolidado = await consolidarVendedor(analises.map((a) => a.payload), metricas);
+    // O coaching comercial não pode punir o vendedor por suporte, conversa
+    // social ou testes técnicos. Esses itens continuam nas métricas de resposta,
+    // mas o treino usa negociações quando houver ao menos uma.
+    const baseCoaching = negociacoes.length ? negociacoes : analises;
+    const consolidado = await consolidarVendedor(baseCoaching.map((a) => a.payload), metricas);
     const unidadeId = String(analises[0].unidade_id);
     const { error: erroRel } = await supabase.from('relatorios_diarios').upsert({
         user_id: userId, unidade_id: unidadeId, data_ref: dataRef, ...metricas,

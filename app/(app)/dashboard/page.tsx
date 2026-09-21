@@ -197,7 +197,7 @@ export default async function Dashboard() {
                 <>
                     <section className="mt-6 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
                         <div className="rounded-card bg-petroleo p-5 text-papel">
-                            <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-white/65">Nota do dia</p>
+                            <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-white/65">Relatório fechado · {new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'short',timeZone:FUSO}).format(new Date(`${relatorio.data_ref}T12:00:00-03:00`))}</p>
                             <p className="display mt-2 text-5xl font-semibold">{relatorio.score_geral === null ? '—' : Math.round(Number(relatorio.score_geral))}<span className="text-base font-medium text-white/55">/100</span></p>
                             <p className="mt-3 text-[11.5px] leading-relaxed text-white/70">Só negociações entram na nota. Suporte e social ficam fora.</p>
                         </div>
@@ -288,7 +288,7 @@ export default async function Dashboard() {
                     </p>
                 </section>
             ) : (
-                <div className="mt-5 grid grid-cols-3 gap-2.5 lg:mt-0 lg:gap-4">
+                <div className="mt-5 lg:mt-0"><p className="mb-2 text-[10.5px] font-bold uppercase tracking-[.12em] text-tinta-3">Tempo real · agora</p><div className="grid grid-cols-3 gap-2.5 lg:gap-4">
                     <div className="flex flex-col gap-0.5 rounded-[11px] border border-linha bg-superficie p-3 lg:gap-1 lg:rounded-card lg:p-5">
                         <span className="display text-[23px] font-semibold leading-tight lg:text-[38px]">{deHoje.length}</span>
                         <span className="text-[11px] leading-snug text-tinta-2 lg:text-[13px]">
@@ -309,7 +309,7 @@ export default async function Dashboard() {
                         </span>
                         <span className="text-[11px] leading-snug text-tinta-2 lg:text-[13px]">respondidas</span>
                     </div>
-                </div>
+                </div><p className="mt-2 text-[10.5px] text-tinta-3">Pode diferir do relatório fechado acima enquanto chegam novas mensagens.</p></div>
             )}
 
             {esperando.length > 0 && (
