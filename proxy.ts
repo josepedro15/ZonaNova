@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/env';
+import { precisaConectar } from '@/lib/conexao';
 
 // /auth/callback tem de ser pública: quem chega do link do e-mail ainda NÃO
 // tem sessão — é essa rota que a cria. Protegida, o proxy mandava para o login
@@ -92,8 +93,8 @@ export async function proxy(request: NextRequest) {
     if (papel === 'vendedor' && caminho !== '/conectar') {
         const { data: conexao } = await supabase
             .from('vw_conexoes_status').select('status')
-            .eq('user_id', user.id).maybeSingle();
-        if (!conexao || conexao.status === 'desconectada') {
+            .eq('user_id', user.id).maybeSingle<{ status: string }>();
+        if (precisaConectar(conexao?.status ?? null)) {
             return NextResponse.redirect(new URL('/conectar', request.url));
         }
     }
