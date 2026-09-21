@@ -145,8 +145,8 @@ export default async function Dashboard() {
     const ligado = conexao?.status === 'conectada';
 
     return (
-        <main className="mx-auto w-full max-w-[430px] px-[18px] pb-10">
-            <header className="flex items-center justify-between border-b border-linha py-3.5">
+        <main className="mx-auto w-full max-w-[430px] px-[18px] pb-10 lg:max-w-[1120px] lg:px-10 lg:pb-16">
+            <header className="flex items-center justify-between border-b border-linha py-3.5 lg:py-5">
                 <Marca legenda={perfil?.unidades?.nome ?? 'Rede'} />
                 <div className="flex items-center gap-3">
                     {ligado ? (
@@ -172,10 +172,10 @@ export default async function Dashboard() {
                 </div>
             </header>
 
-            <h1 className="display mt-5 text-2xl font-semibold">
+            <h1 className="display mt-5 text-2xl font-semibold lg:mt-8 lg:text-[34px]">
                 {saudacao(agora)}, {primeiroNome(perfil?.nome)}
             </h1>
-            <p className="mt-1 text-[12.5px] text-tinta-2">
+            <p className="mt-1 text-[12.5px] text-tinta-2 lg:text-[14px]">
                 {dataPorExtenso(agora)}
                 {deHoje.length > 0 && ` · última mensagem às ${horaBrasilia(deHoje[0].ultima_mensagem_em)}`}
             </p>
@@ -225,9 +225,10 @@ export default async function Dashboard() {
                 </Link>
             )}
 
+            <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-x-6">
             {deHoje.length === 0 ? (
                 /* Ausência de dado, nunca nota zero — design/README. */
-                <section className="mt-5 flex flex-col items-center gap-3 rounded-card border border-linha bg-superficie px-5 py-7 text-center">
+                <section className="mt-5 flex flex-col items-center gap-3 rounded-card lg:mt-0 border border-linha bg-superficie px-5 py-7 text-center">
                     <span className="flex size-13 items-center justify-center rounded-full bg-papel-2">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
@@ -246,32 +247,32 @@ export default async function Dashboard() {
                     </p>
                 </section>
             ) : (
-                <div className="mt-5 grid grid-cols-3 gap-2.5">
-                    <div className="flex flex-col gap-0.5 rounded-[11px] border border-linha bg-superficie p-3">
-                        <span className="display text-[23px] font-semibold leading-tight">{deHoje.length}</span>
-                        <span className="text-[11px] leading-snug text-tinta-2">
+                <div className="mt-5 grid grid-cols-3 gap-2.5 lg:mt-0 lg:gap-4">
+                    <div className="flex flex-col gap-0.5 rounded-[11px] border border-linha bg-superficie p-3 lg:gap-1 lg:rounded-card lg:p-5">
+                        <span className="display text-[23px] font-semibold leading-tight lg:text-[38px]">{deHoje.length}</span>
+                        <span className="text-[11px] leading-snug text-tinta-2 lg:text-[13px]">
                             conversa{deHoje.length === 1 ? '' : 's'} hoje
                         </span>
                     </div>
-                    <div className="flex flex-col gap-0.5 rounded-[11px] border border-linha bg-superficie p-3">
-                        <span className="display text-[23px] font-semibold leading-tight">
+                    <div className="flex flex-col gap-0.5 rounded-[11px] border border-linha bg-superficie p-3 lg:gap-1 lg:rounded-card lg:p-5">
+                        <span className="display text-[23px] font-semibold leading-tight lg:text-[38px]">
                             {respostaMedia === null ? '—' : respostaMedia}
-                            {respostaMedia !== null && <span className="text-[12.5px] font-medium text-tinta-2">min</span>}
+                            {respostaMedia !== null && <span className="text-[12.5px] font-medium text-tinta-2 lg:text-[16px]">min</span>}
                         </span>
-                        <span className="text-[11px] leading-snug text-tinta-2">resposta média</span>
+                        <span className="text-[11px] leading-snug text-tinta-2 lg:text-[13px]">resposta média</span>
                     </div>
-                    <div className="flex flex-col gap-0.5 rounded-[11px] border border-linha bg-superficie p-3">
-                        <span className="display text-[23px] font-semibold leading-tight">
+                    <div className="flex flex-col gap-0.5 rounded-[11px] border border-linha bg-superficie p-3 lg:gap-1 lg:rounded-card lg:p-5">
+                        <span className="display text-[23px] font-semibold leading-tight lg:text-[38px]">
                             {taxa === null ? '—' : taxa}
-                            {taxa !== null && <span className="text-[12.5px] font-medium text-tinta-2">%</span>}
+                            {taxa !== null && <span className="text-[12.5px] font-medium text-tinta-2 lg:text-[16px]">%</span>}
                         </span>
-                        <span className="text-[11px] leading-snug text-tinta-2">respondidas</span>
+                        <span className="text-[11px] leading-snug text-tinta-2 lg:text-[13px]">respondidas</span>
                     </div>
                 </div>
             )}
 
             {esperando.length > 0 && (
-                <section className="mt-4 flex flex-col gap-3 rounded-card border border-vermelho-linha bg-superficie p-4">
+                <section className="mt-4 flex flex-col gap-3 rounded-card border border-vermelho-linha bg-superficie p-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0">
                     <div className="flex items-center gap-2">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -325,7 +326,7 @@ export default async function Dashboard() {
             )}
 
             {deHoje.length > 0 && (
-                <section className="mt-5 flex flex-col gap-2.5">
+                <section className="mt-5 flex flex-col gap-2.5 lg:col-start-1 lg:row-start-2 lg:mt-6">
                     <span className="display text-[15.5px] font-semibold">Conversas de hoje</span>
                     {deHoje.map((c) => {
                         const audios = c.mensagens.filter((m) => m.tipo === 'audio').length;
@@ -349,10 +350,11 @@ export default async function Dashboard() {
                     })}
                 </section>
             )}
+            </div>
 
             {/* O que ainda não existe, dito uma vez e em voz baixa — não um
                 aviso de obra ocupando o meio da tela a cada visita. */}
-            <p className="mt-5 flex gap-2.5 rounded-[11px] border border-linha bg-papel-2 px-3.5 py-3 text-[11.5px] leading-relaxed text-tinta-2">
+            <p className="mt-5 flex gap-2.5 rounded-[11px] lg:mt-8 border border-linha bg-papel-2 px-3.5 py-3 text-[11.5px] leading-relaxed text-tinta-2">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                      className="mt-px shrink-0" aria-hidden="true">
