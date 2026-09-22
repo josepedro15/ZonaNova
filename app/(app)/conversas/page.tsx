@@ -13,7 +13,12 @@ export default async function ConversasPage({ searchParams }: { searchParams: Pr
         .select('id,user_id,cliente_nome,cliente_telefone,ultima_mensagem_em,total_mensagens,profiles!conversas_user_id_fkey(nome)')
         .eq('bloqueada', false)
         .order('ultima_mensagem_em', { ascending: false }).limit(100);
-    if (params.q) consulta = consulta.or(`cliente_nome.ilike.%${params.q.replace(/[%_,]/g, '')}%,cliente_telefone.ilike.%${params.q.replace(/[%_,]/g, '')}%`);
+    // Só letras, dígitos, espaço e . @ + -: parêntese, vírgula e aspas têm
+    // significado na sintaxe do `.or()` do PostgREST e quebravam a consulta.
+    const termo = (params.q ?? '').replace(/[^\p{L}\p{N} .@+-]/gu, '').trim().slice(0, 60);
+    // O telefone é gravado só com dígitos: "(54) 9981" procura por "549981".
+    const digitos = termo.replace(/\D/g, '');
+    if (termo) consulta = consulta.or([`cliente_nome.ilike.%${termo}%`, ...(digitos ? [`cliente_telefone.ilike.%${digitos}%`] : [])].join(','));
     const { data: conversas } = await consulta;
     const ids = (conversas ?? []).map((c) => c.id as string);
     const { data: analises } = ids.length ? await supabase.from('analises_conversa')

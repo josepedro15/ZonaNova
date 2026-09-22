@@ -209,3 +209,40 @@ export function diasAte(ultimo: string, n: number): string[] {
     return Array.from({ length: n }, (_, i) =>
         new Date(fim - (n - 1 - i) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
 }
+
+export type LinhaDia = {
+    data_ref: string;
+    score_geral: number | null;
+    leads_atendidos: number | null;
+    conversoes_confirmadas: number | null;
+    oportunidades_perdidas: number | null;
+    tempo_medio_resposta_s: number | null;
+    taxa_resposta: number | null;
+};
+
+/**
+ * Junta num dia só as linhas de várias unidades. Contagens somam; médias são
+ * ponderadas por leads atendidos (mínimo 1), a mesma regra do rollup da rede —
+ * uma unidade com 2 leads não pode pesar o mesmo que outra com 200.
+ */
+export function juntarPorDia(linhas: LinhaDia[]): LinhaDia[] {
+    const dias = new Map<string, LinhaDia[]>();
+    for (const l of linhas) dias.set(l.data_ref, [...(dias.get(l.data_ref) ?? []), l]);
+    const media = (xs: LinhaDia[], campo: 'score_geral' | 'tempo_medio_resposta_s' | 'taxa_resposta') => {
+        const validas = xs.filter((x) => x[campo] != null);
+        const peso = (x: LinhaDia) => Math.max(1, Number(x.leads_atendidos ?? 0));
+        const total = validas.reduce((s, x) => s + peso(x), 0);
+        return total ? validas.reduce((s, x) => s + Number(x[campo]) * peso(x), 0) / total : null;
+    };
+    const soma = (xs: LinhaDia[], campo: 'leads_atendidos' | 'conversoes_confirmadas' | 'oportunidades_perdidas') =>
+        xs.reduce((s, x) => s + Number(x[campo] ?? 0), 0);
+    return [...dias.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([data_ref, xs]) => ({
+        data_ref,
+        score_geral: media(xs, 'score_geral'),
+        leads_atendidos: soma(xs, 'leads_atendidos'),
+        conversoes_confirmadas: soma(xs, 'conversoes_confirmadas'),
+        oportunidades_perdidas: soma(xs, 'oportunidades_perdidas'),
+        tempo_medio_resposta_s: media(xs, 'tempo_medio_resposta_s'),
+        taxa_resposta: media(xs, 'taxa_resposta'),
+    }));
+}

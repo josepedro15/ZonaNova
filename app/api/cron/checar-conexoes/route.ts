@@ -4,7 +4,12 @@ import { decifrar } from '@/lib/crypto';
 import { Uazapi, ehNossa } from '@/lib/uazapi/cliente';
 import { mudancasDaChecagem } from '@/lib/conexao';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
+
+// Uma a uma, cada ping levando ~1s, as últimas conexões não cabiam nos 60s e
+// nunca eram conferidas. Oito de cada vez: poucas o bastante para não
+// sobrecarregar a UAZAPI, que é compartilhada.
+const EM_PARALELO = 8;
 
 /**
  * Corrige o status das conexões batendo o estado real na UAZAPI (doc 4 §4.4).
@@ -40,13 +45,13 @@ export async function GET(req: Request) {
 
     let conferidas = 0, corrigidas = 0, numerados = 0, ilegiveis = 0, alheias = 0;
 
-    for (const c of conexoes ?? []) {
+    const conferir = async (c: { id: string; status: string; instance_token: string; numero: string | null }) => {
         let token: string;
         try {
             token = decifrar(Buffer.from(c.instance_token.replace(/^\\x/, ''), 'hex'));
         } catch {
             ilegiveis++;
-            continue;
+            return;
         }
 
         try {
@@ -55,7 +60,7 @@ export async function GET(req: Request) {
 
             // O servidor é compartilhado: se a instância deixou de ser nossa,
             // não se mexe nela nem se conclui nada sobre ela.
-            if (!ehNossa(i)) { alheias++; continue; }
+            if (!ehNossa(i)) { alheias++; return; }
 
             const mudancas = mudancasDaChecagem({ status: c.status, numero: c.numero }, i);
             if (mudancas) {
@@ -75,7 +80,12 @@ export async function GET(req: Request) {
         } catch (e) {
             console.error(`checar-conexoes: ${c.id}`, e);
         }
-    }
+    };
+
+    const fila = [...(conexoes ?? [])];
+    await Promise.all(Array.from({ length: EM_PARALELO }, async () => {
+        for (let c = fila.shift(); c; c = fila.shift()) await conferir(c);
+    }));
 
     return Response.json({
         total: conexoes?.length ?? 0, conferidas, corrigidas, numerados, ilegiveis, alheias,

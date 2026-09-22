@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, primeiroNome, esperaDoCliente, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, primeiroNome, esperaDoCliente, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -168,4 +168,19 @@ test('primeiro nome sai capitalizado quando veio uniforme', () => {
 test('dias corridos até a data, com virada de mês', () => {
     assert.deepEqual(diasAte('2026-10-02', 4), ['2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02']);
     assert.equal(diasAte('2026-09-21', 14).length, 14);
+});
+
+test('dias de várias unidades somam contagens e ponderam médias', () => {
+    const linha = (data_ref: string, score: number | null, leads: number) => ({
+        data_ref, score_geral: score, leads_atendidos: leads, conversoes_confirmadas: 1, oportunidades_perdidas: 0,
+        tempo_medio_resposta_s: 60, taxa_resposta: 100,
+    });
+    const [d1, d2] = juntarPorDia([linha('2026-09-22', 80, 30), linha('2026-09-21', 50, 10), linha('2026-09-21', 90, 30)]);
+    assert.equal(d1.data_ref, '2026-09-21');
+    assert.equal(d1.leads_atendidos, 40);
+    assert.equal(d1.conversoes_confirmadas, 2);
+    assert.equal(d1.score_geral, (50 * 10 + 90 * 30) / 40);
+    assert.equal(d2.score_geral, 80);
+    // Unidade sem nota não puxa a média para zero.
+    assert.equal(juntarPorDia([linha('2026-09-21', null, 5), linha('2026-09-21', 70, 5)])[0].score_geral, 70);
 });

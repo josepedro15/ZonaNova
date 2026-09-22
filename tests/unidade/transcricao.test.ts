@@ -80,3 +80,27 @@ test('pede português — áudio curto sem idioma o modelo adivinha errado', asy
     await transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, procurarCache: async () => null });
     assert.equal(corpo!.get('language'), 'pt');
 });
+
+// A URL vem do payload: se o token de uma rota vazasse, sem isto o servidor
+// buscaria o que o atacante pedisse.
+test('só https fora da rede interna', async () => {
+    const { urlDeMidiaPermitida } = await import('../../lib/transcricao.ts');
+    assert.ok(urlDeMidiaPermitida('https://uaz.exemplo.com/a.ogg'));
+    for (const ruim of ['http://uaz.exemplo.com/a.ogg', 'file:///etc/passwd', 'https://localhost/a', 'https://127.0.0.1/a',
+        'https://10.0.0.5/a', 'https://169.254.169.254/latest', 'https://192.168.1.1/a', 'https://172.20.0.1/a',
+        'https://[::1]/a', 'https://[fd00::1]/a', 'https://db.internal/a', 'lixo']) {
+        assert.equal(urlDeMidiaPermitida(ruim), null, ruim);
+    }
+});
+
+test('URL recusada não chega a ser buscada', async () => {
+    const { f, chamadas } = falso();
+    await assert.rejects(transcrever('http://169.254.169.254/x', { apiKey: 'k', buscar: f, procurarCache: async () => null }), /recusada/);
+    assert.equal(chamadas.length, 0);
+});
+
+test('áudio acima do teto vira erro', async () => {
+    const { MAX_BYTES_AUDIO } = await import('../../lib/transcricao.ts');
+    const { f } = falso({ audio: new Uint8Array(MAX_BYTES_AUDIO + 1) });
+    await assert.rejects(transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, procurarCache: async () => null }), /grande demais/);
+});
