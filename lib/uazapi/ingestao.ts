@@ -167,3 +167,22 @@ export async function drenarEntradas(limite = 5, idadeMinima = 10 * 60_000): Pro
     }
     return { reprocessadas, falhas };
 }
+
+/** Quanto uma entrada não processada fica guardada para investigação. */
+export const RETENCAO_ENTRADA_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Apaga entradas com mais de `RETENCAO_ENTRADA_MS`. Na prática são as que
+ * esgotaram as tentativas: uma entrada saudável some em segundos. Ficam uma
+ * semana para dar tempo de ler o `ultimo_erro`; depois disso são só conteúdo
+ * de mensagem guardado sem propósito.
+ */
+export async function expurgarEntradas(agora = new Date()): Promise<number> {
+    const supabase = criarClienteAdmin();
+    const { data, error } = await supabase.from('webhook_entrada')
+        .delete()
+        .lt('recebido_em', new Date(agora.getTime() - RETENCAO_ENTRADA_MS).toISOString())
+        .select('id');
+    if (error) throw new Error(error.message);
+    return data?.length ?? 0;
+}

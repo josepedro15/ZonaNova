@@ -7,7 +7,7 @@ import { custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type Mens
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
-import { drenarEntradas } from '@/lib/uazapi/ingestao';
+import { drenarEntradas, expurgarEntradas } from '@/lib/uazapi/ingestao';
 
 export const maxDuration = 300;
 
@@ -43,6 +43,10 @@ export async function GET(req: Request) {
         console.error('processar-fila: falha ao drenar webhook_entrada', e);
         return null;
     });
+    const entradasExpurgadas = await expurgarEntradas(agora).catch((e) => {
+        console.error('processar-fila: falha ao expurgar webhook_entrada', e);
+        return null;
+    });
 
     const { data: candidatos, error } = await supabase
         .from('fila_processamento')
@@ -55,7 +59,7 @@ export async function GET(req: Request) {
         .returns<{ id: string; tipo: ItemTipo; referencia_id: string; data_ref: string; tentativas: number }[]>();
 
     if (error) return Response.json({ erro: error.message }, { status: 500 });
-    if (!candidatos?.length) return Response.json({ pegos: 0, concluidos: 0, falhados: 0, resgatados, entradas });
+    if (!candidatos?.length) return Response.json({ pegos: 0, concluidos: 0, falhados: 0, resgatados, entradas, entradasExpurgadas });
 
     if (!apiKey && candidatos.some((c) => ['transcricao', 'analise_conversa', 'relatorio_vendedor'].includes(c.tipo))) {
         // Sem chave não há como transcrever. Deixar na fila é melhor que
@@ -114,7 +118,7 @@ export async function GET(req: Request) {
         }
     }
 
-    return Response.json({ pegos: meus.size, concluidos, falhados, reagendados, resgatados, entradas });
+    return Response.json({ pegos: meus.size, concluidos, falhados, reagendados, resgatados, entradas, entradasExpurgadas });
 }
 
 type Admin = ReturnType<typeof criarClienteAdmin>;
