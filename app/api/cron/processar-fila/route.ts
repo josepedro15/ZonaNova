@@ -19,27 +19,39 @@ const LOTE = 4;
 // mais nenhuma função trabalhando nele.
 const PRAZO_PROCESSANDO_MS = 10 * 60_000;
 
+// Depois disto o worker não começa a reprocessar entrada nova do webhook.
+// Folga para o maxDuration de 300s, mesmo com a entrada em curso.
+const PRAZO_DRENO_MS = 120_000;
+
 /**
  * Worker da fila (doc 3 §3.4). Roda a cada 5 minutos.
  *
  * Trata a cadeia inteira: transcrição → análise → relatório → unidade → rede.
+ * Depois, com o tempo que sobrar, reprocessa o que o webhook não terminou —
+ * nessa ordem para que uma entrada pesada nunca impeça a fila de andar.
  */
 export async function GET(req: Request) {
     if (!cronAutorizado(req)) {
         return Response.json({ erro: 'não autorizado' }, { status: 401 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
     const supabase = criarClienteAdmin();
     const agora = new Date();
 
-    // Antes de pegar trabalho novo: devolver o que ficou preso e reprocessar o
-    // que o webhook não terminou. Nenhum dos dois pode derrubar o worker.
+    // Nenhuma das manutenções pode derrubar o worker.
     const resgatados = await resgatarPresos(supabase, agora).catch((e) => {
         console.error('processar-fila: falha ao resgatar itens presos', e);
         return 0;
     });
-    const entradas = await drenarEntradas().catch((e) => {
+
+    let fila: Record<string, unknown>;
+    try {
+        fila = await processarLote(supabase, agora);
+    } catch (e) {
+        return Response.json({ erro: String(e) }, { status: 500 });
+    }
+
+    const entradas = await drenarEntradas(new Date(agora.getTime() + PRAZO_DRENO_MS)).catch((e) => {
         console.error('processar-fila: falha ao drenar webhook_entrada', e);
         return null;
     });
@@ -48,6 +60,11 @@ export async function GET(req: Request) {
         return null;
     });
 
+    return Response.json({ ...fila, resgatados, entradas, entradasExpurgadas });
+}
+
+async function processarLote(supabase: Admin, agora: Date): Promise<Record<string, unknown>> {
+    const apiKey = process.env.OPENAI_API_KEY;
     const { data: candidatos, error } = await supabase
         .from('fila_processamento')
         .select('id, tipo, referencia_id, data_ref, tentativas')
@@ -58,13 +75,13 @@ export async function GET(req: Request) {
         .limit(LOTE)
         .returns<{ id: string; tipo: ItemTipo; referencia_id: string; data_ref: string; tentativas: number }[]>();
 
-    if (error) return Response.json({ erro: error.message }, { status: 500 });
-    if (!candidatos?.length) return Response.json({ pegos: 0, concluidos: 0, falhados: 0, resgatados, entradas, entradasExpurgadas });
+    if (error) throw new Error(error.message);
+    if (!candidatos?.length) return { pegos: 0, concluidos: 0, falhados: 0 };
 
     if (!apiKey && candidatos.some((c) => ['transcricao', 'analise_conversa', 'relatorio_vendedor'].includes(c.tipo))) {
         // Sem chave não há como transcrever. Deixar na fila é melhor que
         // gastar tentativa: quando a chave chegar, o áudio ainda está lá.
-        return Response.json({ pegos: 0, concluidos: 0, falhados: 0, aguardando: 'OPENAI_API_KEY' });
+        return { pegos: 0, concluidos: 0, falhados: 0, aguardando: 'OPENAI_API_KEY' };
     }
 
     // Marca `processando` só no que ainda está `pendente`: se outro worker
@@ -85,6 +102,11 @@ export async function GET(req: Request) {
     const meus = new Set((pegos ?? []).map((p) => p.id));
     let concluidos = 0, falhados = 0, reagendados = 0;
 
+    // O desfecho só vale se o item ainda está `processando`: se ele foi
+    // reaberto enquanto rodava (ver `reabrir`), a reabertura manda.
+    const fechar = (id: string, campos: Record<string, unknown>) => supabase.from('fila_processamento')
+        .update(campos).eq('id', id).eq('status', 'processando');
+
     for (const item of candidatos.filter((c) => meus.has(c.id))) {
         try {
             if (item.tipo === 'transcricao') await transcreverMensagem(supabase, item.referencia_id, apiKey!);
@@ -92,33 +114,34 @@ export async function GET(req: Request) {
             else if (item.tipo === 'relatorio_vendedor') await consolidarItem(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'rollup_unidade') await rollupUnidade(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'rollup_rede') await rollupRede(supabase, item.data_ref);
-            await supabase.from('fila_processamento')
-                .update({ status: 'concluido', processado_em: new Date().toISOString() })
-                .eq('id', item.id);
-            await encadear(supabase, item.tipo, item.referencia_id, item.data_ref);
+            await fechar(item.id, { status: 'concluido', processado_em: new Date().toISOString() });
+            await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
             concluidos++;
         } catch (e) {
             if (e instanceof IgnorarItem) {
-                await supabase.from('fila_processamento').update({
-                    status: 'ignorado', ultimo_erro: e.message, processado_em: new Date().toISOString(),
-                }).eq('id', item.id);
-                await encadear(supabase, item.tipo, item.referencia_id, item.data_ref);
+                await fechar(item.id, { status: 'ignorado', ultimo_erro: e.message, processado_em: new Date().toISOString() });
+                await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
                 continue;
             }
             const desfecho = aposFalha(item.tentativas);
-            await supabase.from('fila_processamento').update({
+            await fechar(item.id, {
                 status: desfecho.status,
                 tentativas: desfecho.tentativas,
                 ultimo_erro: String(e).slice(0, 500),
                 ...(desfecho.status === 'pendente'
                     ? { proxima_tentativa_em: desfecho.proximaTentativaEm.toISOString() }
                     : { processado_em: new Date().toISOString() }),
-            }).eq('id', item.id);
-            if (desfecho.status === 'falhou') falhados++; else reagendados++;
+            });
+            if (desfecho.status === 'falhou') {
+                // Falha definitiva também libera o próximo passo: o relatório
+                // sai sem esta conversa em vez de nunca sair.
+                await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
+                falhados++;
+            } else reagendados++;
         }
     }
 
-    return Response.json({ pegos: meus.size, concluidos, falhados, reagendados, resgatados, entradas, entradasExpurgadas });
+    return { pegos: meus.size, concluidos, falhados, reagendados };
 }
 
 type Admin = ReturnType<typeof criarClienteAdmin>;
@@ -137,11 +160,11 @@ const COLUNA_AUSENTE = new Set(['42703', 'PGRST204']);
 async function resgatarPresos(supabase: Admin, agora: Date): Promise<number> {
     const limite = new Date(agora.getTime() - PRAZO_PROCESSANDO_MS).toISOString();
     const { data: presos, error } = await supabase.from('fila_processamento')
-        .select('id, tentativas')
+        .select('id, tipo, referencia_id, data_ref, tentativas')
         .eq('status', 'processando')
         .or(`iniciado_em.lt.${limite},and(iniciado_em.is.null,created_at.lt.${limite})`)
         .limit(50)
-        .returns<{ id: string; tentativas: number }[]>();
+        .returns<{ id: string; tipo: ItemTipo; referencia_id: string; data_ref: string; tentativas: number }[]>();
     if (error) throw new Error(error.message);
 
     for (const item of presos ?? []) {
@@ -154,9 +177,11 @@ async function resgatarPresos(supabase: Admin, agora: Date): Promise<number> {
                 ? { proxima_tentativa_em: desfecho.proximaTentativaEm.toISOString() }
                 : { processado_em: agora.toISOString() }),
         }).eq('id', item.id).eq('status', 'processando');
+        if (desfecho.status === 'falhou') await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
     }
     return presos?.length ?? 0;
 }
+
 type ItemTipo = 'transcricao' | 'analise_conversa' | 'relatorio_vendedor' | 'rollup_unidade' | 'rollup_rede';
 class IgnorarItem extends Error {}
 
@@ -273,12 +298,22 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
     const negociacoes = analises.filter((a) => a.tipo_conversa === 'negociacao');
     const conversaIds = analises.map((a) => a.conversa_id as string);
     const { inicio, fim } = janelaDoDia(dataRef);
-    const { data: mensagens } = await supabase.from('mensagens')
-        .select('conversa_id,direcao,automatica,enviada_em').in('conversa_id', conversaIds)
-        .gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString())
-        .returns<(Msg & { conversa_id: string })[]>();
+    // Paginado e em lotes de ids: o PostgREST corta em 1000 linhas sem avisar,
+    // e um dia movimentado passa disso — as métricas sairiam de uma amostra.
     const porConversa = new Map<string, Msg[]>();
-    for (const m of mensagens ?? []) porConversa.set(m.conversa_id, [...(porConversa.get(m.conversa_id) ?? []), m]);
+    for (let i = 0; i < conversaIds.length; i += 100) {
+        const lote = conversaIds.slice(i, i + 100);
+        for (let de = 0; ; de += 1000) {
+            const { data: mensagens, error: erroMensagens } = await supabase.from('mensagens')
+                .select('conversa_id,direcao,automatica,enviada_em').in('conversa_id', lote)
+                .gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString())
+                .order('id').range(de, de + 999)
+                .returns<(Msg & { conversa_id: string })[]>();
+            if (erroMensagens) throw erroMensagens;
+            for (const m of mensagens ?? []) porConversa.set(m.conversa_id, [...(porConversa.get(m.conversa_id) ?? []), m]);
+            if ((mensagens ?? []).length < 1000) break;
+        }
+    }
     const tempos = [...porConversa.values()].flatMap(temposDeResposta);
     const respostas = [...porConversa.values()].map(foiRespondido).filter((v): v is boolean => v !== null);
     const metricas = {
@@ -360,20 +395,71 @@ async function rollupRede(supabase: Admin, dataRef: string) {
     }, { onConflict: 'data_ref' });
 }
 
+/**
+ * Coloca o passo seguinte na fila — ou o recoloca, se já rodou.
+ *
+ * Reabrir em vez de ignorar a duplicata é o que mantém a cadeia correta com
+ * retries: se uma análise atrasada termina depois do relatório, o relatório
+ * refaz; se um vendedor entra depois do rollup da unidade, a unidade refaz; e
+ * a rede, depois dela. Um item reaberto enquanto roda volta a `pendente`, e o
+ * `fechar` do worker que o rodava não sobrescreve isso.
+ */
+async function reabrir(supabase: Admin, tipo: ItemTipo, referenciaId: string, dataRef: string) {
+    const { error } = await supabase.from('fila_processamento').upsert({
+        tipo, referencia_id: referenciaId, data_ref: dataRef, status: 'pendente', tentativas: 0,
+        ultimo_erro: null, processado_em: null, proxima_tentativa_em: new Date().toISOString(),
+    }, { onConflict: 'tipo,referencia_id,data_ref' });
+    if (error) throw new Error(error.message);
+}
+
+const EM_ABERTO = ['pendente', 'processando'];
+
+/** Ainda há análise do vendedor para o dia na fila (pendente, em retry ou rodando)? */
+async function vendedorTemAnalisePendente(supabase: Admin, userId: string, dataRef: string): Promise<boolean> {
+    for (let de = 0; ; de += 1000) {
+        const { data: abertas, error } = await supabase.from('fila_processamento')
+            .select('referencia_id').eq('tipo', 'analise_conversa').eq('data_ref', dataRef).in('status', EM_ABERTO)
+            .order('id').range(de, de + 999).returns<{ referencia_id: string }[]>();
+        if (error) throw new Error(error.message);
+        const ids = (abertas ?? []).map((a) => a.referencia_id);
+        for (let i = 0; i < ids.length; i += 100) {
+            const { count, error: erro } = await supabase.from('conversas').select('id', { count: 'exact', head: true })
+                .eq('user_id', userId).in('id', ids.slice(i, i + 100));
+            if (erro) throw new Error(erro.message);
+            if (count) return true;
+        }
+        if (ids.length < 1000) return false;
+    }
+}
+
 async function encadear(supabase: Admin, tipo: ItemTipo, referenciaId: string, dataRef: string) {
     if (tipo === 'analise_conversa') {
         const { data: conversa } = await supabase.from('conversas').select('user_id').eq('id', referenciaId).maybeSingle<{ user_id: string }>();
         if (!conversa) return;
-        const { count } = await supabase.from('fila_processamento').select('id', { count: 'exact', head: true })
-            .eq('tipo', 'analise_conversa').eq('data_ref', dataRef).in('status', ['pendente','processando'])
-            .in('referencia_id', (await supabase.from('conversas').select('id').eq('user_id', conversa.user_id)).data?.map((c) => c.id) ?? []);
-        if (!count) await supabase.from('fila_processamento').upsert({ tipo: 'relatorio_vendedor', referencia_id: conversa.user_id, data_ref: dataRef }, { onConflict: 'tipo,referencia_id,data_ref', ignoreDuplicates: true });
+        if (!await vendedorTemAnalisePendente(supabase, conversa.user_id, dataRef)) {
+            await reabrir(supabase, 'relatorio_vendedor', conversa.user_id, dataRef);
+        }
     } else if (tipo === 'relatorio_vendedor') {
-        const { data: perfil } = await supabase.from('profiles').select('unidade_id').eq('id', referenciaId).maybeSingle<{ unidade_id: string | null }>();
-        if (perfil?.unidade_id) await supabase.from('fila_processamento').upsert({ tipo: 'rollup_unidade', referencia_id: perfil.unidade_id, data_ref: dataRef }, { onConflict: 'tipo,referencia_id,data_ref', ignoreDuplicates: true });
+        // A unidade do relatório, não a do perfil: o dia pertence a onde as
+        // conversas aconteceram, mesmo que o vendedor já tenha mudado.
+        const { data: relatorio } = await supabase.from('relatorios_diarios').select('unidade_id')
+            .eq('user_id', referenciaId).eq('data_ref', dataRef).maybeSingle<{ unidade_id: string }>();
+        if (relatorio) await reabrir(supabase, 'rollup_unidade', relatorio.unidade_id, dataRef);
     } else if (tipo === 'rollup_unidade') {
-        const { count } = await supabase.from('fila_processamento').select('id', { count: 'exact', head: true })
-            .eq('tipo', 'rollup_unidade').eq('data_ref', dataRef).in('status', ['pendente','processando']);
-        if (!count) await supabase.from('fila_processamento').upsert({ tipo: 'rollup_rede', referencia_id: '00000000-0000-0000-0000-000000000000', data_ref: dataRef }, { onConflict: 'tipo,referencia_id,data_ref', ignoreDuplicates: true });
+        const { count, error } = await supabase.from('fila_processamento').select('id', { count: 'exact', head: true })
+            .in('tipo', ['relatorio_vendedor', 'rollup_unidade']).eq('data_ref', dataRef).in('status', EM_ABERTO);
+        if (error) throw new Error(error.message);
+        if (!count) await reabrir(supabase, 'rollup_rede', '00000000-0000-0000-0000-000000000000', dataRef);
     }
+}
+
+/**
+ * O item já foi fechado quando isto roda: uma falha aqui não pode virar falha
+ * dele. Fica no log; o próximo item do mesmo vendedor ou unidade encadeia de
+ * novo.
+ */
+async function encadearSemFalhar(supabase: Admin, tipo: ItemTipo, referenciaId: string, dataRef: string) {
+    await encadear(supabase, tipo, referenciaId, dataRef).catch((e) => {
+        console.error(`processar-fila: falha ao encadear ${tipo} ${referenciaId} ${dataRef}`, e);
+    });
 }

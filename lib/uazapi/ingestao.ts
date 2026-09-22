@@ -117,16 +117,17 @@ export const MAX_TENTATIVAS_ENTRADA = 5;
 
 /**
  * Processa uma entrada e a apaga. Em falha, registra o erro e deixa a linha
- * para a próxima rodada do worker.
+ * para a próxima rodada do worker. `tentativaJaContada` é o caso do worker,
+ * que soma a tentativa antes de começar (ver `drenarEntradas`).
  */
-export async function processarEntrada(entradaId: string, evento: EventoUazapi, conexao: Conexao, tentativas = 0) {
+export async function processarEntrada(entradaId: string, evento: EventoUazapi, conexao: Conexao, tentativas = 0, tentativaJaContada = false) {
     const supabase = criarClienteAdmin();
     try {
         await processar(evento, conexao);
         await supabase.from('webhook_entrada').delete().eq('id', entradaId);
     } catch (e) {
         await supabase.from('webhook_entrada')
-            .update({ tentativas: tentativas + 1, ultimo_erro: String(e).slice(0, 500) })
+            .update({ ...(tentativaJaContada ? {} : { tentativas: tentativas + 1 }), ultimo_erro: String(e).slice(0, 500) })
             .eq('id', entradaId);
         throw e;
     }
@@ -134,11 +135,16 @@ export async function processarEntrada(entradaId: string, evento: EventoUazapi, 
 
 /**
  * Reprocessa entradas esquecidas. Só pega as que têm mais de `idadeMinima` ms
- * para não disputar com o `after()` do webhook que ainda está trabalhando. O
- * lote é pequeno porque um evento `history` pode trazer centenas de mensagens
- * e o worker ainda tem a fila inteira para tocar.
+ * para não disputar com o `after()` do webhook que ainda está trabalhando.
+ *
+ * A tentativa é somada ANTES de processar. Somada só no erro, uma entrada
+ * grande demais para o tempo da função (um `history` com centenas de
+ * mensagens) morria sem nunca contar, e voltava a cada rodada para sempre. A
+ * soma é condicional ao valor lido, o que também impede dois workers de
+ * pegarem a mesma entrada. `ate` é o instante a partir do qual não se começa
+ * entrada nova: o worker tem outras coisas para fazer no mesmo tempo.
  */
-export async function drenarEntradas(limite = 5, idadeMinima = 10 * 60_000): Promise<{ reprocessadas: number; falhas: number }> {
+export async function drenarEntradas(ate: Date, limite = 5, idadeMinima = 10 * 60_000): Promise<{ reprocessadas: number; falhas: number }> {
     const supabase = criarClienteAdmin();
     const { data, error } = await supabase.from('webhook_entrada')
         .select('id, conexao_id, payload, tentativas')
@@ -150,6 +156,7 @@ export async function drenarEntradas(limite = 5, idadeMinima = 10 * 60_000): Pro
 
     let reprocessadas = 0, falhas = 0;
     for (const entrada of data ?? []) {
+        if (Date.now() >= ate.getTime()) break;
         const { data: conexao } = await supabase.from('conexoes_whatsapp')
             .select('id, user_id, unidade_id').eq('id', entrada.conexao_id)
             .maybeSingle<Conexao>();
@@ -157,8 +164,13 @@ export async function drenarEntradas(limite = 5, idadeMinima = 10 * 60_000): Pro
             await supabase.from('webhook_entrada').delete().eq('id', entrada.id);
             continue;
         }
+        const { data: minha } = await supabase.from('webhook_entrada')
+            .update({ tentativas: entrada.tentativas + 1 })
+            .eq('id', entrada.id).eq('tentativas', entrada.tentativas)
+            .select('id');
+        if (!minha?.length) continue;
         try {
-            await processarEntrada(entrada.id, entrada.payload, conexao, entrada.tentativas);
+            await processarEntrada(entrada.id, entrada.payload, conexao, entrada.tentativas, true);
             reprocessadas++;
         } catch (e) {
             console.error(`webhook_entrada ${entrada.id}: falha ao reprocessar`, e);
