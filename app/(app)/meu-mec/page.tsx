@@ -10,7 +10,7 @@ export default async function MeuMecPage() {
     const { supabase, perfil } = await contextoApp();
     const { data: dias } = await supabase.from('aderencia_diaria').select('data_ref,aderencia_geral,por_etapa,sondagem_itens,frases_proibidas').eq('user_id', perfil.id).order('data_ref', { ascending: false }).limit(1);
     const dia = dias?.[0];
-    const { data: marcacoes } = dia ? await supabase.from('aderencia_conversa').select('conversa_id,etapa,aplicavel,aplicado,justificativa,evidencias,conversas(cliente_nome)').eq('user_id', perfil.id).eq('data_ref', dia.data_ref).order('created_at', { ascending: false }) : { data: [] };
+    const { data: marcacoes } = dia ? await supabase.from('aderencia_conversa').select('conversa_id,etapa,aplicavel,aplicado,justificativa,evidencias,conversas!inner(cliente_nome,bloqueada)').eq('user_id', perfil.id).eq('conversas.bloqueada', false).eq('data_ref', dia.data_ref).order('created_at', { ascending: false }) : { data: [] };
     const etapas = (dia?.por_etapa ?? {}) as Record<string,number|null>;
     const exemplo = new Map<string, Record<string, unknown>>();
     for (const m of marcacoes ?? []) if (m.aplicavel && !exemplo.has(m.etapa as string)) exemplo.set(m.etapa as string, m as Record<string, unknown>);

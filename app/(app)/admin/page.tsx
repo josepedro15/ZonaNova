@@ -1,14 +1,16 @@
 import AppShell from '@/components/app-shell';
 import { contextoApp } from '@/lib/contexto-app';
 import { repetirItem, reprocessarDia } from '@/app/actions/operacao';
+import { paginar } from '@/lib/paginar';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminPage() {
     const { supabase, perfil } = await contextoApp();
-    const [{ data: fila }, { data: analises }, { data: eventos }] = await Promise.all([
+    // O custo é acumulado de verdade: paginado, não as primeiras mil análises.
+    const [{ data: fila }, analises, { data: eventos }] = await Promise.all([
         supabase.from('fila_processamento').select('*').order('created_at', { ascending: false }).limit(100),
-        supabase.from('analises_conversa').select('custo_estimado,created_at').order('created_at', { ascending: false }).limit(5000),
+        paginar((de, ate) => supabase.from('analises_conversa').select('id,custo_estimado').order('id').range(de, ate), 500_000),
         supabase.from('eventos_admin').select('id,acao,detalhes,created_at,profiles!eventos_admin_actor_id_fkey(nome)').order('created_at', { ascending: false }).limit(12),
     ]);
     const cont = (status: string) => (fila ?? []).filter((f) => f.status === status).length;

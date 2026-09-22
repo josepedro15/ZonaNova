@@ -1,15 +1,19 @@
 import AppShell from '@/components/app-shell';
 import { contextoApp } from '@/lib/contexto-app';
 import { revisarContestacao } from '@/app/actions/operacao';
+import { paginar } from '@/lib/paginar';
 
 export const dynamic = 'force-dynamic';
 const valor = (x: string) => x === 'sim' ? 1 : x === 'parcial' ? .5 : 0;
 
 export default async function MecRede() {
     const { supabase, perfil } = await contextoApp();
-    const [{ data: unidades }, { data: linhas }, { data: contestacoes }] = await Promise.all([
+    // Paginado (o PostgREST corta em 1000) e sem conversa bloqueada.
+    const [{ data: unidades }, linhas, { data: contestacoes }] = await Promise.all([
         supabase.from('unidades').select('id,nome').eq('ativa', true),
-        supabase.from('aderencia_conversa').select('unidade_id,etapa,aplicavel,aplicado').eq('aplicavel', true).limit(10000),
+        paginar((de, ate) => supabase.from('aderencia_conversa')
+            .select('id,unidade_id,etapa,aplicavel,aplicado,conversas!inner(bloqueada)')
+            .eq('aplicavel', true).eq('conversas.bloqueada', false).order('id').range(de, ate)),
         supabase.from('aderencia_contestacoes').select('id,motivo,created_at,aderencia_conversa(etapa,justificativa,conversas(cliente_nome)),profiles!aderencia_contestacoes_contestado_por_fkey(nome)').eq('veredito', 'pendente').order('created_at').limit(100),
     ]);
     const etapas = [...new Set((linhas ?? []).map(l => l.etapa as string))];

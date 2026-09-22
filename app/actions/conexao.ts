@@ -6,7 +6,8 @@ import { cifrar, decifrar } from '@/lib/crypto';
 import { tokenDeRota } from '@/lib/uazapi/rota';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { APP_URL } from '@/lib/env';
-import { telefoneE164, variantesTelefone } from '@/lib/painel';
+import { semTelefone, telefoneE164, variantesTelefone } from '@/lib/painel';
+import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
 export type EstadoConexao = {
@@ -195,7 +196,10 @@ export async function bloquearContato(form: FormData) {
     const supabase = await criarClienteServidor();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const telefone = telefoneE164(String(form.get('telefone') ?? '')).slice(0, 20);
+    // Contato `@lid` não tem número para digitar: chega pelo botão da
+    // conversa, já no formato em que foi gravado.
+    const bruto = String(form.get('telefone') ?? '').trim();
+    const telefone = semTelefone(bruto) ? bruto.slice(0, 40) : telefoneE164(bruto).slice(0, 20);
     const motivo = String(form.get('motivo') ?? '').trim().slice(0, 300) || null;
     if (telefone.length < 8) return;
     const admin = criarClienteAdmin();
@@ -207,6 +211,8 @@ export async function bloquearContato(form: FormData) {
     revalidatePath('/perfil');
     revalidatePath('/dashboard');
     revalidatePath('/conversas');
+    // Vindo da própria conversa, ela acabou de sumir: volta para a lista.
+    if (form.get('voltar') === 'conversas') redirect('/conversas');
 }
 
 export async function desbloquearContato(form: FormData) {
@@ -219,8 +225,16 @@ export async function desbloquearContato(form: FormData) {
     const { data: removido } = await admin.from('contatos_bloqueados').delete()
         .eq('id', id).eq('user_id', user.id).select('telefone').maybeSingle<{ telefone: string }>();
     if (removido) {
-        await admin.from('conversas').update({ bloqueada: false })
-            .eq('user_id', user.id).in('cliente_telefone', variantesTelefone(removido.telefone));
+        // Outro bloqueio pode cobrir o mesmo número (com e sem o nono dígito):
+        // o que ele cobre continua bloqueado.
+        const { data: restantes } = await admin.from('contatos_bloqueados').select('telefone').eq('user_id', user.id)
+            .returns<{ telefone: string }[]>();
+        const aindaCobertos = new Set((restantes ?? []).flatMap((r) => variantesTelefone(r.telefone)));
+        const liberar = variantesTelefone(removido.telefone).filter((t) => !aindaCobertos.has(t));
+        if (liberar.length) {
+            await admin.from('conversas').update({ bloqueada: false })
+                .eq('user_id', user.id).in('cliente_telefone', liberar);
+        }
     }
     revalidatePath('/perfil');
     revalidatePath('/dashboard');

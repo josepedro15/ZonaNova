@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { APP_URL } from '@/lib/env';
+import { destinoSeguro } from '@/lib/destino';
 
 /**
  * Destino do link de confirmação de e-mail — e do de recuperação de senha,
@@ -15,10 +16,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const code = url.searchParams.get('code');
 
-    // Só caminho relativo: um `next=https://…` faria desta rota um redirecionador
-    // aberto, com o domínio da Zona Nova na frente do link de phishing.
-    const pedido = url.searchParams.get('next') ?? '/aguardando-aprovacao';
-    const destino = pedido.startsWith('/') && !pedido.startsWith('//') ? pedido : '/aguardando-aprovacao';
+    // Só caminho da própria aplicação: um `next=https://…` (ou `/\evil.com`)
+    // faria desta rota um redirecionador aberto, com o domínio da Zona Nova na
+    // frente do link de phishing.
+    const destino = destinoSeguro(url.searchParams.get('next'), APP_URL, '/aguardando-aprovacao');
 
     // A base do redirecionamento é o APP_URL, não `url.origin`. Atrás de um
     // proxy — o túnel do `npm run tunel`, e qualquer balanceador — o Next vê o

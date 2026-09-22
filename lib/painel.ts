@@ -156,6 +156,7 @@ export function telefoneE164(digitado: string): string {
  * "(54) 9 9812-4471" não pegava o contato que chega como 555498124471.
  */
 export function variantesTelefone(e164: string): string[] {
+    if (semTelefone(e164)) return [e164];
     const d = e164.replace(/\D/g, '');
     if (!d.startsWith('55')) return [d];
     const ddd = d.slice(2, 4);

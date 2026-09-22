@@ -312,3 +312,50 @@ begin
     then raise notice 'PASSOU  mensagem atrasada não recuou ultima_mensagem_em';
     else raise notice 'FALHOU  carimbo recuou com mensagem atrasada'; end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 0016: inativo não herda o escopo do papel; contestação fica na unidade
+-- ---------------------------------------------------------------------------
+reset role;
+update public.profiles set status = 'inativo' where id = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select pg_temp.como('11111111-1111-1111-1111-111111111111');
+select pg_temp.ok('supervisor inativo NÃO vê o relatório da rede',
+       (select count(*) from relatorios_rede), 0);
+select pg_temp.ok('supervisor inativo NÃO vê o log',
+       (select count(*) from eventos_admin), 0);
+select pg_temp.ok('supervisor inativo NÃO vê profile de ninguém além do próprio',
+       (select count(*) from profiles), 1);
+do $$
+begin
+    insert into public.unidades (nome) values ('Unidade fantasma');
+    raise notice 'FALHOU  supervisor inativo criou unidade';
+exception when insufficient_privilege or check_violation then
+    raise notice 'PASSOU  supervisor inativo não escreve em unidades';
+end $$;
+reset role;
+update public.profiles set status = 'ativo' where id = '11111111-1111-1111-1111-111111111111';
+
+-- Encerrado: só pode haver um playbook vigente, e o seed já tem o dele.
+insert into public.playbooks (id, versao, nome, vigente_de, vigente_ate)
+values ('dddddddd-0000-0000-0000-000000000001', 'teste-rls', 'Playbook de teste', current_date, current_date)
+on conflict do nothing;
+insert into public.aderencia_conversa (id, conversa_id, user_id, unidade_id, data_ref, playbook_id, etapa, aplicavel, aplicado)
+values ('eeeeeeee-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000003',
+        '66666666-6666-6666-6666-666666666666', 'aaaaaaaa-0000-0000-0000-000000000002',
+        current_date, 'dddddddd-0000-0000-0000-000000000001', 'acolhida', true, 'nao')
+on conflict do nothing;
+insert into public.aderencia_contestacoes (aderencia_id, contestado_por, motivo)
+values ('eeeeeeee-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'motivo de Bento');
+
+set role authenticated;
+select pg_temp.como('22222222-2222-2222-2222-222222222222');
+select pg_temp.ok('gestor do Centro NÃO lê contestação de Bento',
+       (select count(*) from aderencia_contestacoes), 0);
+select pg_temp.como('33333333-3333-3333-3333-333333333333');
+select pg_temp.ok('gestor de Bento lê a contestação da unidade dele',
+       (select count(*) from aderencia_contestacoes), 1);
+select pg_temp.como('11111111-1111-1111-1111-111111111111');
+select pg_temp.ok('supervisor ativo lê a contestação',
+       (select count(*) from aderencia_contestacoes), 1);
+reset role;

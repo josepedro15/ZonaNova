@@ -147,6 +147,8 @@ test('celular casa com e sem o nono dígito', () => {
     // Fixo não tem nono dígito.
     assert.deepEqual(variantesTelefone('555433334444'), ['555433334444']);
     assert.deepEqual(variantesTelefone('12025550147'), ['12025550147']);
+    // LID é identidade própria: sem dígito a acrescentar ou tirar.
+    assert.deepEqual(variantesTelefone('lid:123456789012345'), ['lid:123456789012345']);
 });
 
 test('contato @lid não é formatado como telefone', () => {

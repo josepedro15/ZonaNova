@@ -3,6 +3,7 @@ import AppShell from '@/components/app-shell';
 import { contextoApp, horaCurta } from '@/lib/contexto-app';
 import { telefoneBonito } from '@/lib/painel';
 import { contestarAderencia } from '@/app/actions/gestao';
+import { bloquearContato } from '@/app/actions/conexao';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,8 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
     const { supabase, perfil } = await contextoApp();
     const { data: conversa } = await supabase.from('conversas')
         .select('id,cliente_nome,cliente_telefone,user_id,profiles!conversas_user_id_fkey(nome),mensagens(id,direcao,tipo,conteudo,transcricao,automatica,enviada_em)')
-        .eq('id', id).maybeSingle();
+        .eq('id', id).eq('bloqueada', false).maybeSingle();
+    // Bloqueada some para todo mundo, inclusive por link direto.
     if (!conversa) notFound();
     const [{ data: analise }, { data: aderencia }] = await Promise.all([
         supabase.from('analises_conversa').select('*').eq('conversa_id', id).order('data_ref', { ascending: false }).limit(1).maybeSingle(),
@@ -25,6 +27,16 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
         <AppShell papel={perfil.role} nome={perfil.nome} unidade={perfil.unidade} atual="/conversas">
             <div className="mx-auto max-w-[1240px] px-5 pb-28 pt-7 lg:px-10 lg:pb-16 lg:pt-10">
                 <h1 className="display text-[28px] font-semibold">{conversa.cliente_nome || telefoneBonito(conversa.cliente_telefone)}</h1><p className="mt-1 text-sm text-tinta-2">{telefoneBonito(conversa.cliente_telefone)}{vendedor?.nome ? ` · atendida por ${vendedor.nome}` : ''}</p>
+                {conversa.user_id === perfil.id && (
+                    // Único caminho para bloquear contato `@lid`, que não tem
+                    // número para digitar no Perfil.
+                    <form action={bloquearContato} className="mt-3">
+                        <input type="hidden" name="telefone" value={conversa.cliente_telefone} />
+                        <input type="hidden" name="motivo" value="Bloqueado pela conversa" />
+                        <input type="hidden" name="voltar" value="conversas" />
+                        <button className="text-xs font-semibold text-vermelho">Não é atendimento — bloquear este contato</button>
+                    </form>
+                )}
                 <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)]">
                     <section className="rounded-card border border-linha bg-superficie p-4 lg:p-6"><p className="text-[11px] font-bold uppercase tracking-[.12em] text-tinta-3">Conversa</p><div className="mt-5 space-y-3">{mensagens.map((m) => <div key={m.id} className={`flex ${m.direcao === 'saida' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-[13px] px-3.5 py-2.5 ${m.automatica ? 'border border-dashed border-linha bg-papel-2' : m.direcao === 'saida' ? 'bg-petroleo-sof' : 'bg-papel-2'}`}>{m.automatica && <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-tinta-3">Mensagem automática</p>}<p className="whitespace-pre-wrap text-[13px] leading-relaxed">{m.tipo === 'audio' ? m.transcricao ? `🎧 ${m.transcricao}` : '🎧 Áudio sem transcrição' : m.conteudo || `[${m.tipo}]`}</p><p className="mt-1 text-right text-[9.5px] text-tinta-3">{horaCurta(m.enviada_em)}</p></div></div>)}</div></section>
                     <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
