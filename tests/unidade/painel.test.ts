@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, esperaDoCliente, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, primeiroNome, esperaDoCliente, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -151,4 +151,19 @@ test('celular casa com e sem o nono dígito', () => {
 
 test('contato @lid não é formatado como telefone', () => {
     assert.equal(telefoneBonito('lid:123456789012345'), 'Contato sem número visível');
+});
+
+// --- saudação e gráfico ------------------------------------------------------
+
+test('primeiro nome sai capitalizado quando veio uniforme', () => {
+    assert.equal(primeiroNome('jose pedro'), 'Jose');
+    assert.equal(primeiroNome('JOSÉ PEDRO'), 'José');
+    assert.equal(primeiroNome('  ana  '), 'Ana');
+    assert.equal(primeiroNome('McArthur Silva'), 'McArthur');
+    assert.equal(primeiroNome(null), '');
+});
+
+test('dias corridos até a data, com virada de mês', () => {
+    assert.deepEqual(diasAte('2026-10-02', 4), ['2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02']);
+    assert.equal(diasAte('2026-09-21', 14).length, 14);
 });

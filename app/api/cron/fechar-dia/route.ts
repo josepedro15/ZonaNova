@@ -1,6 +1,7 @@
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { cronAutorizado } from '@/lib/cron';
 import { dataEmSaoPaulo, janelaDoDia } from '@/lib/analise';
+import { conversasComMensagemNoDia } from '@/lib/fechamento';
 
 export const maxDuration = 300;
 
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
     for (const vendedor of vendedores ?? []) {
         let lista: string[];
         try {
-            lista = await conversasComMensagemNoDia(supabase, vendedor.id, inicio, fim);
+            lista = await conversasComMensagemNoDia(supabase, inicio, fim, vendedor.id);
         } catch (e) {
             return Response.json({ erro: String(e) }, { status: 500 });
         }
@@ -43,45 +44,3 @@ export async function GET(req: Request) {
     return Response.json({ data_ref: dataRef, vendedores: vendedores?.length ?? 0, conversas_enfileiradas: conversas });
 }
 
-type Admin = ReturnType<typeof criarClienteAdmin>;
-const PAGINA = 1000;
-
-/**
- * As conversas do vendedor com pelo menos uma mensagem dentro da janela.
- *
- * Não dá para filtrar por `ultima_mensagem_em`: quando o dia fecha, uma
- * negociação que continuou no dia seguinte já tem a última mensagem fora da
- * janela, e quem conversa todo dia nunca seria analisado. O que decide é ter
- * mensagem no dia. `ultima_mensagem_em >= inicio` só pré-filtra: toda conversa
- * com mensagem na janela passa por ele. Contato bloqueado fica de fora.
- */
-async function conversasComMensagemNoDia(supabase: Admin, userId: string, inicio: Date, fim: Date): Promise<string[]> {
-    const candidatas: string[] = [];
-    for (let de = 0; ; de += PAGINA) {
-        const { data, error } = await supabase.from('conversas')
-            .select('id').eq('user_id', userId).eq('bloqueada', false)
-            .gte('ultima_mensagem_em', inicio.toISOString())
-            .order('id').range(de, de + PAGINA - 1)
-            .returns<{ id: string }[]>();
-        if (error) throw new Error(error.message);
-        candidatas.push(...(data ?? []).map((c) => c.id));
-        if ((data ?? []).length < PAGINA) break;
-    }
-
-    const comMensagem = new Set<string>();
-    // Lotes de 100 ids mantêm a URL do PostgREST curta.
-    for (let i = 0; i < candidatas.length; i += 100) {
-        const lote = candidatas.slice(i, i + 100);
-        for (let de = 0; ; de += PAGINA) {
-            const { data, error } = await supabase.from('mensagens')
-                .select('conversa_id').in('conversa_id', lote)
-                .gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString())
-                .order('id').range(de, de + PAGINA - 1)
-                .returns<{ conversa_id: string }[]>();
-            if (error) throw new Error(error.message);
-            for (const m of data ?? []) comMensagem.add(m.conversa_id);
-            if ((data ?? []).length < PAGINA) break;
-        }
-    }
-    return [...comMensagem];
-}

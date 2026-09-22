@@ -185,3 +185,26 @@ export function telefoneBonito(numero: string): string {
     if (resto.length === 8) return `(${ddd}) ${resto.slice(0, 4)}-${resto.slice(4)}`;
     return numero;
 }
+
+/**
+ * O primeiro nome para a saudação. Cadastro digitado todo em minúsculas ou
+ * maiúsculas ("jose", "JOSÉ") vira "Jose"/"José"; o que já tem capitalização
+ * própria ("McArthur") fica como está.
+ */
+export function primeiroNome(nome: string | null | undefined): string {
+    const primeiro = (nome ?? '').trim().split(/\s+/)[0] ?? '';
+    const uniforme = primeiro === primeiro.toLowerCase() || primeiro === primeiro.toUpperCase();
+    if (!uniforme) return primeiro;
+    return primeiro.charAt(0).toLocaleUpperCase('pt-BR') + primeiro.slice(1).toLocaleLowerCase('pt-BR');
+}
+
+/**
+ * Os `n` dias corridos terminando em `ultimo` (AAAA-MM-DD), do mais antigo ao
+ * mais recente. O gráfico desenha um lugar por dia: dia sem relatório vira
+ * lacuna visível em vez de sumir e encostar os vizinhos.
+ */
+export function diasAte(ultimo: string, n: number): string[] {
+    const fim = Date.parse(`${ultimo}T12:00:00Z`);
+    return Array.from({ length: n }, (_, i) =>
+        new Date(fim - (n - 1 - i) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+}

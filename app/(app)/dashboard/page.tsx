@@ -4,8 +4,8 @@ import { sair } from '@/app/actions/auth';
 import Marca from '@/app/marca';
 import AppShell from '@/components/app-shell';
 import {
-    desde, esperaDoCliente, esperaEmTexto, foiRespondido,
-    respostaMediaEmMinutos, semTelefone, telefoneBonito, temposDeResposta, type Msg,
+    desde, diasAte, esperaDoCliente, esperaEmTexto, foiRespondido,
+    primeiroNome, respostaMediaEmMinutos, semTelefone, telefoneBonito, temposDeResposta, type Msg,
 } from '@/lib/painel';
 
 // O painel lê o que chegou há instantes pelo webhook. Gerado uma vez no build
@@ -51,8 +51,6 @@ function dataPorExtenso(agora: Date): string {
     }).format(agora);
     return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
-
-const primeiroNome = (nome: string | null | undefined) => (nome ?? '').split(' ')[0];
 
 /**
  * O link que realmente resolve o problema hoje.
@@ -164,7 +162,13 @@ export default async function Dashboard() {
 
     const ligado = conexao?.status === 'conectada';
     const relatorio = (relatorios ?? []).find((r) => r.data_ref === dataRef) ?? relatorios?.[0] ?? null;
-    const historico = [...(relatorios ?? [])].reverse();
+    // Catorze dias corridos até ontem, o último que o fechamento cobre. Dia sem
+    // relatório fica como lacuna; dia com relatório e sem nota (só suporte ou
+    // social) fica tracejado — nota zero e "não houve nota" não são a mesma
+    // coisa.
+    const porDia = new Map((relatorios ?? []).map((r) => [r.data_ref as string, r]));
+    const ontem = new Date(Date.parse(`${dataRef}T12:00:00Z`) - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const historico = diasAte(ontem, 14).map((dia) => ({ dia, relatorio: porDia.get(dia) ?? null }));
     const coaching = (relatorio?.payload ?? {}) as {
         resumo?: string; melhorias?: string[]; elogio?: string; desafio?: string;
     };
@@ -263,7 +267,13 @@ export default async function Dashboard() {
                     </section>
                     <section className="mt-4 grid gap-4 lg:grid-cols-2">
                         <div className="rounded-card border border-linha bg-superficie p-5"><p className="text-[11px] font-bold uppercase tracking-[.12em] text-tinta-3">Seu MEC</p><p className="display mt-2 text-3xl font-semibold">{aderencia?.aderencia_geral == null ? '—' : `${Math.round(Number(aderencia.aderencia_geral))}%`}</p><Link href="/meu-mec" className="mt-3 inline-block text-[12.5px] font-semibold text-petroleo">Ver as sete etapas →</Link></div>
-                        <div className="rounded-card border border-linha bg-superficie p-5"><p className="text-[11px] font-bold uppercase tracking-[.12em] text-tinta-3">Últimos dias</p><div className="mt-4 flex h-16 items-end gap-1.5">{historico.slice(-14).map((r) => <div key={r.data_ref} title={`${r.data_ref}: ${r.score_geral ?? 'sem nota'}`} className="min-w-2 flex-1 rounded-t bg-petroleo/70" style={{ height: `${Math.max(8, Number(r.score_geral ?? 0))}%` }} />)}</div></div>
+                        <div className="rounded-card border border-linha bg-superficie p-5"><p className="text-[11px] font-bold uppercase tracking-[.12em] text-tinta-3">Últimos dias</p><div className="mt-4 flex h-16 items-end gap-1.5">{historico.map(({ dia, relatorio: r }) => {
+                            const nota = r?.score_geral == null ? null : Math.round(Number(r.score_geral));
+                            const rotulo = `${dia.slice(8, 10)}/${dia.slice(5, 7)}: ${!r ? 'sem relatório' : nota === null ? 'sem nota' : `nota ${nota}`}`;
+                            if (!r) return <div key={dia} title={rotulo} className="h-1 min-w-2 flex-1 rounded bg-linha" />;
+                            if (nota === null) return <div key={dia} title={rotulo} className="h-1/3 min-w-2 flex-1 rounded-t border border-dashed border-tinta-3" />;
+                            return <div key={dia} title={rotulo} className="min-w-2 flex-1 rounded-t bg-petroleo/70" style={{ height: `${Math.max(6, nota)}%` }} />;
+                        })}</div><p className="mt-2 text-[11px] text-tinta-3">Nota diária de 0 a 100 · tracejado: dia sem negociação</p></div>
                     </section>
                 </>
             )}

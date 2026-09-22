@@ -14,12 +14,14 @@ export async function processar(evento: EventoUazapi, conexao: Conexao) {
     const supabase = criarClienteAdmin();
 
     // Evento de conexão: é o que alimenta o alerta de número caído.
+    // Só quando não é uma mensagem avulsa: nela, `status` pode ser o da
+    // mensagem. Um lote (`messages[]`) com status traz os dois — atualiza a
+    // conexão e segue para as mensagens em vez de descartá-las.
     const status = statusDeConexao(evento);
     if (status && !evento.message) {
         await supabase.from('conexoes_whatsapp')
             .update({ status, ...(status === 'conectada' ? { historico_status: 'recebendo' } : {}), ultimo_evento_em: new Date().toISOString(), updated_at: new Date().toISOString() })
             .eq('id', conexao.id);
-        return;
     }
 
     const mensagens = mensagensDoEvento(evento);
@@ -52,20 +54,17 @@ async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
 
     // A unidade é carimbada na conversa no momento da criação: se o vendedor
     // mudar de unidade amanhã, o histórico continua pertencendo a onde
-    // aconteceu.
-    const { data: conversa, error: erroConversa } = await supabase
-        .from('conversas')
-        .upsert(
-            {
-                user_id: conexao.user_id,
-                unidade_id: conexao.unidade_id,
-                cliente_telefone: m.clienteTelefone,
-                ...(m.clienteNome ? { cliente_nome: m.clienteNome } : {}),
-            },
-            { onConflict: 'user_id,cliente_telefone' },
-        )
-        .select('id')
-        .single<{ id: string }>();
+    // aconteceu. Por isso o upsert ignora duplicata — atualizar reescreveria a
+    // unidade a cada mensagem — e o nome vai num update separado.
+    const chave = { user_id: conexao.user_id, cliente_telefone: m.clienteTelefone };
+    const { error: erroCriacao } = await supabase.from('conversas')
+        .upsert({ ...chave, unidade_id: conexao.unidade_id }, { onConflict: 'user_id,cliente_telefone', ignoreDuplicates: true });
+    if (erroCriacao) throw erroCriacao;
+
+    const { data: conversa, error: erroConversa } = m.clienteNome
+        ? await supabase.from('conversas').update({ cliente_nome: m.clienteNome }).match(chave)
+            .select('id').single<{ id: string }>()
+        : await supabase.from('conversas').select('id').match(chave).single<{ id: string }>();
 
     if (erroConversa || !conversa) {
         throw erroConversa ?? new Error('conversa não resolvida');
