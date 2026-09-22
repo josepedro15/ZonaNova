@@ -11,7 +11,7 @@
         └─► áudio? enfileira transcricao
                               │
   ┌───────────────────────────┘
-  │  23:30 BRT — cron "fechar-dia"
+  │  00:30 BRT — cron "fechar-dia" (fecha o dia que acabou)
   ▼
   monta a lista de conversas com atividade no dia, por vendedor ativo
         │  filtros: contatos bloqueados, grupos, disparo em massa, aniversário
@@ -61,7 +61,9 @@ e telefones em `contatos_bloqueados`.
 
 ## 3.3 Fechamento do dia
 
-Cron às **23:30 BRT** (`30 2 * * *` em UTC). Para cada vendedor com
+Cron às **00:30 BRT** (`30 3 * * *` em UTC), fechando o dia que acabou de
+terminar — às 23:30 ele fechava o dia anterior, com 24h de atraso (migration
+0020). Para cada vendedor com
 `status = 'ativo'` e conexão `conectada`:
 
 - Busca conversas com mensagem entre 00:00 e 23:59:59 do dia (fuso

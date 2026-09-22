@@ -34,3 +34,21 @@ export async function dentroDoLimite(regras: Regra[]): Promise<boolean> {
     }
     return cabe;
 }
+
+/**
+ * Alguma regra já estourou nesta janela? Só lê — não consome. Para o login,
+ * onde só a FALHA conta: vendedores da mesma loja saem pelo mesmo IP, e
+ * contar login certo travava a troca de turno inteira.
+ */
+export async function limiteEstourado(regras: Regra[]): Promise<boolean> {
+    const admin = criarClienteAdmin();
+    const { data, error } = await admin.from('limites_acesso').select('chave,inicio,contagem')
+        .in('chave', regras.map((r) => r.chave))
+        .returns<{ chave: string; inicio: string; contagem: number }[]>();
+    if (error) { console.error('limite: contador indisponível', error.message); return false; }
+    const agora = Date.now();
+    return (data ?? []).some((linha) => {
+        const regra = regras.find((r) => r.chave === linha.chave)!;
+        return Date.parse(linha.inicio) > agora - regra.janelaSegundos * 1000 && linha.contagem >= regra.max;
+    });
+}

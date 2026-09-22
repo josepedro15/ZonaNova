@@ -7,7 +7,7 @@ import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { APP_URL } from '@/lib/env';
 import { schemaAprovacao, schemaCadastro, schemaLogin, schemaNovaSenha } from '@/lib/validators/auth';
 import { podeResolver, type Papel } from '@/lib/aprovacao';
-import { dentroDoLimite, ipDoCliente } from '@/lib/limite';
+import { dentroDoLimite, ipDoCliente, limiteEstourado } from '@/lib/limite';
 
 const MUITAS_TENTATIVAS = 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.';
 
@@ -25,11 +25,14 @@ export async function entrar(_estado: Resultado, form: FormData): Promise<Result
     // Por IP e por e-mail: o primeiro segura quem testa muitas contas, o
     // segundo quem testa muitas senhas de uma conta só. Todo login sai do IP
     // do servidor, então o limite do próprio Supabase valia para a rede toda.
+    // Só a FALHA conta: a loja inteira sai pelo mesmo IP, e o login certo da
+    // troca de turno não pode travar ninguém.
     const ip = await ipDoCliente();
-    if (!await dentroDoLimite([
-        { chave: `login:ip:${ip}`, max: 20, janelaSegundos: 600 },
+    const regras = [
+        { chave: `login:ip:${ip}`, max: 30, janelaSegundos: 600 },
         { chave: `login:email:${parse.data.email.toLowerCase()}`, max: 10, janelaSegundos: 600 },
-    ])) return { erro: MUITAS_TENTATIVAS };
+    ];
+    if (await limiteEstourado(regras)) return { erro: MUITAS_TENTATIVAS };
 
     const supabase = await criarClienteServidor();
     const { error } = await supabase.auth.signInWithPassword({
@@ -37,7 +40,10 @@ export async function entrar(_estado: Resultado, form: FormData): Promise<Result
     });
     // Mensagem única de propósito: distinguir "e-mail não existe" de "senha
     // errada" transforma a tela num jeito de descobrir quem trabalha na rede.
-    if (error) return { erro: 'E-mail ou senha incorretos.' };
+    if (error) {
+        await dentroDoLimite(regras);
+        return { erro: 'E-mail ou senha incorretos.' };
+    }
 
     // O proxy resolve o destino pelo papel (vendedor/equipe/rede/admin).
     redirect('/');
@@ -77,7 +83,9 @@ export async function cadastrar(_estado: Resultado, form: FormData): Promise<Res
     // enterrava a fila de aprovação dos gestores.
     const ip = await ipDoCliente();
     if (!await dentroDoLimite([
-        { chave: `cadastro:ip:${ip}`, max: 5, janelaSegundos: 3600 },
+        // 20 por IP: uma loja cadastrando a equipe nova de uma vez sai toda
+        // pelo mesmo IP. Por e-mail continua 3.
+        { chave: `cadastro:ip:${ip}`, max: 20, janelaSegundos: 3600 },
         { chave: `cadastro:email:${email.toLowerCase()}`, max: 3, janelaSegundos: 3600 },
     ])) return { erro: MUITAS_TENTATIVAS };
 

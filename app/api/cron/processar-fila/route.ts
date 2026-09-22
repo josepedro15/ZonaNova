@@ -3,7 +3,7 @@ import { cronAutorizado } from '@/lib/cron';
 import { aposFalha } from '@/lib/fila';
 import { transcrever } from '@/lib/transcricao';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
-import { custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
+import { aderenciaPercentual, custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
@@ -190,14 +190,25 @@ async function fechar(supabase: Admin, id: string, desfecho: Record<string, unkn
 async function resgatarPresos(supabase: Admin, agora: Date): Promise<number> {
     const limite = new Date(agora.getTime() - PRAZO_PROCESSANDO_MS).toISOString();
     const { data: presos, error } = await supabase.from('fila_processamento')
-        .select('id, tipo, referencia_id, data_ref, tentativas')
+        .select('id, tipo, referencia_id, data_ref, tentativas, reaberto')
         .eq('status', 'processando')
         .or(`iniciado_em.lt.${limite},and(iniciado_em.is.null,created_at.lt.${limite})`)
         .limit(50)
-        .returns<{ id: string; tipo: ItemTipo; referencia_id: string; data_ref: string; tentativas: number }[]>();
+        .returns<{ id: string; tipo: ItemTipo; referencia_id: string; data_ref: string; tentativas: number; reaberto: boolean }[]>();
     if (error) throw new Error(error.message);
 
     for (const item of presos ?? []) {
+        // Reaberto enquanto rodava: há dado novo esperando por ele. Volta à
+        // fila do zero, como faria o `fechar` — contar a falha e, na última
+        // tentativa, marcar `falhou` jogaria fora a reabertura e deixaria o
+        // relatório (ou a unidade) parcial.
+        if (item.reaberto) {
+            await supabase.from('fila_processamento').update({
+                status: 'pendente', reaberto: false, tentativas: 0, ultimo_erro: null, processado_em: null,
+                proxima_tentativa_em: agora.toISOString(),
+            }).eq('id', item.id).eq('status', 'processando');
+            continue;
+        }
         const desfecho = aposFalha(item.tentativas, agora);
         await supabase.from('fila_processamento').update({
             status: desfecho.status,
@@ -274,6 +285,25 @@ async function doutrinaMec(supabase: Admin): Promise<{ texto: string; playbookId
 }
 
 /**
+ * O relatório do vendedor no dia é mais velho que alguma análise dele no
+ * mesmo dia (ou não existe)? Compara com a MAIS RECENTE, não só com a
+ * análise da vez: duas análises no mesmo lote — uma nova, outra repetida —
+ * faziam a nova achar a irmã ainda rodando e a repetida achar o relatório em
+ * dia com ela, e ninguém reabria o relatório.
+ */
+async function relatorioDesatualizado(supabase: Admin, userId: string, dataRef: string): Promise<boolean> {
+    const [{ data: ultima, error: e1 }, { data: relatorio, error: e2 }] = await Promise.all([
+        supabase.from('analises_conversa').select('updated_at').eq('user_id', userId).eq('data_ref', dataRef)
+            .order('updated_at', { ascending: false }).limit(1).maybeSingle<{ updated_at: string }>(),
+        supabase.from('relatorios_diarios').select('updated_at').eq('user_id', userId).eq('data_ref', dataRef)
+            .maybeSingle<{ updated_at: string }>(),
+    ]);
+    if (e1 || e2) throw new Error((e1 ?? e2)!.message);
+    if (!relatorio) return true;
+    return !!ultima && Date.parse(relatorio.updated_at) < Date.parse(ultima.updated_at);
+}
+
+/**
  * Analisa uma conversa do dia. Devolve se o passo seguinte (o relatório do
  * vendedor) precisa rodar: análise nova, sim; transcript igual ao já
  * analisado, só se o relatório ainda não a incorporou.
@@ -283,6 +313,12 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     const { data: conversa } = await supabase.from('conversas').select('id,user_id,unidade_id')
         .eq('id', conversaId).maybeSingle<{ id: string; user_id: string; unidade_id: string }>();
     if (!conversa) throw new IgnorarItem('conversa não existe mais');
+    // A unidade vigente do vendedor HOJE, não a de quando a conversa nasceu
+    // (doc 3 §3.3): depois de uma transferência, a carteira antiga dele
+    // passaria a contar para sempre na unidade que ele deixou.
+    const { data: perfil } = await supabase.from('profiles').select('unidade_id')
+        .eq('id', conversa.user_id).maybeSingle<{ unidade_id: string | null }>();
+    const unidadeId = perfil?.unidade_id ?? conversa.unidade_id;
     const { data: mensagens, error } = await supabase.from('mensagens')
         .select('direcao,tipo,conteudo,transcricao,automatica,enviada_em')
         .eq('conversa_id', conversaId).gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString())
@@ -302,17 +338,14 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
         .eq('conversa_id', conversaId).eq('data_ref', dataRef).maybeSingle<{ id: string; transcript_hash: string | null; updated_at: string }>();
     if (existente?.transcript_hash === hash) {
         // Nada mudou: reencadear pagaria a consolidação de novo à toa. Só
-        // encadeia se o relatório é mais velho que a análise — o caso de uma
-        // execução que gravou a análise e morreu antes de encadear.
-        const { data: relatorio } = await supabase.from('relatorios_diarios').select('updated_at')
-            .eq('user_id', conversa.user_id).eq('data_ref', dataRef).maybeSingle<{ updated_at: string }>();
-        return !relatorio || relatorio.updated_at < existente.updated_at;
+        // encadeia se o relatório não incorporou alguma análise do dia.
+        return relatorioDesatualizado(supabase, conversa.user_id, dataRef);
     }
 
     const doutrina = await doutrinaMec(supabase);
     const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto });
     const { error: erroAnalise } = await supabase.from('analises_conversa').upsert({
-        conversa_id: conversaId, user_id: conversa.user_id, unidade_id: conversa.unidade_id, data_ref: dataRef,
+        conversa_id: conversaId, user_id: conversa.user_id, unidade_id: unidadeId, data_ref: dataRef,
         tipo_conversa: resultado.tipo_conversa, status: resultado.status, sentiment: resultado.sentiment,
         score_atendimento: resultado.score_atendimento, score_oportunidade: resultado.score_oportunidade,
         score_risco: resultado.score_risco, estagio_funil: resultado.estagio_funil,
@@ -324,7 +357,7 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
 
     if (doutrina.playbookId && resultado.tipo_conversa === 'negociacao') {
         await supabase.from('aderencia_conversa').upsert(resultado.mec.map((m) => ({
-            conversa_id: conversaId, user_id: conversa.user_id, unidade_id: conversa.unidade_id,
+            conversa_id: conversaId, user_id: conversa.user_id, unidade_id: unidadeId,
             data_ref: dataRef, playbook_id: doutrina.playbookId, etapa: m.etapa,
             aplicavel: m.aplicavel, aplicado: m.aplicado, justificativa: m.justificativa,
             evidencias: m.evidencias, itens: m.itens,
@@ -390,15 +423,14 @@ async function consolidarAderenciaDiaria(supabase: Admin, userId: string, unidad
         .eq('user_id', userId).eq('data_ref', dataRef);
     if (!linhas?.length) return;
     const aplicaveis = linhas.filter((l) => l.aplicavel);
-    const valor = (a: string | null) => a === 'sim' ? 1 : a === 'parcial' ? 0.5 : 0;
     const etapas = [...new Set(aplicaveis.map((l) => String(l.etapa)))];
     const porEtapa = Object.fromEntries(etapas.map((etapa) => {
-        const xs = aplicaveis.filter((l) => l.etapa === etapa);
-        return [etapa, xs.length ? Math.round(xs.reduce((s, x) => s + valor(x.aplicado), 0) / xs.length * 100) : null];
+        const nota = aderenciaPercentual(aplicaveis.filter((l) => l.etapa === etapa));
+        return [etapa, nota === null ? null : Math.round(nota)];
     }));
     await supabase.from('aderencia_diaria').upsert({
         user_id: userId, unidade_id: unidadeId, data_ref: dataRef, playbook_id: linhas[0].playbook_id,
-        aderencia_geral: aplicaveis.length ? aplicaveis.reduce((s, x) => s + valor(x.aplicado), 0) / aplicaveis.length * 100 : null,
+        aderencia_geral: aderenciaPercentual(aplicaveis),
         por_etapa: porEtapa,
     }, { onConflict: 'user_id,data_ref' });
 }

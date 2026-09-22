@@ -82,6 +82,19 @@ export function dataValida(texto: string | null | undefined): texto is string {
     return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === texto;
 }
 
+/**
+ * Aderência ao MEC (doc 7): aplicadas ÷ aplicáveis, em 0–100. `parcial` vale
+ * meio. `nao_verificavel` sai do denominador: é a etapa que pode ter
+ * acontecido fora do WhatsApp (ligação, balcão), e o doc 7 §7.3 proíbe
+ * tratá-la como descumprimento. `null` quando nada ficou para medir.
+ */
+export function aderenciaPercentual(linhas: { aplicavel: boolean; aplicado: string | null }[]): number | null {
+    const medidas = linhas.filter((l) => l.aplicavel && l.aplicado !== 'nao_verificavel' && l.aplicado !== null);
+    if (!medidas.length) return null;
+    const pontos = medidas.reduce((s, l) => s + (l.aplicado === 'sim' ? 1 : l.aplicado === 'parcial' ? 0.5 : 0), 0);
+    return pontos / medidas.length * 100;
+}
+
 export function janelaDoDia(dataRef: string): { inicio: Date; fim: Date } {
     const inicio = new Date(`${dataRef}T00:00:00-03:00`);
     return { inicio, fim: new Date(inicio.getTime() + 24 * 60 * 60 * 1000) };

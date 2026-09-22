@@ -64,12 +64,9 @@ cada uma pelo `pg_net`, levando o `Authorization: Bearer ${CRON_SECRET}`.
 |---|---|---|---|
 | processar a fila | `*/5 * * * *` | `/api/cron/processar-fila` | sim |
 | checar conexões | `0 */2 * * *` | `/api/cron/checar-conexoes` | sim |
-| fechar o dia | `30 2 * * *` | `/api/cron/fechar-dia` | a rota não existe |
-| expurgo | `0 5 1 * *` | `/api/cron/expurgo` | a rota não existe |
-
-Os dois últimos ficam fora do `cron.schedule` até as rotas existirem:
-agendar o que ainda não foi escrito faz o banco bater numa 404 todo dia e dá,
-no painel de jobs, a impressão de que estão cobertos.
+| fechar o dia | `30 3 * * *` | `/api/cron/fechar-dia` | sim (0010, horário na 0020) |
+| expurgo | `0 5 1 * *` | `/api/cron/expurgo` | sim (0011) |
+| descobertas | `0 12 * * 0` | `/api/cron/descobertas` | sim (0012, horário na 0020) |
 
 Os segredos (`cron_secret` e `app_url`) vivem no Vault do Supabase, não na
 migration — ela é versionada. São lidos em tempo de execução, dentro de
@@ -81,7 +78,9 @@ minutos — esse é o motivo prático. O motivo de fundo é melhor: o agendament
 passa a viver junto do estado que ele mexe, dá para ler `cron.job_run_details`
 quando um dia não fecha, e mudar horário deixa de exigir deploy.
 
-Horários em UTC. `fechar-dia` às 02:30 UTC = **23:30 BRT** do dia anterior.
+Horários em UTC. `fechar-dia` às 03:30 UTC = **00:30 BRT**: fecha o dia que
+acabou de terminar. As descobertas rodam domingo às 09:00 BRT, depois que a
+fila da madrugada processou o sábado.
 `checar-conexoes` bate o status real na UAZAPI e corrige `caida` — webhook de
 desconexão se perde, ping não.
 

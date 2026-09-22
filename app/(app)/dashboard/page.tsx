@@ -37,6 +37,10 @@ function horaBrasilia(iso: string): string {
     }).format(new Date(iso)).replace(':', 'h');
 }
 
+function dataCurtaBrasilia(iso: string): string {
+    return new Intl.DateTimeFormat('pt-BR', { timeZone: FUSO, day: 'numeric', month: 'short' }).format(new Date(iso));
+}
+
 function saudacao(agora: Date): string {
     const hora = Number(new Intl.DateTimeFormat('pt-BR', {
         timeZone: FUSO, hour: '2-digit', hour12: false,
@@ -114,7 +118,7 @@ export default async function Dashboard() {
     // Tudo já passou pela RLS. Vendedor vê as próprias conversas; gestor, as da
     // unidade. Ver tests/rls.sql.
     const dataRef = new Intl.DateTimeFormat('en-CA', { timeZone: FUSO, year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora);
-    const [{ data: perfil }, { data: conexao }, { data: conversas }, { data: relatorios }, { data: aderencia }] = await Promise.all([
+    const [{ data: perfil }, { data: conexao }, { data: conversas }, { data: relatorios }, { data: aderencia }, { data: observacoes }] = await Promise.all([
         supabase.from('profiles')
             .select('nome, role, unidades!profiles_unidade_id_fkey(nome)')
             .eq('id', user!.id)
@@ -134,6 +138,10 @@ export default async function Dashboard() {
             .eq('user_id', user!.id).order('data_ref', { ascending: false }).limit(30),
         supabase.from('aderencia_diaria').select('data_ref,aderencia_geral,por_etapa,sondagem_itens,frases_proibidas')
             .eq('user_id', user!.id).order('data_ref', { ascending: false }).limit(1).maybeSingle(),
+        // A tela do gestor promete "ele vê o que você escrever": é aqui.
+        supabase.from('observacoes_gestor').select('id,texto,created_at')
+            .eq('vendedor_id', user!.id).order('created_at', { ascending: false }).limit(3)
+            .returns<{ id: string; texto: string; created_at: string }[]>(),
     ]);
 
     const todas = conversas ?? [];
@@ -243,6 +251,20 @@ export default async function Dashboard() {
                 {dataPorExtenso(agora)}
                 {deHoje.length > 0 && ` · última mensagem às ${horaBrasilia(deHoje[0].ultima_mensagem_em)}`}
             </p>
+
+            {!!observacoes?.length && (
+                <section className="mt-6 rounded-card border border-linha bg-superficie p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-[.12em] text-tinta-3">Do seu gestor</p>
+                    <ul className="mt-3 space-y-3">
+                        {observacoes.map((o) => (
+                            <li key={o.id} className="text-[13px] leading-relaxed">
+                                <span className="whitespace-pre-line">{o.texto}</span>
+                                <span className="mt-0.5 block text-[11px] text-tinta-3">{dataCurtaBrasilia(o.created_at)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
 
             {relatorio && (
                 <>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { custoEstimado, dataEmSaoPaulo, dataValida, hashTranscript, janelaDoDia, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise } from '../../lib/analise.ts';
+import { aderenciaPercentual, custoEstimado, dataEmSaoPaulo, dataValida, hashTranscript, janelaDoDia, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise } from '../../lib/analise.ts';
 
 test('o dia comercial usa São Paulo na virada do UTC', () => {
     assert.equal(dataEmSaoPaulo(new Date('2026-09-22T01:30:00Z')), '2026-09-21');
@@ -67,4 +67,16 @@ test('data só vale se existe no calendário', () => {
     for (const ruim of ['2026-02-31', '2026-13-01', '2026-02-29', '21/09/2026', '2026-9-1', '', null]) {
         assert.equal(dataValida(ruim), false, String(ruim));
     }
+});
+
+// Doc 7 §7.3: o que pode ter sido feito por ligação não é descumprimento.
+test('aderência ignora não verificável e não aplicável', () => {
+    assert.equal(aderenciaPercentual([
+        { aplicavel: true, aplicado: 'sim' },
+        { aplicavel: true, aplicado: 'parcial' },
+        { aplicavel: true, aplicado: 'nao_verificavel' },
+        { aplicavel: false, aplicado: 'nao' },
+    ]), 75);
+    assert.equal(aderenciaPercentual([{ aplicavel: true, aplicado: 'nao_verificavel' }]), null);
+    assert.equal(aderenciaPercentual([]), null);
 });

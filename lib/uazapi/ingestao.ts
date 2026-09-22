@@ -30,8 +30,11 @@ export async function processar(evento: EventoUazapi, conexao: Conexao) {
     // Quem foi desativado (ou recusado) não é mais monitorado, ainda que a
     // instância na UAZAPI continue de pé — desligá-la pode ter falhado. O
     // status da conexão acima continua sendo atualizado; a mensagem, não.
-    const { data: dono } = await supabase.from('profiles').select('status')
+    const { data: dono, error: erroDono } = await supabase.from('profiles').select('status')
         .eq('id', conexao.user_id).maybeSingle<{ status: string }>();
+    // Falha de leitura não é "dono inativo": lançar mantém a entrada em
+    // webhook_entrada para o worker tentar de novo, em vez de apagar mensagens.
+    if (erroDono) throw erroDono;
     if (dono?.status !== 'ativo') return;
 
     for (const mensagem of mensagens) await processarMensagem(mensagem, conexao);
@@ -60,19 +63,19 @@ async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
         .limit(1);
     if (bloqueado?.length) return;
 
-    // A unidade é carimbada na conversa no momento da criação: se o vendedor
-    // mudar de unidade amanhã, o histórico continua pertencendo a onde
-    // aconteceu. Por isso o upsert ignora duplicata — atualizar reescreveria a
-    // unidade a cada mensagem — e o nome vai num update separado.
-    const chave = { user_id: conexao.user_id, cliente_telefone: m.clienteTelefone };
-    const { error: erroCriacao } = await supabase.from('conversas')
-        .upsert({ ...chave, unidade_id: conexao.unidade_id }, { onConflict: 'user_id,cliente_telefone', ignoreDuplicates: true });
-    if (erroCriacao) throw erroCriacao;
-
-    const { data: conversa, error: erroConversa } = m.clienteNome
-        ? await supabase.from('conversas').update({ cliente_nome: m.clienteNome }).match(chave)
-            .select('id').single<{ id: string }>()
-        : await supabase.from('conversas').select('id').match(chave).single<{ id: string }>();
+    // A conversa pertence à unidade VIGENTE do vendedor, a da conexão: se ele
+    // é transferido, a próxima mensagem de um cliente antigo leva a conversa
+    // junto, e é o gestor novo quem passa a vê-la. O histórico por dia não se
+    // perde — cada análise e relatório guarda a unidade do dia em que foi
+    // feito (doc 2, rollup histórico).
+    const { data: conversa, error: erroConversa } = await supabase.from('conversas')
+        .upsert({
+            user_id: conexao.user_id,
+            cliente_telefone: m.clienteTelefone,
+            unidade_id: conexao.unidade_id,
+            ...(m.clienteNome ? { cliente_nome: m.clienteNome } : {}),
+        }, { onConflict: 'user_id,cliente_telefone' })
+        .select('id').single<{ id: string }>();
 
     if (erroConversa || !conversa) {
         throw erroConversa ?? new Error('conversa não resolvida');
