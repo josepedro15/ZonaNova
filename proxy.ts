@@ -114,7 +114,10 @@ export async function proxy(request: NextRequest) {
     // Vendedor ativo sem WhatsApp ligado não tem o que ver no dashboard: sem
     // conexão não entra mensagem, sem mensagem não há análise. Mandar para
     // /conectar é o doc 4 §4.3 — e continua sendo só navegação, não barreira.
-    if (papel === 'vendedor' && caminho !== '/conectar') {
+    // Só o dashboard: desviar TODA rota trancava quem teve o número caído
+    // fora das conversas, da evolução, do Meu MEC e do Perfil (onde ficam os
+    // contatos bloqueados), sem nem um botão de sair.
+    if (papel === 'vendedor' && caminho === '/dashboard') {
         const { data: conexao } = await supabase
             .from('vw_conexoes_status').select('status')
             .eq('user_id', user.id).maybeSingle<{ status: string }>();

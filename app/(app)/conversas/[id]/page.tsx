@@ -15,10 +15,21 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
         .eq('id', id).eq('bloqueada', false).maybeSingle();
     // Bloqueada some para todo mundo, inclusive por link direto.
     if (!conversa) notFound();
-    const [{ data: analise }, { data: aderencia }] = await Promise.all([
-        supabase.from('analises_conversa').select('*').eq('conversa_id', id).order('data_ref', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('aderencia_conversa').select('id,etapa,aplicavel,aplicado,justificativa,evidencias,itens').eq('conversa_id', id).order('etapa'),
-    ]);
+    const { data: analise } = await supabase.from('analises_conversa').select('*').eq('conversa_id', id)
+        .order('data_ref', { ascending: false }).limit(1).maybeSingle();
+    // O MEC do MESMO dia da análise exibida: uma conversa analisada em três
+    // dias tinha 21 etapas misturadas na tela, ao lado da análise de um só.
+    const { data: aderencia } = analise
+        ? await supabase.from('aderencia_conversa').select('id,etapa,aplicavel,aplicado,justificativa,evidencias,itens')
+            .eq('conversa_id', id).eq('data_ref', analise.data_ref).order('etapa')
+        : { data: [] };
+    // O que já foi contestado aparece na própria marcação, com o veredito.
+    const { data: contestacoes } = aderencia?.length
+        ? await supabase.from('aderencia_contestacoes').select('aderencia_id,veredito')
+            .in('aderencia_id', aderencia.map((a) => a.id as string))
+            .returns<{ aderencia_id: string; veredito: string }[]>()
+        : { data: [] };
+    const contestada = new Map((contestacoes ?? []).map((c) => [c.aderencia_id, c.veredito]));
     const mensagens = [...((conversa.mensagens ?? []) as { id:string;direcao:string;tipo:string;conteudo:string|null;transcricao:string|null;automatica:boolean;enviada_em:string }[])].sort((a,b) => a.enviada_em.localeCompare(b.enviada_em));
     const payload = (analise?.payload ?? {}) as { resumo?:string; destaque?:string; proxima_acao?:string; script_sugerido?:string; objecoes?:string[]; tecnicas_usadas?:string[]; erros_vendedor?:string[]; evidencias?:{trecho:string;conclusao:string}[] };
     const vendedor = conversa.profiles as unknown as { nome: string } | null;
@@ -44,7 +55,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                             <section className="rounded-card border border-linha bg-superficie p-5"><div className="grid grid-cols-4 gap-2 text-center">{[['Atendimento',analise.score_atendimento],['Cliente',analise.sentiment],['Oportunidade',analise.score_oportunidade],['Risco',analise.score_risco]].map(([r,v]) => <div key={String(r)}><p className="display text-2xl font-semibold">{String(v ?? '—')}</p><p className="text-[9.5px] text-tinta-3">{r}</p></div>)}</div><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-petroleo-sof px-2.5 py-1 text-xs font-semibold text-petroleo">{analise.tipo_conversa}</span><span className="rounded-full bg-papel-2 px-2.5 py-1 text-xs capitalize">{String(analise.status).replaceAll('_',' ')}</span></div></section>
                             <section className="rounded-card border border-linha bg-superficie p-5"><h2 className="display text-lg font-semibold">O que aconteceu</h2><p className="mt-2 text-[13px] leading-relaxed text-tinta-2">{payload.resumo}</p>{payload.proxima_acao && <div className="mt-4 rounded-[10px] bg-ocre-sof p-3.5"><p className="text-[10px] font-bold uppercase text-ocre-texto">Próxima ação</p><p className="mt-1 text-[12.5px] leading-relaxed">{payload.proxima_acao}</p></div>}{payload.script_sugerido && <div className="mt-3 rounded-[10px] bg-petroleo-sof p-3.5"><p className="text-[10px] font-bold uppercase text-petroleo">Responda assim</p><p className="mt-1 text-[12.5px] leading-relaxed">{payload.script_sugerido}</p></div>}</section>
                             <section className="rounded-card border border-linha bg-superficie p-5"><h2 className="display text-lg font-semibold">Evidências</h2><div className="mt-3 space-y-3">{(payload.evidencias ?? []).map((e,i) => <blockquote key={i} className="border-l-2 border-dourado pl-3"><p className="text-[12.5px] italic">“{e.trecho}”</p><p className="mt-1 text-[11px] text-tinta-3">{e.conclusao}</p></blockquote>)}</div></section>
-                            {!!aderencia?.length && <section className="rounded-card border border-linha bg-superficie p-5"><h2 className="display text-lg font-semibold">MEC nesta conversa</h2><div className="mt-3 space-y-2">{aderencia.map((a) => <div key={a.etapa} className="border-b border-linha py-2 last:border-0"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold capitalize">{String(a.etapa).replaceAll('_',' ')}</p><p className="mt-0.5 text-[10.5px] text-tinta-3">{a.justificativa}</p></div><span className="text-xs font-semibold capitalize">{a.aplicavel ? a.aplicado : 'não se aplica'}</span></div>{['gestor','supervisor','admin'].includes(perfil.role)&&<form action={contestarAderencia} className="mt-2 flex gap-2"><input type="hidden" name="aderenciaId" value={a.id as string}/><input required name="motivo" placeholder="Contestar esta marcação…" className="min-w-0 flex-1 rounded border border-linha-campo px-2 py-1 text-xs"/><button className="text-[11px] font-semibold text-petroleo">Enviar</button></form>}</div>)}</div></section>}
+                            {!!aderencia?.length && <section className="rounded-card border border-linha bg-superficie p-5"><h2 className="display text-lg font-semibold">MEC nesta conversa</h2><div className="mt-3 space-y-2">{aderencia.map((a) => <div key={a.etapa} className="border-b border-linha py-2 last:border-0"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold capitalize">{String(a.etapa).replaceAll('_',' ')}</p><p className="mt-0.5 text-[10.5px] text-tinta-3">{a.justificativa}</p></div><span className="text-xs font-semibold capitalize">{a.aplicavel ? a.aplicado : 'não se aplica'}</span></div>{contestada.has(a.id as string)&&<p className="mt-1 text-[11px] font-semibold text-ocre-texto">Contestada — {contestada.get(a.id as string)==='pendente'?'aguardando revisão':contestada.get(a.id as string)}</p>}{['gestor','supervisor','admin'].includes(perfil.role)&&contestada.get(a.id as string)!=='pendente'&&<form action={contestarAderencia} className="mt-2 flex gap-2"><input type="hidden" name="aderenciaId" value={a.id as string}/><input required name="motivo" placeholder="Contestar esta marcação…" className="min-w-0 flex-1 rounded border border-linha-campo px-2 py-1 text-xs"/><button className="text-[11px] font-semibold text-petroleo">Enviar</button></form>}</div>)}</div></section>}
                         </>}
                     </aside>
                 </div>

@@ -3,8 +3,9 @@ import type { criarClienteAdmin } from '@/lib/supabase/admin';
 
 /**
  * Quem entra no fechamento de um dia. Dois chamadores: o cron `fechar-dia`
- * (por vendedor) e o "reprocessar dia" da operação (a rede inteira). Os dois
- * precisam da mesma resposta, senão reprocessar daria outro dia.
+ * (por vendedor ativo) e o "reprocessar dia" da operação, via
+ * `conversasDoFechamento`, com o mesmo filtro. Os dois precisam da mesma
+ * resposta, senão reprocessar daria outro dia.
  */
 type Admin = ReturnType<typeof criarClienteAdmin>;
 const PAGINA = 1000;
@@ -50,4 +51,20 @@ export async function conversasComMensagemNoDia(supabase: Admin, inicio: Date, f
         }
     }
     return [...comMensagem];
+}
+
+/**
+ * Quem o fechamento do dia analisa: conversas com mensagem na janela, só de
+ * vendedor ativo. O "reprocessar dia" usa esta mesma resposta — rodando sem o
+ * filtro de vendedor ele reanalisava (e pagava) conversas de inativos,
+ * pendentes e gestores, que o fechamento normal nunca olha.
+ */
+export async function conversasDoFechamento(supabase: Admin, inicio: Date, fim: Date): Promise<string[]> {
+    const { data: vendedores, error } = await supabase.from('profiles')
+        .select('id').eq('role', 'vendedor').eq('status', 'ativo')
+        .returns<{ id: string }[]>();
+    if (error) throw new Error(error.message);
+    const todas: string[] = [];
+    for (const v of vendedores ?? []) todas.push(...await conversasComMensagemNoDia(supabase, inicio, fim, v.id));
+    return todas;
 }

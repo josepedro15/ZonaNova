@@ -32,6 +32,13 @@ export async function contestarAderencia(form: FormData) {
     const supabase = await criarClienteServidor();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('aderencia_contestacoes').insert({ aderencia_id: aderenciaId, contestado_por: user.id, motivo });
+    // Uma contestação pendente por pessoa e marcação: sem retorno na tela, o
+    // gestor reenviava achando que não tinha ido.
+    const { count } = await supabase.from('aderencia_contestacoes').select('id', { count: 'exact', head: true })
+        .eq('aderencia_id', aderenciaId).eq('contestado_por', user.id).eq('veredito', 'pendente');
+    if (!count) await supabase.from('aderencia_contestacoes').insert({ aderencia_id: aderenciaId, contestado_por: user.id, motivo });
+    const { data: marcacao } = await supabase.from('aderencia_conversa').select('conversa_id').eq('id', aderenciaId)
+        .maybeSingle<{ conversa_id: string }>();
+    if (marcacao) revalidatePath(`/conversas/${marcacao.conversa_id}`);
     revalidatePath('/equipe/mec');
 }
