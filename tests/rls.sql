@@ -359,3 +359,56 @@ select pg_temp.como('11111111-1111-1111-1111-111111111111');
 select pg_temp.ok('supervisor ativo lê a contestação',
        (select count(*) from aderencia_contestacoes), 1);
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- 0017: reabrir sem execução dupla; limite de tentativas
+-- ---------------------------------------------------------------------------
+do $$
+declare
+    v_ref uuid := 'ffffffff-0000-0000-0000-000000000001';
+    v_status text; v_reaberto boolean; v_tentativas int;
+begin
+    -- Item parado volta para pendente, zerado.
+    insert into public.fila_processamento (tipo, referencia_id, data_ref, status, tentativas)
+    values ('relatorio_vendedor', v_ref, '2026-09-21', 'falhou', 3);
+    perform public.zn_reabrir_item('relatorio_vendedor', v_ref, '2026-09-21');
+    select status, reaberto, tentativas into v_status, v_reaberto, v_tentativas
+      from public.fila_processamento where referencia_id = v_ref;
+    if v_status = 'pendente' and not v_reaberto and v_tentativas = 0
+    then raise notice 'PASSOU  reabrir item parado volta para pendente';
+    else raise notice 'FALHOU  reabrir item parado: % % %', v_status, v_reaberto, v_tentativas; end if;
+
+    -- Item rodando só ganha a marca: não volta para pendente (execução dupla).
+    update public.fila_processamento set status = 'processando', tentativas = 1 where referencia_id = v_ref;
+    perform public.zn_reabrir_item('relatorio_vendedor', v_ref, '2026-09-21');
+    select status, reaberto, tentativas into v_status, v_reaberto, v_tentativas
+      from public.fila_processamento where referencia_id = v_ref;
+    if v_status = 'processando' and v_reaberto and v_tentativas = 1
+    then raise notice 'PASSOU  reabrir item rodando só marca reaberto';
+    else raise notice 'FALHOU  reabrir item rodando: % % %', v_status, v_reaberto, v_tentativas; end if;
+
+    -- Item inexistente nasce pendente.
+    perform public.zn_reabrir_item('rollup_rede', '00000000-0000-0000-0000-000000000000', '2026-09-21');
+    if exists (select 1 from public.fila_processamento where tipo = 'rollup_rede' and data_ref = '2026-09-21' and status = 'pendente')
+    then raise notice 'PASSOU  reabrir item novo cria pendente';
+    else raise notice 'FALHOU  reabrir item novo não criou'; end if;
+
+    if public.zn_consumir_limite('teste:x', 2, 60) and public.zn_consumir_limite('teste:x', 2, 60)
+       and not public.zn_consumir_limite('teste:x', 2, 60)
+    then raise notice 'PASSOU  limite deixa 2 e barra o 3º';
+    else raise notice 'FALHOU  limite não contou certo'; end if;
+
+    update public.limites_acesso set inicio = now() - interval '2 minutes' where chave = 'teste:x';
+    if public.zn_consumir_limite('teste:x', 2, 60)
+    then raise notice 'PASSOU  janela vencida zera o limite';
+    else raise notice 'FALHOU  janela vencida continuou barrando'; end if;
+end $$;
+
+do $$
+begin
+    if has_function_privilege('authenticated', 'public.zn_consumir_limite(text, integer, integer)', 'execute')
+       or has_function_privilege('anon', 'public.zn_reabrir_item(text, uuid, date)', 'execute')
+       or has_table_privilege('authenticated', 'public.limites_acesso', 'select')
+    then raise notice 'FALHOU  funções/tabela da 0017 alcançáveis pelo cliente';
+    else raise notice 'PASSOU  0017 só para o service role'; end if;
+end $$;

@@ -8,6 +8,7 @@ import { Uazapi } from '@/lib/uazapi/cliente';
 import { APP_URL } from '@/lib/env';
 import { semTelefone, telefoneE164, variantesTelefone } from '@/lib/painel';
 import { redirect } from 'next/navigation';
+import { desligarWhatsappDe } from '@/lib/desligar';
 import { revalidatePath } from 'next/cache';
 
 export type EstadoConexao = {
@@ -161,31 +162,11 @@ export async function desconectarWhatsapp(): Promise<EstadoConexao> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { erro: 'Sessão expirada. Entre de novo.' };
 
-    const admin = criarClienteAdmin();
-    const { data: conexao } = await admin.from('conexoes_whatsapp')
-        .select('id, instance_token, numero')
-        .eq('user_id', user.id)
-        .maybeSingle<{ id: string; instance_token: string | null; numero: string | null }>();
-
-    if (!conexao?.instance_token) return { status: 'desconectada', numero: conexao?.numero ?? null };
-
     try {
-        const token = decifrar(deBytea(conexao.instance_token));
-        await uazapi().desconectar(token);
-        await admin.from('conexoes_whatsapp').update({
-            status: 'desconectada',
-            ultimo_evento_em: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-        }).eq('id', conexao.id);
-        await admin.from('eventos_admin').insert({
-            actor_id: user.id,
-            acao: 'desconectou_whatsapp',
-            alvo_id: conexao.id,
-            detalhes: { numero: conexao.numero },
-        });
+        const { numero } = await desligarWhatsappDe(user.id, user.id);
         revalidatePath('/perfil');
         revalidatePath('/dashboard');
-        return { status: 'desconectada', numero: conexao.numero };
+        return { status: 'desconectada', numero };
     } catch (e) {
         console.error('desconectarWhatsapp', e);
         return { erro: 'Não foi possível desconectar agora. Tente novamente.' };

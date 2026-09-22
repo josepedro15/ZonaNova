@@ -51,12 +51,22 @@ export async function proxy(request: NextRequest) {
 
     const { data: { user } } = await supabase.auth.getUser();
     const caminho = request.nextUrl.pathname;
+
+    // O `getUser` acima pode ter renovado a sessão e gravado cookies novos em
+    // `resposta`. Um redirect é outra resposta: sem copiar os cookies, o
+    // navegador ficava com o refresh token já usado, e a próxima renovação
+    // podia derrubar a sessão (detecção de reuso do Supabase).
+    const redirecionar = (destino: string) => {
+        const r = NextResponse.redirect(new URL(destino, request.url));
+        resposta.cookies.getAll().forEach((c) => r.cookies.set(c));
+        return r;
+    };
     const publica = comecaCom(caminho, ROTAS_PUBLICAS);
 
     if (!user) {
         // Sem sessão a tela mostra "link vencido" e o caminho para pedir outro.
         if (publica || caminho === ROTA_NOVA_SENHA) return resposta;
-        return NextResponse.redirect(new URL('/login', request.url));
+        return redirecionar('/login');
     }
 
     const { data: perfil } = await supabase
@@ -69,12 +79,12 @@ export async function proxy(request: NextRequest) {
     // de deixar a pessoa num app meio funcional.
     if (!perfil) {
         await supabase.auth.signOut();
-        return NextResponse.redirect(new URL('/login?erro=sem-perfil', request.url));
+        return redirecionar('/login?erro=sem-perfil');
     }
 
     if (perfil.status === 'inativo') {
         await supabase.auth.signOut();
-        return NextResponse.redirect(new URL('/login?erro=desativado', request.url));
+        return redirecionar('/login?erro=desativado');
     }
 
     // Depois do `inativo` de propósito: conta recusada ou desativada não troca
@@ -84,7 +94,7 @@ export async function proxy(request: NextRequest) {
     if (perfil.status === 'pendente') {
         return caminho === '/aguardando-aprovacao'
             ? resposta
-            : NextResponse.redirect(new URL('/aguardando-aprovacao', request.url));
+            : redirecionar('/aguardando-aprovacao');
     }
 
     const papel = perfil.role as string;
@@ -94,11 +104,11 @@ export async function proxy(request: NextRequest) {
     // no painel que responde à decisão dele; misturar toda a unidade no
     // dashboard de vendedor produz indicadores semanticamente errados.
     if (publica || caminho === '/aguardando-aprovacao' || caminho === '/') {
-        return NextResponse.redirect(new URL(inicio, request.url));
+        return redirecionar(inicio);
     }
 
     if (caminho === '/dashboard' && papel !== 'vendedor') {
-        return NextResponse.redirect(new URL(inicio, request.url));
+        return redirecionar(inicio);
     }
 
     // Vendedor ativo sem WhatsApp ligado não tem o que ver no dashboard: sem
@@ -109,18 +119,18 @@ export async function proxy(request: NextRequest) {
             .from('vw_conexoes_status').select('status')
             .eq('user_id', user.id).maybeSingle<{ status: string }>();
         if (precisaConectar(conexao?.status ?? null)) {
-            return NextResponse.redirect(new URL('/conectar', request.url));
+            return redirecionar('/conectar');
         }
     }
 
     if (comecaCom(caminho, ROTAS_DE_ADMIN) && papel !== 'admin') {
-        return NextResponse.redirect(new URL(inicio, request.url));
+        return redirecionar(inicio);
     }
     if (comecaCom(caminho, ROTAS_DE_REDE) && !['supervisor', 'admin'].includes(papel)) {
-        return NextResponse.redirect(new URL(inicio, request.url));
+        return redirecionar(inicio);
     }
     if (comecaCom(caminho, ROTAS_DE_GESTAO) && !['gestor', 'supervisor', 'admin'].includes(papel)) {
-        return NextResponse.redirect(new URL(inicio, request.url));
+        return redirecionar(inicio);
     }
 
     return resposta;

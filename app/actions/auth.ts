@@ -7,6 +7,9 @@ import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { APP_URL } from '@/lib/env';
 import { schemaAprovacao, schemaCadastro, schemaLogin, schemaNovaSenha } from '@/lib/validators/auth';
 import { podeResolver, type Papel } from '@/lib/aprovacao';
+import { dentroDoLimite, ipDoCliente } from '@/lib/limite';
+
+const MUITAS_TENTATIVAS = 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.';
 
 export type Resultado = { erro?: string; campo?: string; enviado?: boolean; vencido?: boolean };
 
@@ -18,6 +21,15 @@ export async function entrar(_estado: Resultado, form: FormData): Promise<Result
         const p = parse.error.issues[0];
         return { erro: p.message, campo: String(p.path[0]) };
     }
+
+    // Por IP e por e-mail: o primeiro segura quem testa muitas contas, o
+    // segundo quem testa muitas senhas de uma conta só. Todo login sai do IP
+    // do servidor, então o limite do próprio Supabase valia para a rede toda.
+    const ip = await ipDoCliente();
+    if (!await dentroDoLimite([
+        { chave: `login:ip:${ip}`, max: 20, janelaSegundos: 600 },
+        { chave: `login:email:${parse.data.email.toLowerCase()}`, max: 10, janelaSegundos: 600 },
+    ])) return { erro: MUITAS_TENTATIVAS };
 
     const supabase = await criarClienteServidor();
     const { error } = await supabase.auth.signInWithPassword({
@@ -59,6 +71,16 @@ export async function cadastrar(_estado: Resultado, form: FormData): Promise<Res
     // cadastrar com o e-mail de outro. O que segura é a aprovação: a conta nasce
     // `pendente`, não lê nada, e só entra quando um gestor que conhece a pessoa
     // aprova (app/(app)/aprovacoes).
+    //
+    // `auth.admin.createUser` passa por fora do rate limit e do captcha do
+    // Supabase: sem isto, um script criava milhares de contas pendentes e
+    // enterrava a fila de aprovação dos gestores.
+    const ip = await ipDoCliente();
+    if (!await dentroDoLimite([
+        { chave: `cadastro:ip:${ip}`, max: 5, janelaSegundos: 3600 },
+        { chave: `cadastro:email:${email.toLowerCase()}`, max: 3, janelaSegundos: 3600 },
+    ])) return { erro: MUITAS_TENTATIVAS };
+
     const admin = criarClienteAdmin();
     const { error: erroCriar } = await admin.auth.admin.createUser({
         email,
@@ -90,17 +112,27 @@ export async function pedirLinkDeSenha(_estado: Resultado, form: FormData): Prom
     const email = String(form.get('email') ?? '').trim().toLowerCase();
     if (!email.includes('@')) return { erro: 'E-mail inválido.' };
 
+    // Estourado o limite, responde igual e não envia: dizer "limite" só para
+    // alguns e-mails voltaria a revelar quem existe. Protege a cota de e-mails
+    // do projeto, que é pequena.
+    const ip = await ipDoCliente();
+    if (!await dentroDoLimite([
+        { chave: `senha:ip:${ip}`, max: 5, janelaSegundos: 3600 },
+        { chave: `senha:email:${email}`, max: 3, janelaSegundos: 3600 },
+    ])) return { enviado: true };
+
     const supabase = await criarClienteServidor();
-    await supabase.auth.resetPasswordForEmail(email, {
+    const { error: erroEnvio } = await supabase.auth.resetPasswordForEmail(email, {
         // Passa pelo /auth/callback, que troca o `code` do PKCE por sessão — a
         // mesma troca da confirmação de cadastro, num lugar só. Mandar direto
         // para /nova-senha deixava o `code` sem ninguém para o trocar.
         redirectTo: `${APP_URL}/auth/callback?next=/nova-senha`,
     });
 
-    // Responde igual com e-mail existente ou não, e ignora o erro de propósito:
-    // diferenciar aqui transformaria a tela num jeito de descobrir quem
-    // trabalha na rede.
+    // Responde igual com e-mail existente ou não: diferenciar aqui
+    // transformaria a tela num jeito de descobrir quem trabalha na rede. O
+    // erro vai para o log, onde a cota de e-mails esgotada aparece.
+    if (erroEnvio) console.error('pedirLinkDeSenha', erroEnvio.message);
     return { enviado: true };
 }
 

@@ -100,54 +100,78 @@ async function processarLote(supabase: Admin, agora: Date): Promise<Record<strin
         : claim;
 
     const meus = new Set((pegos ?? []).map((p) => p.id));
-    let concluidos = 0, falhados = 0, reagendados = 0;
-
-    // O desfecho só vale se o item ainda está `processando`: se ele foi
-    // reaberto enquanto rodava (ver `reabrir`), a reabertura manda.
-    const fechar = (id: string, campos: Record<string, unknown>) => supabase.from('fila_processamento')
-        .update(campos).eq('id', id).eq('status', 'processando');
+    let concluidos = 0, falhados = 0, reagendados = 0, reenfileirados = 0;
 
     for (const item of candidatos.filter((c) => meus.has(c.id))) {
+        // Começa limpando a marca de reabertura: o que for reaberto a partir
+        // daqui mudou DEPOIS do início desta execução, e só isso justifica
+        // rodar o item de novo (ver 0017). Se a linha não está mais em
+        // `processando`, alguém a resgatou — não é mais nossa.
+        const { data: ainda } = await supabase.from('fila_processamento').update({ reaberto: false })
+            .eq('id', item.id).eq('status', 'processando').select('id');
+        if (!ainda?.length) continue;
+
+        let desfecho: Record<string, unknown>;
+        let encadeia = true;
         try {
             if (item.tipo === 'transcricao') await transcreverMensagem(supabase, item.referencia_id, apiKey!);
             else if (item.tipo === 'analise_conversa') await analisarItem(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'relatorio_vendedor') await consolidarItem(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'rollup_unidade') await rollupUnidade(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'rollup_rede') await rollupRede(supabase, item.data_ref);
-            await fechar(item.id, { status: 'concluido', processado_em: new Date().toISOString() });
-            await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
-            concluidos++;
+            desfecho = { status: 'concluido', processado_em: new Date().toISOString() };
         } catch (e) {
             if (e instanceof IgnorarItem) {
-                await fechar(item.id, { status: 'ignorado', ultimo_erro: e.message, processado_em: new Date().toISOString() });
-                await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
-                continue;
+                desfecho = { status: 'ignorado', ultimo_erro: e.message, processado_em: new Date().toISOString() };
+            } else {
+                const falha = aposFalha(item.tentativas);
+                desfecho = {
+                    status: falha.status,
+                    tentativas: falha.tentativas,
+                    ultimo_erro: String(e).slice(0, 500),
+                    ...(falha.status === 'pendente'
+                        ? { proxima_tentativa_em: falha.proximaTentativaEm.toISOString() }
+                        : { processado_em: new Date().toISOString() }),
+                };
+                // Retry não encadeia: o próximo passo espera. Falha definitiva
+                // encadeia — o relatório sai sem esta conversa em vez de nunca.
+                encadeia = falha.status === 'falhou';
             }
-            const desfecho = aposFalha(item.tentativas);
-            await fechar(item.id, {
-                status: desfecho.status,
-                tentativas: desfecho.tentativas,
-                ultimo_erro: String(e).slice(0, 500),
-                ...(desfecho.status === 'pendente'
-                    ? { proxima_tentativa_em: desfecho.proximaTentativaEm.toISOString() }
-                    : { processado_em: new Date().toISOString() }),
-            });
-            if (desfecho.status === 'falhou') {
-                // Falha definitiva também libera o próximo passo: o relatório
-                // sai sem esta conversa em vez de nunca sair.
-                await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
-                falhados++;
-            } else reagendados++;
         }
+
+        const fechado = await fechar(supabase, item.id, desfecho);
+        if (fechado === 'reenfileirado') { reenfileirados++; continue; }
+        if (fechado === 'perdido') continue;
+        if (encadeia) await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
+        if (desfecho.status === 'concluido') concluidos++;
+        else if (desfecho.status === 'falhou') falhados++;
+        else if (desfecho.status === 'pendente') reagendados++;
     }
 
-    return { pegos: meus.size, concluidos, falhados, reagendados };
+    return { pegos: meus.size, concluidos, falhados, reagendados, reenfileirados };
 }
 
 type Admin = ReturnType<typeof criarClienteAdmin>;
 
 /** 42703 vem do Postgres; PGRST204 é como o PostgREST diz o mesmo. */
 const COLUNA_AUSENTE = new Set(['42703', 'PGRST204']);
+
+/**
+ * Grava o desfecho de um item — se ele ainda é deste worker e não foi
+ * reaberto durante a execução. Reaberto no meio do caminho, o resultado
+ * desta execução já está velho: o item volta para a fila, do zero, e não
+ * encadeia (quem encadeia é a execução que vier a seguir).
+ */
+async function fechar(supabase: Admin, id: string, desfecho: Record<string, unknown>): Promise<'fechado' | 'reenfileirado' | 'perdido'> {
+    const { data: fechou } = await supabase.from('fila_processamento').update(desfecho)
+        .eq('id', id).eq('status', 'processando').eq('reaberto', false).select('id');
+    if (fechou?.length) return 'fechado';
+    const { data: voltou } = await supabase.from('fila_processamento').update({
+        status: 'pendente', reaberto: false, tentativas: 0, ultimo_erro: null, processado_em: null,
+        proxima_tentativa_em: new Date().toISOString(),
+    }).eq('id', id).eq('status', 'processando').eq('reaberto', true).select('id');
+    return voltou?.length ? 'reenfileirado' : 'perdido';
+}
 
 /**
  * Item em `processando` além do prazo: a função que o pegou morreu (timeout,
@@ -173,6 +197,7 @@ async function resgatarPresos(supabase: Admin, agora: Date): Promise<number> {
             status: desfecho.status,
             tentativas: desfecho.tentativas,
             ultimo_erro: 'interrompido: ficou em processando além do prazo',
+            reaberto: false,
             ...(desfecho.status === 'pendente'
                 ? { proxima_tentativa_em: desfecho.proximaTentativaEm.toISOString() }
                 : { processado_em: agora.toISOString() }),
@@ -401,14 +426,12 @@ async function rollupRede(supabase: Admin, dataRef: string) {
  * Reabrir em vez de ignorar a duplicata é o que mantém a cadeia correta com
  * retries: se uma análise atrasada termina depois do relatório, o relatório
  * refaz; se um vendedor entra depois do rollup da unidade, a unidade refaz; e
- * a rede, depois dela. Um item reaberto enquanto roda volta a `pendente`, e o
- * `fechar` do worker que o rodava não sobrescreve isso.
+ * a rede, depois dela. Um item que está rodando não é interrompido nem
+ * duplicado: ganha a marca `reaberto` e só volta à fila ao terminar, se a
+ * marca apareceu depois de ele começar (ver `fechar` e a migration 0017).
  */
 async function reabrir(supabase: Admin, tipo: ItemTipo, referenciaId: string, dataRef: string) {
-    const { error } = await supabase.from('fila_processamento').upsert({
-        tipo, referencia_id: referenciaId, data_ref: dataRef, status: 'pendente', tentativas: 0,
-        ultimo_erro: null, processado_em: null, proxima_tentativa_em: new Date().toISOString(),
-    }, { onConflict: 'tipo,referencia_id,data_ref' });
+    const { error } = await supabase.rpc('zn_reabrir_item', { p_tipo: tipo, p_referencia: referenciaId, p_data: dataRef });
     if (error) throw new Error(error.message);
 }
 
@@ -445,12 +468,25 @@ async function encadear(supabase: Admin, tipo: ItemTipo, referenciaId: string, d
         const { data: relatorio } = await supabase.from('relatorios_diarios').select('unidade_id')
             .eq('user_id', referenciaId).eq('data_ref', dataRef).maybeSingle<{ unidade_id: string }>();
         if (relatorio) await reabrir(supabase, 'rollup_unidade', relatorio.unidade_id, dataRef);
+        // Sem relatório (vendedor só com disparo ou aniversário, ou falha),
+        // ninguém mais encadeia: se este era o último passo aberto do dia, é
+        // daqui que a rede tem de sair.
+        await talvezFecharRede(supabase, dataRef);
     } else if (tipo === 'rollup_unidade') {
-        const { count, error } = await supabase.from('fila_processamento').select('id', { count: 'exact', head: true })
-            .in('tipo', ['relatorio_vendedor', 'rollup_unidade']).eq('data_ref', dataRef).in('status', EM_ABERTO);
-        if (error) throw new Error(error.message);
-        if (!count) await reabrir(supabase, 'rollup_rede', '00000000-0000-0000-0000-000000000000', dataRef);
+        await talvezFecharRede(supabase, dataRef);
     }
+}
+
+/**
+ * A rede fecha quando nada do dia que a alimenta está em aberto. Se algo
+ * reabrir depois (análise atrasada), a cadeia passa por aqui de novo e a rede
+ * é reaberta — nunca fica com um dia parcial para sempre.
+ */
+async function talvezFecharRede(supabase: Admin, dataRef: string) {
+    const { count, error } = await supabase.from('fila_processamento').select('id', { count: 'exact', head: true })
+        .in('tipo', ['analise_conversa', 'relatorio_vendedor', 'rollup_unidade']).eq('data_ref', dataRef).in('status', EM_ABERTO);
+    if (error) throw new Error(error.message);
+    if (!count) await reabrir(supabase, 'rollup_rede', '00000000-0000-0000-0000-000000000000', dataRef);
 }
 
 /**

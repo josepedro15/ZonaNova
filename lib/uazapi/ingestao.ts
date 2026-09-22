@@ -26,6 +26,14 @@ export async function processar(evento: EventoUazapi, conexao: Conexao) {
 
     const mensagens = mensagensDoEvento(evento);
     if (!mensagens.length) return;
+
+    // Quem foi desativado (ou recusado) não é mais monitorado, ainda que a
+    // instância na UAZAPI continue de pé — desligá-la pode ter falhado. O
+    // status da conexão acima continua sendo atualizado; a mensagem, não.
+    const { data: dono } = await supabase.from('profiles').select('status')
+        .eq('id', conexao.user_id).maybeSingle<{ status: string }>();
+    if (dono?.status !== 'ativo') return;
+
     for (const mensagem of mensagens) await processarMensagem(mensagem, conexao);
     if (evento.EventType?.toLowerCase() === 'history') {
         await supabase.from('conexoes_whatsapp').update({
