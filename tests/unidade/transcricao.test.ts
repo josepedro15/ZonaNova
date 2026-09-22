@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { transcrever, hashDoAudio } from '../../lib/transcricao.ts';
 
 const AUDIO = new Uint8Array([1, 2, 3, 4, 5]);
+/** DNS de mentira: todo nome resolve para um IP público. */
+const publico = async () => ['93.184.216.34'];
 
 function falso({ audio = AUDIO, statusAudio = 200, texto = 'bom dia, seu João' } = {}) {
     const chamadas: string[] = [];
@@ -25,7 +27,7 @@ test('o hash é estável e muda com o conteúdo', () => {
 test('transcreve e devolve o hash do arquivo', async () => {
     const { f } = falso();
     const r = await transcrever('https://uaz/a.ogg', {
-        apiKey: 'k', buscar: f, procurarCache: async () => null,
+        apiKey: 'k', buscar: f, resolver: publico, procurarCache: async () => null,
     });
     assert.equal(r.texto, 'bom dia, seu João');
     assert.equal(r.hash, hashDoAudio(AUDIO));
@@ -36,7 +38,7 @@ test('transcreve e devolve o hash do arquivo', async () => {
 test('cache evita a chamada paga', async () => {
     const { f, chamadas } = falso();
     const r = await transcrever('https://uaz/a.ogg', {
-        apiKey: 'k', buscar: f, procurarCache: async () => 'já transcrito antes',
+        apiKey: 'k', buscar: f, resolver: publico, procurarCache: async () => 'já transcrito antes',
     });
     assert.equal(r.texto, 'já transcrito antes');
     assert.equal(chamadas.filter((c) => c.includes('openai.com')).length, 0);
@@ -46,7 +48,7 @@ test('o cache é consultado pelo hash do arquivo, não pela URL', async () => {
     const { f } = falso();
     let visto: string | null = null;
     await transcrever('https://uaz/outra-url.ogg', {
-        apiKey: 'k', buscar: f,
+        apiKey: 'k', buscar: f, resolver: publico,
         procurarCache: async (h) => { visto = h; return null; },
     });
     assert.equal(visto, hashDoAudio(AUDIO));
@@ -55,7 +57,7 @@ test('o cache é consultado pelo hash do arquivo, não pela URL', async () => {
 test('áudio inacessível vira erro, não transcrição vazia', async () => {
     const { f } = falso({ statusAudio: 404 });
     await assert.rejects(
-        () => transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, procurarCache: async () => null }),
+        () => transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, resolver: publico, procurarCache: async () => null }),
         /inacessível: 404/,
     );
 });
@@ -63,7 +65,7 @@ test('áudio inacessível vira erro, não transcrição vazia', async () => {
 test('áudio vazio vira erro', async () => {
     const { f } = falso({ audio: new Uint8Array([]) });
     await assert.rejects(
-        () => transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, procurarCache: async () => null }),
+        () => transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, resolver: publico, procurarCache: async () => null }),
         /vazio/,
     );
 });
@@ -77,7 +79,7 @@ test('pede português — áudio curto sem idioma o modelo adivinha errado', asy
         }
         return new Response(AUDIO as BodyInit, { status: 200 });
     }) as unknown as typeof globalThis.fetch;
-    await transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, procurarCache: async () => null });
+    await transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, resolver: publico, procurarCache: async () => null });
     assert.equal(corpo!.get('language'), 'pt');
 });
 
@@ -95,12 +97,46 @@ test('só https fora da rede interna', async () => {
 
 test('URL recusada não chega a ser buscada', async () => {
     const { f, chamadas } = falso();
-    await assert.rejects(transcrever('http://169.254.169.254/x', { apiKey: 'k', buscar: f, procurarCache: async () => null }), /recusada/);
+    await assert.rejects(transcrever('http://169.254.169.254/x', { apiKey: 'k', buscar: f, resolver: publico, procurarCache: async () => null }), /recusada/);
     assert.equal(chamadas.length, 0);
 });
 
 test('áudio acima do teto vira erro', async () => {
     const { MAX_BYTES_AUDIO } = await import('../../lib/transcricao.ts');
     const { f } = falso({ audio: new Uint8Array(MAX_BYTES_AUDIO + 1) });
-    await assert.rejects(transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, procurarCache: async () => null }), /grande demais/);
+    await assert.rejects(transcrever('https://uaz/a.ogg', { apiKey: 'k', buscar: f, resolver: publico, procurarCache: async () => null }), /grande demais/);
+});
+
+test('nome que resolve para a rede interna é recusado', async () => {
+    const { f, chamadas } = falso();
+    await assert.rejects(transcrever('https://parece-publico.exemplo.com/a.ogg', {
+        apiKey: 'k', buscar: f, resolver: async () => ['10.0.0.7'], procurarCache: async () => null,
+    }), /rede interna/);
+    assert.equal(chamadas.length, 0);
+});
+
+test('redirecionamento é seguido só para destino permitido', async () => {
+    const saltos = (destino: string) => (async (url: string | URL | Request) => {
+        const u = String(url);
+        if (u.includes('openai.com')) return new Response(JSON.stringify({ text: 'ok' }), { status: 200 });
+        if (u.includes('cdn.exemplo.com')) return new Response(null, { status: 302, headers: { location: destino } });
+        return new Response(AUDIO as BodyInit, { status: 200 });
+    }) as unknown as typeof globalThis.fetch;
+
+    const r = await transcrever('https://cdn.exemplo.com/a.ogg', {
+        apiKey: 'k', buscar: saltos('https://arquivos.exemplo.com/a.ogg'), resolver: publico, procurarCache: async () => null,
+    });
+    assert.equal(r.texto, 'ok');
+
+    await assert.rejects(transcrever('https://cdn.exemplo.com/a.ogg', {
+        apiKey: 'k', buscar: saltos('http://169.254.169.254/latest/meta-data'), resolver: publico, procurarCache: async () => null,
+    }), /recusada/);
+});
+
+test('IP interno reconhecido em todas as formas', async () => {
+    const { ipInterno } = await import('../../lib/transcricao.ts');
+    for (const ip of ['10.1.2.3', '127.0.0.1', '169.254.169.254', '172.31.0.1', '192.168.0.1', '100.64.0.1', '0.0.0.0', '::1', '::', 'fd12::1', 'fe80::1', '::ffff:10.0.0.1']) {
+        assert.equal(ipInterno(ip), true, ip);
+    }
+    for (const ip of ['93.184.216.34', '172.32.0.1', '2606:4700::1111']) assert.equal(ipInterno(ip), false, ip);
 });

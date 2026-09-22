@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { custoEstimado, dataEmSaoPaulo, hashTranscript, janelaDoDia, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise } from '../../lib/analise.ts';
+import { custoEstimado, dataEmSaoPaulo, dataValida, hashTranscript, janelaDoDia, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise } from '../../lib/analise.ts';
 
 test('o dia comercial usa São Paulo na virada do UTC', () => {
     assert.equal(dataEmSaoPaulo(new Date('2026-09-22T01:30:00Z')), '2026-09-21');
@@ -59,4 +59,12 @@ test('schema recusa análise sem as sete etapas do MEC', () => {
         evidencias: [{ trecho: 'preciso hoje', conclusao: 'urgência' }], mec: [],
     };
     assert.equal(schemaAnalise.safeParse(base).success, false);
+});
+
+test('data só vale se existe no calendário', () => {
+    assert.equal(dataValida('2026-09-21'), true);
+    assert.equal(dataValida('2028-02-29'), true);
+    for (const ruim of ['2026-02-31', '2026-13-01', '2026-02-29', '21/09/2026', '2026-9-1', '', null]) {
+        assert.equal(dataValida(ruim), false, String(ruim));
+    }
 });

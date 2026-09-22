@@ -17,8 +17,11 @@ export default async function ConversasPage({ searchParams }: { searchParams: Pr
     // significado na sintaxe do `.or()` do PostgREST e quebravam a consulta.
     const termo = (params.q ?? '').replace(/[^\p{L}\p{N} .@+-]/gu, '').trim().slice(0, 60);
     // O telefone é gravado só com dígitos: "(54) 9981" procura por "549981".
+    // Só quando o termo é um número: "Loja 2" viraria telefone contendo "2",
+    // que é quase todo mundo.
     const digitos = termo.replace(/\D/g, '');
-    if (termo) consulta = consulta.or([`cliente_nome.ilike.%${termo}%`, ...(digitos ? [`cliente_telefone.ilike.%${digitos}%`] : [])].join(','));
+    const ehNumero = !/\p{L}/u.test(termo) && digitos.length >= 3;
+    if (termo) consulta = consulta.or([`cliente_nome.ilike.%${termo}%`, ...(ehNumero ? [`cliente_telefone.ilike.%${digitos}%`] : [])].join(','));
     const { data: conversas } = await consulta;
     const ids = (conversas ?? []).map((c) => c.id as string);
     const { data: analises } = ids.length ? await supabase.from('analises_conversa')

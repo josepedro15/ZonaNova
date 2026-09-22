@@ -1,6 +1,6 @@
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { cronAutorizado } from '@/lib/cron';
-import { dataEmSaoPaulo, janelaDoDia } from '@/lib/analise';
+import { dataEmSaoPaulo, dataValida, janelaDoDia } from '@/lib/analise';
 import { conversasComMensagemNoDia } from '@/lib/fechamento';
 
 export const maxDuration = 300;
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const dataRef = url.searchParams.get('data') || dataEmSaoPaulo(ontem);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataRef)) return Response.json({ erro: 'data inválida' }, { status: 400 });
+    if (!dataValida(dataRef)) return Response.json({ erro: 'data inválida' }, { status: 400 });
 
     const { inicio, fim } = janelaDoDia(dataRef);
     const supabase = criarClienteAdmin();

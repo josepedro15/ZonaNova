@@ -72,6 +72,16 @@ export function dataEmSaoPaulo(instante: Date): string {
     }).format(instante);
 }
 
+/**
+ * AAAA-MM-DD que existe no calendário. O formato sozinho deixava passar
+ * "2026-02-31", que o Date rola em silêncio para 3 de março.
+ */
+export function dataValida(texto: string | null | undefined): texto is string {
+    if (!texto || !/^\d{4}-\d{2}-\d{2}$/.test(texto)) return false;
+    const d = new Date(`${texto}T12:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === texto;
+}
+
 export function janelaDoDia(dataRef: string): { inicio: Date; fim: Date } {
     const inicio = new Date(`${dataRef}T00:00:00-03:00`);
     return { inicio, fim: new Date(inicio.getTime() + 24 * 60 * 60 * 1000) };

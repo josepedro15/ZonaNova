@@ -445,3 +445,16 @@ begin
     then raise notice 'FALHOU  zn_vendedor_tem_analise_aberta alcançável pelo cliente';
     else raise notice 'PASSOU  zn_vendedor_tem_analise_aberta só para o service role'; end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 0019: a soma de custo respeita a RLS de quem chama
+-- ---------------------------------------------------------------------------
+do $$
+begin
+    if has_function_privilege('anon', 'public.zn_custo_total()', 'execute')
+    then raise notice 'FALHOU  anon executa zn_custo_total';
+    else raise notice 'PASSOU  zn_custo_total fora do anon'; end if;
+    if (select prosecdef from pg_proc where proname = 'zn_custo_total')
+    then raise notice 'FALHOU  zn_custo_total é security definer (furaria a RLS)';
+    else raise notice 'PASSOU  zn_custo_total soma pela RLS de quem chama'; end if;
+end $$;

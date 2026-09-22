@@ -5,16 +5,26 @@ import { paginar } from '@/lib/paginar';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Somado no banco (migration 0019), numa ida só. Sem a função, cai na soma
+ * paginada — correta, só mais lenta.
+ */
+async function custoAcumulado(supabase: Awaited<ReturnType<typeof contextoApp>>['supabase']): Promise<number> {
+    const { data, error } = await supabase.rpc('zn_custo_total');
+    if (!error) return Number(data ?? 0);
+    if (error.code !== 'PGRST202') throw new Error(error.message);
+    const analises = await paginar((de, ate) => supabase.from('analises_conversa').select('id,custo_estimado').order('id').range(de, ate), 500_000);
+    return analises.reduce((s, a) => s + Number(a.custo_estimado ?? 0), 0);
+}
+
 export default async function AdminPage() {
     const { supabase, perfil } = await contextoApp();
-    // O custo é acumulado de verdade: paginado, não as primeiras mil análises.
-    const [{ data: fila }, analises, { data: eventos }] = await Promise.all([
+    const [{ data: fila }, custo, { data: eventos }] = await Promise.all([
         supabase.from('fila_processamento').select('*').order('created_at', { ascending: false }).limit(100),
-        paginar((de, ate) => supabase.from('analises_conversa').select('id,custo_estimado').order('id').range(de, ate), 500_000),
+        custoAcumulado(supabase),
         supabase.from('eventos_admin').select('id,acao,detalhes,created_at,profiles!eventos_admin_actor_id_fkey(nome)').order('created_at', { ascending: false }).limit(12),
     ]);
     const cont = (status: string) => (fila ?? []).filter((f) => f.status === status).length;
-    const custo = (analises ?? []).reduce((s, a) => s + Number(a.custo_estimado ?? 0), 0);
 
     return (
         <AppShell papel={perfil.role} nome={perfil.nome} unidade={perfil.unidade} atual="/admin">

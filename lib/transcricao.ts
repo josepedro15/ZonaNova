@@ -17,10 +17,28 @@ export type ResultadoTranscricao = { texto: string; hash: string };
 /** O limite de arquivo da API de transcrição: acima disso ela recusa de todo jeito. */
 export const MAX_BYTES_AUDIO = 25 * 1024 * 1024;
 
+/** Endereço da rede interna, loopback, link-local ou de metadados da nuvem. */
+export function ipInterno(ip: string): boolean {
+    const h = ip.toLowerCase().replace(/^\[|\]$/g, '');
+    const mapeado = h.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapeado) return ipInterno(mapeado[1]);
+    const v4 = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (v4) {
+        const [a, b] = [Number(v4[1]), Number(v4[2])];
+        return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
+            || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+    }
+    if (h.includes(':')) {
+        return h === '::' || h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80') || h.startsWith('::ffff:');
+    }
+    return false;
+}
+
 /**
  * A URL do áudio vem do payload do webhook. Autenticado, mas ainda assim dado
  * de fora: se o token de uma rota vazasse, quem o tivesse faria o servidor
- * buscar o que quisesse. Só https, e nunca nome ou IP da rede interna.
+ * buscar o que quisesse. Só https, e nunca nome ou IP da rede interna. É a
+ * checagem do texto; o que o nome resolve é conferido em `baixarAudio`.
  */
 export function urlDeMidiaPermitida(bruta: string): URL | null {
     let url: URL;
@@ -28,14 +46,45 @@ export function urlDeMidiaPermitida(bruta: string): URL | null {
     if (url.protocol !== 'https:') return null;
     const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
     if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return null;
-    const v4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-    if (v4) {
-        const [a, b] = [Number(v4[1]), Number(v4[2])];
-        if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
-            || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)) return null;
-    }
-    if (host.includes(':') && (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80') || host.startsWith('::ffff:'))) return null;
+    if (ipInterno(host)) return null;
     return url;
+}
+
+export type Resolver = (host: string) => Promise<string[]>;
+
+const resolverDns: Resolver = async (host) => {
+    const { lookup } = await import('node:dns/promises');
+    return (await lookup(host, { all: true })).map((r) => r.address);
+};
+
+const REDIRECIONAMENTOS = [301, 302, 303, 307, 308];
+
+/**
+ * Baixa o áudio conferindo cada salto: a URL, o que o nome resolve e, em
+ * redirecionamento, o destino — um `https://cdn-publico/x` que responde 302
+ * para `http://169.254.169.254/` passava pela checagem do texto e o fetch
+ * seguia sozinho.
+ *
+ * Resta uma janela: o nome é resolvido aqui e de novo pelo fetch. Um DNS
+ * hostil que mude a resposta entre as duas (rebinding) ainda passa; fechar isso
+ * exigiria conectar direto no IP conferido.
+ */
+async function baixarAudio(bruta: string, buscar: typeof globalThis.fetch, resolver: Resolver): Promise<Response> {
+    let atual = bruta;
+    for (let salto = 0; salto <= 3; salto++) {
+        const url = urlDeMidiaPermitida(atual);
+        if (!url) throw new Error('URL de áudio recusada: só https fora da rede interna');
+        const host = url.hostname.replace(/^\[|\]$/g, '');
+        const ips = /^[\d.]+$|:/.test(host) ? [host] : await resolver(host);
+        if (!ips.length || ips.some(ipInterno)) throw new Error('URL de áudio recusada: o nome aponta para a rede interna');
+
+        const r = await buscar(url, { signal: AbortSignal.timeout(60_000), redirect: 'manual' });
+        if (!REDIRECIONAMENTOS.includes(r.status)) return r;
+        const destino = r.headers.get('location');
+        if (!destino) throw new Error(`áudio inacessível: ${r.status} sem destino`);
+        atual = new URL(destino, url).toString();
+    }
+    throw new Error('áudio inacessível: redirecionamentos demais');
 }
 
 /** Lê o corpo parando no teto, sem confiar no content-length. */
@@ -74,13 +123,13 @@ export async function transcrever(
         modelo?: string;
         procurarCache: (hash: string) => Promise<string | null>;
         buscar?: typeof globalThis.fetch;
+        /** Nome → IPs. Injetável para teste; o padrão é o DNS do sistema. */
+        resolver?: Resolver;
     },
 ): Promise<ResultadoTranscricao> {
     const buscar = opcoes.buscar ?? globalThis.fetch;
 
-    const url = urlDeMidiaPermitida(midiaUrl);
-    if (!url) throw new Error('URL de áudio recusada: só https fora da rede interna');
-    const r = await buscar(url, { signal: AbortSignal.timeout(60_000) });
+    const r = await baixarAudio(midiaUrl, buscar, opcoes.resolver ?? resolverDns);
     if (!r.ok) throw new Error(`áudio inacessível: ${r.status}`);
     const bytes = await lerComTeto(r, MAX_BYTES_AUDIO);
     if (bytes.byteLength === 0) throw new Error('áudio vazio');
