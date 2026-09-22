@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, esperaDoCliente, temposDeResposta, foiRespondido, telefoneBonito, type Msg } from '../../lib/painel.ts';
+import { desde, esperaDoCliente, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -116,4 +116,39 @@ test('desde() descarta o que veio antes do corte', () => {
 
 test('desde() inclui a mensagem exatamente no corte', () => {
     assert.equal(desde([cliente('08:00')], new Date(em('08:00'))).length, 1);
+});
+
+// --- espera escrita ----------------------------------------------------------
+
+// "22h37" ao lado de "14h45" se lia como horário.
+test('espera nunca se parece com horário', () => {
+    const min = 60_000;
+    assert.equal(esperaEmTexto(30 * 1000), 'agora');
+    assert.equal(esperaEmTexto(18 * min), '18min');
+    assert.equal(esperaEmTexto(4 * 60 * min), '4h');
+    assert.equal(esperaEmTexto((22 * 60 + 37) * min), '22h 37min');
+    assert.equal(esperaEmTexto(24 * 60 * min), '1d');
+    assert.equal(esperaEmTexto((27 * 60 + 5) * min), '1d 3h');
+});
+
+// --- bloqueio ----------------------------------------------------------------
+
+test('telefone digitado sem país ganha o 55', () => {
+    assert.equal(telefoneE164('(54) 9 9812-4471'), '5554998124471');
+    assert.equal(telefoneE164('54 3333-4444'), '555433334444');
+    assert.equal(telefoneE164('+55 54 99812-4471'), '5554998124471');
+    // DDD 55 (Santa Maria) parece o país, mas 11 dígitos é DDD + número.
+    assert.equal(telefoneE164('55 99812-4471'), '5555998124471');
+});
+
+test('celular casa com e sem o nono dígito', () => {
+    assert.deepEqual(variantesTelefone('5554998124471'), ['5554998124471', '555498124471']);
+    assert.deepEqual(variantesTelefone('555498124471'), ['555498124471', '5554998124471']);
+    // Fixo não tem nono dígito.
+    assert.deepEqual(variantesTelefone('555433334444'), ['555433334444']);
+    assert.deepEqual(variantesTelefone('12025550147'), ['12025550147']);
+});
+
+test('contato @lid não é formatado como telefone', () => {
+    assert.equal(telefoneBonito('lid:123456789012345'), 'Contato sem número visível');
 });

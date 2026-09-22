@@ -6,6 +6,7 @@ import { cifrar, decifrar } from '@/lib/crypto';
 import { tokenDeRota } from '@/lib/uazapi/rota';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { APP_URL } from '@/lib/env';
+import { telefoneE164, variantesTelefone } from '@/lib/painel';
 import { revalidatePath } from 'next/cache';
 
 export type EstadoConexao = {
@@ -194,11 +195,18 @@ export async function bloquearContato(form: FormData) {
     const supabase = await criarClienteServidor();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const telefone = String(form.get('telefone') ?? '').replace(/\D/g, '').slice(0, 20);
+    const telefone = telefoneE164(String(form.get('telefone') ?? '')).slice(0, 20);
     const motivo = String(form.get('motivo') ?? '').trim().slice(0, 300) || null;
     if (telefone.length < 8) return;
-    await criarClienteAdmin().from('contatos_bloqueados').upsert({ user_id: user.id, telefone, motivo }, { onConflict: 'user_id,telefone' });
+    const admin = criarClienteAdmin();
+    await admin.from('contatos_bloqueados').upsert({ user_id: user.id, telefone, motivo }, { onConflict: 'user_id,telefone' });
+    // O que já chegou antes do bloqueio sai das telas e da análise, mas não é
+    // apagado: desbloquear devolve tudo como estava.
+    await admin.from('conversas').update({ bloqueada: true })
+        .eq('user_id', user.id).in('cliente_telefone', variantesTelefone(telefone));
     revalidatePath('/perfil');
+    revalidatePath('/dashboard');
+    revalidatePath('/conversas');
 }
 
 export async function desbloquearContato(form: FormData) {
@@ -207,6 +215,14 @@ export async function desbloquearContato(form: FormData) {
     if (!user) return;
     const id = String(form.get('id') ?? '');
     if (!/^[0-9a-f-]{36}$/i.test(id)) return;
-    await criarClienteAdmin().from('contatos_bloqueados').delete().eq('id', id).eq('user_id', user.id);
+    const admin = criarClienteAdmin();
+    const { data: removido } = await admin.from('contatos_bloqueados').delete()
+        .eq('id', id).eq('user_id', user.id).select('telefone').maybeSingle<{ telefone: string }>();
+    if (removido) {
+        await admin.from('conversas').update({ bloqueada: false })
+            .eq('user_id', user.id).in('cliente_telefone', variantesTelefone(removido.telefone));
+    }
     revalidatePath('/perfil');
+    revalidatePath('/dashboard');
+    revalidatePath('/conversas');
 }

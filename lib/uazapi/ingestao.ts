@@ -1,5 +1,6 @@
 import 'server-only';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
+import { variantesTelefone } from '@/lib/painel';
 import { mensagensDoEvento, normalizarMensagem, statusDeConexao, type EventoUazapi, type MensagemUazapi } from '@/lib/uazapi/normalizar';
 
 /**
@@ -39,13 +40,15 @@ async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
     // Contato bloqueado é escolha do vendedor: "isto não é atendimento".
     // Barrar aqui e não na análise evita guardar o que ele pediu para não ser
     // guardado.
+    // Compara com e sem o nono dígito: o JID e o que o vendedor digitou nem
+    // sempre concordam.
     const { data: bloqueado } = await supabase
         .from('contatos_bloqueados')
         .select('id')
         .eq('user_id', conexao.user_id)
-        .eq('telefone', m.clienteTelefone)
-        .maybeSingle();
-    if (bloqueado) return;
+        .in('telefone', variantesTelefone(m.clienteTelefone))
+        .limit(1);
+    if (bloqueado?.length) return;
 
     // A unidade é carimbada na conversa no momento da criação: se o vendedor
     // mudar de unidade amanhã, o histórico continua pertencendo a onde

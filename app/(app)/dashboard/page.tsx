@@ -5,7 +5,7 @@ import Marca from '@/app/marca';
 import AppShell from '@/components/app-shell';
 import {
     desde, esperaDoCliente, esperaEmTexto, foiRespondido,
-    respostaMediaEmMinutos, telefoneBonito, temposDeResposta, type Msg,
+    respostaMediaEmMinutos, semTelefone, telefoneBonito, temposDeResposta, type Msg,
 } from '@/lib/painel';
 
 // O painel lê o que chegou há instantes pelo webhook. Gerado uma vez no build
@@ -65,6 +65,17 @@ const primeiroNome = (nome: string | null | undefined) => (nome ?? '').split(' '
 const noWhatsapp = (telefone: string) => `https://wa.me/${telefone.replace(/\D/g, '')}`;
 
 /**
+ * Contato que chegou só como `@lid` não tem telefone: um wa.me com aqueles
+ * dígitos abriria uma pessoa qualquer. Aí o melhor destino é a conversa.
+ */
+const destinoDaEspera = (c: ConversaComMensagens) => semTelefone(c.cliente_telefone)
+    ? { href: `/conversas/${c.id}` }
+    : { href: noWhatsapp(c.cliente_telefone), target: '_blank', rel: 'noopener noreferrer' };
+
+/** Quantos cartões de espera aparecem abertos; o resto fica em "Ver mais". */
+const ESPERA_VISIVEL = 4;
+
+/**
  * Duas letras para o avatar, ou null quando o cliente ainda não tem nome.
  *
  * O null importa: os dois últimos dígitos do telefone, que era o antigo
@@ -117,6 +128,7 @@ export default async function Dashboard() {
         supabase.from('conversas')
             .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, mensagens(direcao, automatica, enviada_em, tipo, conteudo)')
             .gte('ultima_mensagem_em', janela.toISOString())
+            .eq('bloqueada', false)
             .order('ultima_mensagem_em', { ascending: false })
             .returns<ConversaComMensagens[]>(),
         supabase.from('relatorios_diarios')
@@ -155,6 +167,40 @@ export default async function Dashboard() {
     const historico = [...(relatorios ?? [])].reverse();
     const coaching = (relatorio?.payload ?? {}) as {
         resumo?: string; melhorias?: string[]; elogio?: string; desafio?: string;
+    };
+
+    const cartaoDeEspera = ({ conversa, espera }: { conversa: ConversaComMensagens; espera: number }) => {
+        // Acima de duas horas o atraso deixa de ser demora e vira
+        // lead perdido: a cor muda para dizer isso sem texto.
+        const grave = espera >= 2 * 60 * 60 * 1000;
+        return (
+            <a key={conversa.id} {...destinoDaEspera(conversa)}
+               className={`flex items-center gap-2.5 rounded-[10px] p-3 ${grave ? 'bg-vermelho-sof' : 'bg-ambar-sof'}`}>
+                <span className={`flex size-9 shrink-0 items-center justify-center rounded-full border bg-superficie font-display text-[12.5px] font-semibold ${grave ? 'border-vermelho-linha text-vermelho-texto' : 'border-linha-quente text-ambar-texto'}`}>
+                    {iniciais(conversa.cliente_nome) ?? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="8" r="3.6" />
+                            <path d="M4.5 20c1.4-3.6 4.2-5.4 7.5-5.4s6.1 1.8 7.5 5.4" />
+                        </svg>
+                    )}
+                </span>
+                <span className="flex min-w-0 grow flex-col gap-0.5">
+                    <span className="truncate text-[13.5px] font-semibold">
+                        {conversa.cliente_nome ?? telefoneBonito(conversa.cliente_telefone)}
+                    </span>
+                    <span className="truncate text-[11.5px] text-tinta-2">
+                        {ultimaFalaDoCliente(conversa)}
+                    </span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end">
+                    <span className={`text-[13px] font-semibold ${grave ? 'text-vermelho' : 'text-ambar-texto'}`}>
+                        {esperaEmTexto(espera)}
+                    </span>
+                    <span className="text-[10.5px] text-tinta-2">parado</span>
+                </span>
+            </a>
+        );
     };
 
     return (
@@ -330,40 +376,19 @@ export default async function Dashboard() {
                     </div>
                     <p className="text-[12px] text-tinta-2">O cliente falou por último e ninguém respondeu.</p>
 
-                    {esperando.slice(0, 4).map(({ conversa, espera }) => {
-                        // Acima de duas horas o atraso deixa de ser demora e vira
-                        // lead perdido: a cor muda para dizer isso sem texto.
-                        const grave = espera >= 2 * 60 * 60 * 1000;
-                        return (
-                            <a key={conversa.id} href={noWhatsapp(conversa.cliente_telefone)}
-                               target="_blank" rel="noopener noreferrer"
-                               className={`flex items-center gap-2.5 rounded-[10px] p-3 ${grave ? 'bg-vermelho-sof' : 'bg-ambar-sof'}`}>
-                                <span className={`flex size-9 shrink-0 items-center justify-center rounded-full border bg-superficie font-display text-[12.5px] font-semibold ${grave ? 'border-vermelho-linha text-vermelho-texto' : 'border-linha-quente text-ambar-texto'}`}>
-                                    {iniciais(conversa.cliente_nome) ?? (
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                            <circle cx="12" cy="8" r="3.6" />
-                                            <path d="M4.5 20c1.4-3.6 4.2-5.4 7.5-5.4s6.1 1.8 7.5 5.4" />
-                                        </svg>
-                                    )}
-                                </span>
-                                <span className="flex min-w-0 grow flex-col gap-0.5">
-                                    <span className="truncate text-[13.5px] font-semibold">
-                                        {conversa.cliente_nome ?? telefoneBonito(conversa.cliente_telefone)}
-                                    </span>
-                                    <span className="truncate text-[11.5px] text-tinta-2">
-                                        {ultimaFalaDoCliente(conversa)}
-                                    </span>
-                                </span>
-                                <span className="flex shrink-0 flex-col items-end">
-                                    <span className={`text-[13px] font-semibold ${grave ? 'text-vermelho' : 'text-ambar-texto'}`}>
-                                        {esperaEmTexto(espera)}
-                                    </span>
-                                    <span className="text-[10.5px] text-tinta-2">parado</span>
-                                </span>
-                            </a>
-                        );
-                    })}
+                    {esperando.slice(0, ESPERA_VISIVEL).map(cartaoDeEspera)}
+                    {esperando.length > ESPERA_VISIVEL && (
+                        // O selo conta todos; sem isto, "10" ao lado de quatro
+                        // cartões parecia erro de conta.
+                        <details className="group flex flex-col gap-2.5">
+                            <summary className="cursor-pointer list-none text-center text-[12.5px] font-semibold text-vermelho-texto group-open:hidden">
+                                Ver mais {esperando.length - ESPERA_VISIVEL}
+                            </summary>
+                            <div className="flex flex-col gap-2.5">
+                                {esperando.slice(ESPERA_VISIVEL).map(cartaoDeEspera)}
+                            </div>
+                        </details>
+                    )}
                 </section>
             )}
 

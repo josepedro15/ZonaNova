@@ -109,14 +109,60 @@ export function respostaMediaEmMinutos(tempos: number[]): number | null {
     return Math.round(media / 60000);
 }
 
-/** "4h12", "18min", "agora" — a espera como a tela a escreve. */
+/**
+ * "18min", "4h 12min", "1d 3h", "agora" — a espera como a tela a escreve.
+ *
+ * Nunca "4h12": ao lado de "14h45" na lista de conversas, isso se lê como
+ * horário, e "22h37 parado" parecia a hora em que o cliente parou.
+ */
 export function esperaEmTexto(ms: number): string {
     const minutos = Math.floor(ms / 60000);
     if (minutos < 1) return 'agora';
     if (minutos < 60) return `${minutos}min`;
     const horas = Math.floor(minutos / 60);
-    const resto = minutos % 60;
-    return resto === 0 ? `${horas}h` : `${horas}h${String(resto).padStart(2, '0')}`;
+    if (horas < 24) {
+        const resto = minutos % 60;
+        return resto === 0 ? `${horas}h` : `${horas}h ${resto}min`;
+    }
+    const dias = Math.floor(horas / 24);
+    const restoHoras = horas % 24;
+    return restoHoras === 0 ? `${dias}d` : `${dias}d ${restoHoras}h`;
+}
+
+/** Prefixo de conversa cujo contato só chegou como `@lid`, sem telefone. */
+export const PREFIXO_LID = 'lid:';
+
+export const semTelefone = (numero: string) => numero.startsWith(PREFIXO_LID);
+
+/**
+ * O que a pessoa digitou, no formato que o webhook grava: E.164 sem o `+`.
+ *
+ * Número brasileiro digitado sem o país (DDD + 8 ou 9 dígitos) ganha o 55 —
+ * é assim que quase todo mundo escreve, e sem ele o bloqueio nunca casava.
+ */
+export function telefoneE164(digitado: string): string {
+    const d = digitado.replace(/\D/g, '');
+    // Com país, um número brasileiro tem 12 ou 13 dígitos; 10 ou 11 é sempre
+    // DDD + número — inclusive DDD 55 (Santa Maria), que parece o país.
+    if (d.length === 10 || d.length === 11) return `55${d}`;
+    return d;
+}
+
+/**
+ * As grafias do mesmo celular brasileiro, com e sem o nono dígito.
+ *
+ * O WhatsApp ainda identifica muitos celulares antigos sem o 9 (JID de 12
+ * dígitos), enquanto a pessoa digita com ele. Sem as duas formas, bloquear
+ * "(54) 9 9812-4471" não pegava o contato que chega como 555498124471.
+ */
+export function variantesTelefone(e164: string): string[] {
+    const d = e164.replace(/\D/g, '');
+    if (!d.startsWith('55')) return [d];
+    const ddd = d.slice(2, 4);
+    const resto = d.slice(4);
+    if (resto.length === 9 && resto[0] === '9') return [d, `55${ddd}${resto.slice(1)}`];
+    if (resto.length === 8 && /^[6-9]/.test(resto)) return [d, `55${ddd}9${resto}`];
+    return [d];
 }
 
 /**
@@ -127,6 +173,7 @@ export function esperaEmTexto(ms: number): string {
  * estrangeiro não o torna mais legível, torna-o errado.
  */
 export function telefoneBonito(numero: string): string {
+    if (semTelefone(numero)) return 'Contato sem número visível';
     const d = numero.replace(/\D/g, '');
     if (!d.startsWith('55')) return numero;
 

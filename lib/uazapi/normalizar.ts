@@ -5,6 +5,8 @@
  * mensagem, e decisão de descarte precisa de teste. A rota só faz I/O.
  */
 
+import { PREFIXO_LID } from '../painel.ts';
+
 /** O que a UAZAPI manda. Só os campos que usamos — o resto é ignorado. */
 export type EventoUazapi = {
     EventType?: string;
@@ -93,9 +95,15 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
     if (chat.startsWith('status@') || chat.endsWith('@broadcast')) {
         return { descartar: true, motivo: 'status/broadcast' };
     }
+    // Canal do WhatsApp: conteúdo publicado para seguidores, nunca um cliente.
+    if (chat.endsWith('@newsletter')) return { descartar: true, motivo: 'canal' };
 
-    const telefone = soDigitos(chat);
-    if (!telefone) return { descartar: true, motivo: 'sem telefone identificável' };
+    const digitos = soDigitos(chat);
+    if (!digitos) return { descartar: true, motivo: 'sem telefone identificável' };
+    // `@lid` é o identificador de privacidade do WhatsApp: estável para a
+    // conversa, mas não é telefone. Guardado com prefixo para a tela não o
+    // formatar como número nem montar um link wa.me que abre outra pessoa.
+    const telefone = chat.endsWith('@lid') ? `${PREFIXO_LID}${digitos}` : digitos;
 
     const bruto = (m.messageType ?? m.type ?? 'text').toLowerCase().replace(/[_\s-]/g, '');
     const tipo = TIPOS[bruto] ?? 'outro';

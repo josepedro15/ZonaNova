@@ -107,3 +107,12 @@ test('mensagem enviada não carrega nome de cliente', () => {
     assert.equal(ok(normalizarMensagem(base({ fromMe: true, senderName: 'Vendedor', pushName: 'Vendedor' }))).clienteNome, null);
     assert.equal(ok(normalizarMensagem(base({ senderName: 'Cliente' }))).clienteNome, 'Cliente');
 });
+
+test('canal do WhatsApp é descartado', () => {
+    assert.equal(motivo(normalizarMensagem(base({ chatid: '120363000000000000@newsletter' }))), 'canal');
+});
+
+// LID não é telefone: guardado com prefixo para a tela não inventar número.
+test('contato @lid vira lid:<dígitos>', () => {
+    assert.equal(ok(normalizarMensagem(base({ chatid: '123456789012345@lid' }))).clienteTelefone, 'lid:123456789012345');
+});

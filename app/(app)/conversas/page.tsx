@@ -11,6 +11,7 @@ export default async function ConversasPage({ searchParams }: { searchParams: Pr
     const params = await searchParams;
     let consulta = supabase.from('conversas')
         .select('id,user_id,cliente_nome,cliente_telefone,ultima_mensagem_em,total_mensagens,profiles!conversas_user_id_fkey(nome)')
+        .eq('bloqueada', false)
         .order('ultima_mensagem_em', { ascending: false }).limit(100);
     if (params.q) consulta = consulta.or(`cliente_nome.ilike.%${params.q.replace(/[%_,]/g, '')}%,cliente_telefone.ilike.%${params.q.replace(/[%_,]/g, '')}%`);
     const { data: conversas } = await consulta;
