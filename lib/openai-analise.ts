@@ -4,8 +4,16 @@ import { schemaAnalise, schemaJsonAnalise, type ResultadoAnalise } from '@/lib/a
 
 type Uso = { input_tokens?: number; output_tokens?: number };
 
+/**
+ * Resposta cortada no meio (`status: incomplete`, em geral por bater no
+ * `max_output_tokens`). Com temperatura 0, repetir dá o mesmo corte: o worker
+ * trata como falha definitiva em vez de pagar mais três tentativas iguais.
+ */
+export class RespostaIncompleta extends Error {}
+
 function textoDaResposta(resposta: unknown): string {
-    const r = resposta as { output_text?: string; output?: { content?: { type?: string; text?: string }[] }[] };
+    const r = resposta as { status?: string; incomplete_details?: { reason?: string }; output_text?: string; output?: { content?: { type?: string; text?: string }[] }[] };
+    if (r.status === 'incomplete') throw new RespostaIncompleta(`OpenAI devolveu resposta incompleta: ${r.incomplete_details?.reason ?? 'motivo não informado'}`);
     if (r.output_text) return r.output_text;
     for (const item of r.output ?? []) for (const conteudo of item.content ?? []) {
         if (conteudo.type === 'output_text' && conteudo.text) return conteudo.text;

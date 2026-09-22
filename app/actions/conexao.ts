@@ -6,7 +6,7 @@ import { cifrar, decifrar } from '@/lib/crypto';
 import { tokenDeRota } from '@/lib/uazapi/rota';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { APP_URL } from '@/lib/env';
-import { semTelefone, telefoneE164, variantesTelefone } from '@/lib/painel';
+import { telefoneE164, variantesTelefone } from '@/lib/painel';
 import { redirect } from 'next/navigation';
 import { desligarWhatsappDe } from '@/lib/desligar';
 import { revalidatePath } from 'next/cache';
@@ -177,10 +177,22 @@ export async function bloquearContato(form: FormData) {
     const supabase = await criarClienteServidor();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    // Contato `@lid` não tem número para digitar: chega pelo botão da
-    // conversa, já no formato em que foi gravado.
-    const bruto = String(form.get('telefone') ?? '').trim();
-    const telefone = semTelefone(bruto) ? bruto.slice(0, 40) : telefoneE164(bruto).slice(0, 20);
+    // Pelo botão da conversa chega o id, e o telefone é lido do banco como foi
+    // gravado — sem normalizar: um número estrangeiro de 11 dígitos ganharia
+    // um 55 na frente e o bloqueio iria para outra pessoa. É também o único
+    // jeito de bloquear um contato `@lid`, que não tem número para digitar.
+    // Digitado no Perfil, é número de gente: aí sim vira E.164.
+    const conversaId = String(form.get('conversaId') ?? '');
+    let telefone: string;
+    if (conversaId) {
+        if (!/^[0-9a-f-]{36}$/i.test(conversaId)) return;
+        const { data: conversa } = await supabase.from('conversas').select('cliente_telefone')
+            .eq('id', conversaId).eq('user_id', user.id).maybeSingle<{ cliente_telefone: string }>();
+        if (!conversa) return;
+        telefone = conversa.cliente_telefone;
+    } else {
+        telefone = telefoneE164(String(form.get('telefone') ?? '')).slice(0, 20);
+    }
     const motivo = String(form.get('motivo') ?? '').trim().slice(0, 300) || null;
     if (telefone.length < 8) return;
     const admin = criarClienteAdmin();

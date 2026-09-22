@@ -94,3 +94,14 @@ test('erro HTTP da UAZAPI vira exceção com o status', async () => {
     const { f } = falso({});
     await assert.rejects(() => new Uazapi('https://uaz', 'admin', f).status('x'), /404/);
 });
+
+// Sem prazo, uma UAZAPI travada segurava a tela de conectar e os crons.
+test('toda chamada sai com prazo', async () => {
+    let sinal: AbortSignal | undefined;
+    const buscar = (async (_url: string, init?: RequestInit) => {
+        sinal = init?.signal ?? undefined;
+        return new Response('[]', { status: 200 });
+    }) as unknown as typeof globalThis.fetch;
+    await new Uazapi('https://uaz', 'adm', buscar).listar();
+    assert.ok(sinal instanceof AbortSignal);
+});

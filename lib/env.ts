@@ -16,7 +16,26 @@ function opcional(nome: string, padrao = ''): string {
 
 export const SUPABASE_URL = opcional('NEXT_PUBLIC_SUPABASE_URL');
 export const SUPABASE_ANON_KEY = opcional('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-export const APP_URL = opcional('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+
+/**
+ * O endereço público do app: vai no webhook gravado na UAZAPI e nos links de
+ * recuperação de senha. O antigo fallback de localhost, em produção, gravava
+ * um webhook apontando para lugar nenhum — em silêncio.
+ *
+ * Ordem: a variável do projeto; na Vercel, o domínio de produção que a
+ * própria plataforma informa; fora dela (dev), localhost. Em produção sem
+ * nenhuma das duas, falha alto.
+ */
+function appUrl(): string {
+    const explicita = process.env.NEXT_PUBLIC_APP_URL;
+    if (explicita) return explicita;
+    const daVercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    if (daVercel) return `https://${daVercel}`;
+    if (process.env.VERCEL_ENV === 'production') return obrigatoria('NEXT_PUBLIC_APP_URL');
+    return 'http://localhost:3000';
+}
+
+export const APP_URL = appUrl();
 
 /** Só server. Ignora RLS — nunca importar num componente de cliente. */
 export function serviceRoleKey(): string {

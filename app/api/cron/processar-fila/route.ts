@@ -2,7 +2,7 @@ import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { cronAutorizado } from '@/lib/cron';
 import { aposFalha } from '@/lib/fila';
 import { transcrever } from '@/lib/transcricao';
-import { analisarConversa, consolidarVendedor } from '@/lib/openai-analise';
+import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
 import { custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
@@ -113,23 +113,29 @@ async function processarLote(supabase: Admin, agora: Date): Promise<Record<strin
 
         let desfecho: Record<string, unknown>;
         let encadeia = true;
+        let encadeiaSeMudou = true;
         try {
             if (item.tipo === 'transcricao') await transcreverMensagem(supabase, item.referencia_id, apiKey!);
-            else if (item.tipo === 'analise_conversa') await analisarItem(supabase, item.referencia_id, item.data_ref);
+            else if (item.tipo === 'analise_conversa') encadeiaSeMudou = await analisarItem(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'relatorio_vendedor') await consolidarItem(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'rollup_unidade') await rollupUnidade(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'rollup_rede') await rollupRede(supabase, item.data_ref);
             desfecho = { status: 'concluido', processado_em: new Date().toISOString() };
+            encadeia = encadeiaSeMudou;
         } catch (e) {
             if (e instanceof IgnorarItem) {
                 desfecho = { status: 'ignorado', ultimo_erro: e.message, processado_em: new Date().toISOString() };
             } else {
-                const falha = aposFalha(item.tentativas);
+                // Resposta cortada da OpenAI se repete igual (temperatura 0):
+                // falha definitiva já, em vez de pagar mais três vezes.
+                const falha = e instanceof RespostaIncompleta
+                    ? { status: 'falhou' as const, tentativas: item.tentativas + 1 }
+                    : aposFalha(item.tentativas);
                 desfecho = {
                     status: falha.status,
                     tentativas: falha.tentativas,
                     ultimo_erro: String(e).slice(0, 500),
-                    ...(falha.status === 'pendente'
+                    ...('proximaTentativaEm' in falha
                         ? { proxima_tentativa_em: falha.proximaTentativaEm.toISOString() }
                         : { processado_em: new Date().toISOString() }),
                 };
@@ -267,7 +273,12 @@ async function doutrinaMec(supabase: Admin): Promise<{ texto: string; playbookId
     };
 }
 
-async function analisarItem(supabase: Admin, conversaId: string, dataRef: string) {
+/**
+ * Analisa uma conversa do dia. Devolve se o passo seguinte (o relatório do
+ * vendedor) precisa rodar: análise nova, sim; transcript igual ao já
+ * analisado, só se o relatório ainda não a incorporou.
+ */
+async function analisarItem(supabase: Admin, conversaId: string, dataRef: string): Promise<boolean> {
     const { inicio, fim } = janelaDoDia(dataRef);
     const { data: conversa } = await supabase.from('conversas').select('id,user_id,unidade_id')
         .eq('id', conversaId).maybeSingle<{ id: string; user_id: string; unidade_id: string }>();
@@ -287,9 +298,16 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
         ? mensagens.slice(primeiraEntrada) : mensagens;
     const transcript = montarTranscript(recorte);
     const hash = hashTranscript(transcript);
-    const { data: existente } = await supabase.from('analises_conversa').select('id,transcript_hash')
-        .eq('conversa_id', conversaId).eq('data_ref', dataRef).maybeSingle<{ id: string; transcript_hash: string | null }>();
-    if (existente?.transcript_hash === hash) return;
+    const { data: existente } = await supabase.from('analises_conversa').select('id,transcript_hash,updated_at')
+        .eq('conversa_id', conversaId).eq('data_ref', dataRef).maybeSingle<{ id: string; transcript_hash: string | null; updated_at: string }>();
+    if (existente?.transcript_hash === hash) {
+        // Nada mudou: reencadear pagaria a consolidação de novo à toa. Só
+        // encadeia se o relatório é mais velho que a análise — o caso de uma
+        // execução que gravou a análise e morreu antes de encadear.
+        const { data: relatorio } = await supabase.from('relatorios_diarios').select('updated_at')
+            .eq('user_id', conversa.user_id).eq('data_ref', dataRef).maybeSingle<{ updated_at: string }>();
+        return !relatorio || relatorio.updated_at < existente.updated_at;
+    }
 
     const doutrina = await doutrinaMec(supabase);
     const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto });
@@ -312,6 +330,7 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
             evidencias: m.evidencias, itens: m.itens,
         })), { onConflict: 'conversa_id,data_ref,etapa' });
     }
+    return true;
 }
 
 async function consolidarItem(supabase: Admin, userId: string, dataRef: string) {
@@ -439,6 +458,11 @@ const EM_ABERTO = ['pendente', 'processando'];
 
 /** Ainda há análise do vendedor para o dia na fila (pendente, em retry ou rodando)? */
 async function vendedorTemAnalisePendente(supabase: Admin, userId: string, dataRef: string): Promise<boolean> {
+    // Uma ida ao banco (migration 0018). A varredura abaixo fica só como
+    // reserva enquanto a função não existir.
+    const { data, error: erroRpc } = await supabase.rpc('zn_vendedor_tem_analise_aberta', { p_user: userId, p_data: dataRef });
+    if (!erroRpc) return data === true;
+    if (erroRpc.code !== 'PGRST202') throw new Error(erroRpc.message);
     for (let de = 0; ; de += 1000) {
         const { data: abertas, error } = await supabase.from('fila_processamento')
             .select('referencia_id').eq('tipo', 'analise_conversa').eq('data_ref', dataRef).in('status', EM_ABERTO)

@@ -25,6 +25,9 @@ const itens: Record<Papel, { href: string; rotulo: string }[]> = {
         { href: '/mec', rotulo: 'O MEC' },
         { href: '/descobertas', rotulo: 'Descobertas' },
         { href: '/conversas', rotulo: 'Conversas' },
+        // Só supervisor e admin aprovam alguém como gestor, e só eles resolvem
+        // cadastro de unidade que ainda não tem gestor.
+        { href: '/aprovacoes', rotulo: 'Aprovações' },
         { href: '/perfil', rotulo: 'Perfil' },
     ],
     admin: [
@@ -32,6 +35,7 @@ const itens: Record<Papel, { href: string; rotulo: string }[]> = {
         { href: '/admin/unidades', rotulo: 'Unidades e papéis' },
         { href: '/admin/conexoes', rotulo: 'Conexões' },
         { href: '/admin/eventos', rotulo: 'Registro de ações' },
+        { href: '/aprovacoes', rotulo: 'Aprovações' },
         { href: '/perfil', rotulo: 'Perfil' },
     ],
 };

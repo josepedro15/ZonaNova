@@ -61,7 +61,7 @@ export default async function Aprovacoes({
         <main className="mx-auto w-full max-w-[1180px] px-[18px] pb-12">
             <header className="flex items-center justify-between border-b border-linha py-3.5">
                 <Marca legenda={eu?.role === 'gestor' ? `Gestão · ${eu.unidades?.nome ?? ''}` : 'Rede'} />
-                <Link href="/dashboard" className="text-[13px] text-tinta-3">Voltar</Link>
+                <Link href="/" className="text-[13px] text-tinta-3">Voltar</Link>
             </header>
 
             <h1 className="display mt-6 text-[26px] font-semibold">Quem quer entrar na sua unidade</h1>

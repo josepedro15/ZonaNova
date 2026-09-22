@@ -412,3 +412,36 @@ begin
     then raise notice 'FALHOU  funções/tabela da 0017 alcançáveis pelo cliente';
     else raise notice 'PASSOU  0017 só para o service role'; end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 0018: admin lê todos os perfis; supervisor continua sem ver admin
+-- ---------------------------------------------------------------------------
+reset role;
+insert into auth.users (id, email) values ('88888888-8888-8888-8888-888888888888', 'admin@zonanova.com.br')
+on conflict do nothing;
+insert into public.profiles (id, nome, email, role, unidade_id, status)
+values ('88888888-8888-8888-8888-888888888888', 'Ana Admin', 'admin@zonanova.com.br', 'admin', null, 'ativo')
+on conflict (id) do update set role = 'admin', status = 'ativo', unidade_id = null;
+set role authenticated;
+select pg_temp.como('88888888-8888-8888-8888-888888888888');
+select pg_temp.ok('admin vê todos os perfis, inclusive sem unidade',
+       (select count(*) from profiles), 8);  -- os 7 do seed + o admin
+select pg_temp.como('11111111-1111-1111-1111-111111111111');
+select pg_temp.ok('supervisor NÃO vê o perfil do admin',
+       (select count(*) from profiles where id = '88888888-8888-8888-8888-888888888888'), 0);
+reset role;
+do $$
+begin
+    if public.zn_vendedor_tem_analise_aberta('44444444-4444-4444-4444-444444444444', '2026-01-01') then
+        raise notice 'FALHOU  pendência inventada';
+    end if;
+    insert into public.fila_processamento (tipo, referencia_id, data_ref, status)
+    values ('analise_conversa', 'cccccccc-0000-0000-0000-000000000001', '2026-01-01', 'pendente');
+    if public.zn_vendedor_tem_analise_aberta('44444444-4444-4444-4444-444444444444', '2026-01-01')
+       and not public.zn_vendedor_tem_analise_aberta('55555555-5555-5555-5555-555555555555', '2026-01-01')
+    then raise notice 'PASSOU  pendência do vendedor é só dele';
+    else raise notice 'FALHOU  pendência do vendedor cruzou com colega'; end if;
+    if has_function_privilege('authenticated', 'public.zn_vendedor_tem_analise_aberta(uuid, date)', 'execute')
+    then raise notice 'FALHOU  zn_vendedor_tem_analise_aberta alcançável pelo cliente';
+    else raise notice 'PASSOU  zn_vendedor_tem_analise_aberta só para o service role'; end if;
+end $$;

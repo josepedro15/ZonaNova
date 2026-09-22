@@ -73,6 +73,9 @@ export class Uazapi {
     ): Promise<T> {
         const r = await this.buscar(`${this.baseUrl}${caminho}`, {
             method: metodo,
+            // Sem prazo, uma UAZAPI travada segurava a tela de conectar e os
+            // crons até o limite da plataforma.
+            signal: AbortSignal.timeout(15_000),
             headers: {
                 'content-type': 'application/json',
                 ...(token ? { token } : { admintoken: this.adminToken }),

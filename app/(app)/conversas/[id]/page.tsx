@@ -31,7 +31,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                     // Único caminho para bloquear contato `@lid`, que não tem
                     // número para digitar no Perfil.
                     <form action={bloquearContato} className="mt-3">
-                        <input type="hidden" name="telefone" value={conversa.cliente_telefone} />
+                        <input type="hidden" name="conversaId" value={conversa.id} />
                         <input type="hidden" name="motivo" value="Bloqueado pela conversa" />
                         <input type="hidden" name="voltar" value="conversas" />
                         <button className="text-xs font-semibold text-vermelho">Não é atendimento — bloquear este contato</button>
