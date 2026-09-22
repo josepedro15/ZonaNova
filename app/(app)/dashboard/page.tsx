@@ -4,7 +4,7 @@ import { sair } from '@/app/actions/auth';
 import Marca from '@/app/marca';
 import AppShell from '@/components/app-shell';
 import {
-    esperaDoCliente, esperaEmTexto, foiRespondido,
+    desde, esperaDoCliente, esperaEmTexto, foiRespondido,
     respostaMediaEmMinutos, telefoneBonito, temposDeResposta, type Msg,
 } from '@/lib/painel';
 
@@ -134,11 +134,12 @@ export default async function Dashboard() {
         .filter((e): e is { conversa: ConversaComMensagens; espera: number } => e.espera !== null)
         .sort((a, b) => b.espera - a.espera);
 
-    const tempos = deHoje.flatMap((c) => temposDeResposta(c.mensagens));
+    // A espera acima olha o histórico inteiro; as métricas do dia, não.
+    const tempos = deHoje.flatMap((c) => temposDeResposta(desde(c.mensagens, comeco)));
     const respostaMedia = respostaMediaEmMinutos(tempos);
 
     const comFalaDoCliente = deHoje
-        .map((c) => foiRespondido(c.mensagens))
+        .map((c) => foiRespondido(desde(c.mensagens, comeco)))
         .filter((r): r is boolean => r !== null);
     const taxa = comFalaDoCliente.length > 0
         ? Math.round((comFalaDoCliente.filter(Boolean).length / comFalaDoCliente.length) * 100)

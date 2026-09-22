@@ -25,15 +25,15 @@ export async function GET(req: Request) {
 
     let conversas = 0;
     for (const vendedor of vendedores ?? []) {
-        const { data: lista, error } = await supabase.from('conversas')
-            .select('id').eq('user_id', vendedor.id)
-            .gte('ultima_mensagem_em', inicio.toISOString())
-            .lt('ultima_mensagem_em', fim.toISOString())
-            .returns<{ id: string }[]>();
-        if (error) return Response.json({ erro: error.message }, { status: 500 });
-        if (!lista?.length) continue;
+        let lista: string[];
+        try {
+            lista = await conversasComMensagemNoDia(supabase, vendedor.id, inicio, fim);
+        } catch (e) {
+            return Response.json({ erro: String(e) }, { status: 500 });
+        }
+        if (!lista.length) continue;
         const { error: erroFila } = await supabase.from('fila_processamento').upsert(
-            lista.map((c) => ({ tipo: 'analise_conversa', referencia_id: c.id, data_ref: dataRef })),
+            lista.map((id) => ({ tipo: 'analise_conversa', referencia_id: id, data_ref: dataRef })),
             { onConflict: 'tipo,referencia_id,data_ref', ignoreDuplicates: true },
         );
         if (erroFila) return Response.json({ erro: erroFila.message }, { status: 500 });
@@ -41,4 +41,47 @@ export async function GET(req: Request) {
     }
 
     return Response.json({ data_ref: dataRef, vendedores: vendedores?.length ?? 0, conversas_enfileiradas: conversas });
+}
+
+type Admin = ReturnType<typeof criarClienteAdmin>;
+const PAGINA = 1000;
+
+/**
+ * As conversas do vendedor com pelo menos uma mensagem dentro da janela.
+ *
+ * Não dá para filtrar por `ultima_mensagem_em`: quando o dia fecha, uma
+ * negociação que continuou no dia seguinte já tem a última mensagem fora da
+ * janela, e quem conversa todo dia nunca seria analisado. O que decide é ter
+ * mensagem no dia. `ultima_mensagem_em >= inicio` só pré-filtra: toda conversa
+ * com mensagem na janela passa por ele.
+ */
+async function conversasComMensagemNoDia(supabase: Admin, userId: string, inicio: Date, fim: Date): Promise<string[]> {
+    const candidatas: string[] = [];
+    for (let de = 0; ; de += PAGINA) {
+        const { data, error } = await supabase.from('conversas')
+            .select('id').eq('user_id', userId)
+            .gte('ultima_mensagem_em', inicio.toISOString())
+            .order('id').range(de, de + PAGINA - 1)
+            .returns<{ id: string }[]>();
+        if (error) throw new Error(error.message);
+        candidatas.push(...(data ?? []).map((c) => c.id));
+        if ((data ?? []).length < PAGINA) break;
+    }
+
+    const comMensagem = new Set<string>();
+    // Lotes de 100 ids mantêm a URL do PostgREST curta.
+    for (let i = 0; i < candidatas.length; i += 100) {
+        const lote = candidatas.slice(i, i + 100);
+        for (let de = 0; ; de += PAGINA) {
+            const { data, error } = await supabase.from('mensagens')
+                .select('conversa_id').in('conversa_id', lote)
+                .gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString())
+                .order('id').range(de, de + PAGINA - 1)
+                .returns<{ conversa_id: string }[]>();
+            if (error) throw new Error(error.message);
+            for (const m of data ?? []) comMensagem.add(m.conversa_id);
+            if ((data ?? []).length < PAGINA) break;
+        }
+    }
+    return [...comMensagem];
 }

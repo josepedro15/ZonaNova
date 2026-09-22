@@ -7,12 +7,17 @@ import { custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type Mens
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
+import { drenarEntradas } from '@/lib/uazapi/ingestao';
 
 export const maxDuration = 300;
 
 // Quatro análises reais levaram ~40s. O pg_net espera no máximo 60s; lote
 // maior fazia o banco registrar timeout apesar de a Vercel continuar rodando.
 const LOTE = 4;
+
+// Acima de maxDuration com folga: item `processando` há mais que isso não tem
+// mais nenhuma função trabalhando nele.
+const PRAZO_PROCESSANDO_MS = 10 * 60_000;
 
 /**
  * Worker da fila (doc 3 §3.4). Roda a cada 5 minutos.
@@ -28,6 +33,17 @@ export async function GET(req: Request) {
     const supabase = criarClienteAdmin();
     const agora = new Date();
 
+    // Antes de pegar trabalho novo: devolver o que ficou preso e reprocessar o
+    // que o webhook não terminou. Nenhum dos dois pode derrubar o worker.
+    const resgatados = await resgatarPresos(supabase, agora).catch((e) => {
+        console.error('processar-fila: falha ao resgatar itens presos', e);
+        return 0;
+    });
+    const entradas = await drenarEntradas().catch((e) => {
+        console.error('processar-fila: falha ao drenar webhook_entrada', e);
+        return null;
+    });
+
     const { data: candidatos, error } = await supabase
         .from('fila_processamento')
         .select('id, tipo, referencia_id, data_ref, tentativas')
@@ -39,7 +55,7 @@ export async function GET(req: Request) {
         .returns<{ id: string; tipo: ItemTipo; referencia_id: string; data_ref: string; tentativas: number }[]>();
 
     if (error) return Response.json({ erro: error.message }, { status: 500 });
-    if (!candidatos?.length) return Response.json({ pegos: 0, concluidos: 0, falhados: 0 });
+    if (!candidatos?.length) return Response.json({ pegos: 0, concluidos: 0, falhados: 0, resgatados, entradas });
 
     if (!apiKey && candidatos.some((c) => ['transcricao', 'analise_conversa', 'relatorio_vendedor'].includes(c.tipo))) {
         // Sem chave não há como transcrever. Deixar na fila é melhor que
@@ -49,13 +65,18 @@ export async function GET(req: Request) {
 
     // Marca `processando` só no que ainda está `pendente`: se outro worker
     // passou antes, a condição não bate e o item não é pego duas vezes.
-    const { data: pegos } = await supabase
+    const reivindicar = (campos: Record<string, string>) => supabase
         .from('fila_processamento')
-        .update({ status: 'processando' })
+        .update(campos)
         .in('id', candidatos.map((c) => c.id))
         .eq('status', 'pendente')
         .select('id')
         .returns<{ id: string }[]>();
+    const claim = await reivindicar({ status: 'processando', iniciado_em: agora.toISOString() });
+    // Sem a coluna (migration 0014 ainda não aplicada), reivindica como antes.
+    const { data: pegos } = claim.error && COLUNA_AUSENTE.has(claim.error.code)
+        ? await reivindicar({ status: 'processando' })
+        : claim;
 
     const meus = new Set((pegos ?? []).map((p) => p.id));
     let concluidos = 0, falhados = 0, reagendados = 0;
@@ -93,10 +114,45 @@ export async function GET(req: Request) {
         }
     }
 
-    return Response.json({ pegos: meus.size, concluidos, falhados, reagendados });
+    return Response.json({ pegos: meus.size, concluidos, falhados, reagendados, resgatados, entradas });
 }
 
 type Admin = ReturnType<typeof criarClienteAdmin>;
+
+/** 42703 vem do Postgres; PGRST204 é como o PostgREST diz o mesmo. */
+const COLUNA_AUSENTE = new Set(['42703', 'PGRST204']);
+
+/**
+ * Item em `processando` além do prazo: a função que o pegou morreu (timeout,
+ * deploy, queda) sem gravar o desfecho. Conta como uma falha — assim um item
+ * que derruba o worker sempre acaba em `falhou` em vez de girar para sempre.
+ *
+ * `iniciado_em` nulo é item reivindicado antes da migration 0014; aí o
+ * `created_at` é a melhor pista que existe.
+ */
+async function resgatarPresos(supabase: Admin, agora: Date): Promise<number> {
+    const limite = new Date(agora.getTime() - PRAZO_PROCESSANDO_MS).toISOString();
+    const { data: presos, error } = await supabase.from('fila_processamento')
+        .select('id, tentativas')
+        .eq('status', 'processando')
+        .or(`iniciado_em.lt.${limite},and(iniciado_em.is.null,created_at.lt.${limite})`)
+        .limit(50)
+        .returns<{ id: string; tentativas: number }[]>();
+    if (error) throw new Error(error.message);
+
+    for (const item of presos ?? []) {
+        const desfecho = aposFalha(item.tentativas, agora);
+        await supabase.from('fila_processamento').update({
+            status: desfecho.status,
+            tentativas: desfecho.tentativas,
+            ultimo_erro: 'interrompido: ficou em processando além do prazo',
+            ...(desfecho.status === 'pendente'
+                ? { proxima_tentativa_em: desfecho.proximaTentativaEm.toISOString() }
+                : { processado_em: agora.toISOString() }),
+        }).eq('id', item.id).eq('status', 'processando');
+    }
+    return presos?.length ?? 0;
+}
 type ItemTipo = 'transcricao' | 'analise_conversa' | 'relatorio_vendedor' | 'rollup_unidade' | 'rollup_rede';
 class IgnorarItem extends Error {}
 

@@ -90,6 +90,18 @@ export function foiRespondido(msgs: Msg[]): boolean | null {
     return ordenadas.slice(primeiraFala).some(ehResposta);
 }
 
+/**
+ * Só as mensagens enviadas a partir de `comeco`. As métricas "de hoje" não
+ * podem herdar a madrugada nem os dias anteriores da mesma conversa: um
+ * cliente que escreveu às 22h de ontem e foi respondido às 8h viraria dez
+ * horas de "tempo de resposta de hoje". É o mesmo corte que o relatório
+ * fechado aplica, o que deixa os dois números comparáveis.
+ */
+export function desde<M extends Msg>(msgs: M[], comeco: Date): M[] {
+    const limite = comeco.getTime();
+    return msgs.filter((m) => new Date(m.enviada_em).getTime() >= limite);
+}
+
 /** Média dos tempos, em minutos arredondados. `null` sem nenhum tempo medido. */
 export function respostaMediaEmMinutos(tempos: number[]): number | null {
     if (tempos.length === 0) return null;

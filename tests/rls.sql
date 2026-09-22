@@ -222,6 +222,18 @@ begin
     end if;
 end $$;
 
+-- webhook_entrada guarda conteúdo de mensagem em trânsito (0014): nenhum
+-- papel de cliente lê nem escreve, com ou sem política.
+do $$
+begin
+    if has_table_privilege('authenticated', 'public.webhook_entrada', 'select')
+       or has_table_privilege('anon', 'public.webhook_entrada', 'select') then
+        raise notice 'FALHOU  webhook_entrada legível por papel de cliente';
+    else
+        raise notice 'PASSOU  webhook_entrada fora de anon e authenticated';
+    end if;
+end $$;
+
 -- As funções são o segundo lugar onde "revogar do papel errado" não revoga:
 -- toda função nasce com EXECUTE para PUBLIC, e PUBLIC não é anon nem
 -- authenticated. A 0003 e a 0005 caíram nisso; a 0006 corrige. Aqui se afirma

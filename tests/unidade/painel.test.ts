@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { esperaDoCliente, temposDeResposta, foiRespondido, telefoneBonito, type Msg } from '../../lib/painel.ts';
+import { desde, esperaDoCliente, temposDeResposta, foiRespondido, telefoneBonito, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -101,4 +101,19 @@ test('fixo de oito dígitos vira (DD) XXXX-XXXX', () => {
 test('o que não for brasileiro sai como veio', () => {
     assert.equal(telefoneBonito('12025550147'), '12025550147');
     assert.equal(telefoneBonito('abc'), 'abc');
+});
+
+// --- corte do dia ------------------------------------------------------------
+
+// O cliente que escreveu antes do corte e foi respondido depois não pode virar
+// um "tempo de resposta de hoje" de horas: a espera começou em outro dia.
+test('desde() descarta o que veio antes do corte', () => {
+    const msgs = [cliente('07:00'), vendedor('09:00'), cliente('10:00'), vendedor('10:05')];
+    const hoje = desde(msgs, new Date(em('08:00')));
+    assert.deepEqual(hoje.map((m) => m.enviada_em), [em('09:00'), em('10:00'), em('10:05')]);
+    assert.deepEqual(temposDeResposta(hoje), [5 * 60_000]);
+});
+
+test('desde() inclui a mensagem exatamente no corte', () => {
+    assert.equal(desde([cliente('08:00')], new Date(em('08:00'))).length, 1);
 });

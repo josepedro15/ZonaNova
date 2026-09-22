@@ -105,7 +105,9 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
     return {
         waMessageId: id,
         clienteTelefone: telefone,
-        clienteNome: m.senderName ?? m.pushName ?? null,
+        // Em mensagem enviada, `senderName`/`pushName` é o nome do próprio
+        // vendedor. Gravá-lo sobrescreveria o nome do cliente na conversa.
+        clienteNome: m.fromMe ? null : (m.senderName ?? m.pushName ?? null),
         direcao: m.fromMe ? 'saida' : 'entrada',
         tipo,
         conteudo: texto && texto.length > 0 ? texto : null,

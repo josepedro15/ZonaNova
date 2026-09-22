@@ -100,3 +100,10 @@ test('status de conexão mapeia para o vocabulário do banco', () => {
     assert.equal(statusDeConexao({ status: 'qrcode' }), 'aguardando_qr');
     assert.equal(statusDeConexao({ status: 'sei lá' }), null);
 });
+
+// Em mensagem enviada, o pushName é o do próprio vendedor. Se fosse gravado,
+// cada resposta dele renomearia o cliente na conversa.
+test('mensagem enviada não carrega nome de cliente', () => {
+    assert.equal(ok(normalizarMensagem(base({ fromMe: true, senderName: 'Vendedor', pushName: 'Vendedor' }))).clienteNome, null);
+    assert.equal(ok(normalizarMensagem(base({ senderName: 'Cliente' }))).clienteNome, 'Cliente');
+});
