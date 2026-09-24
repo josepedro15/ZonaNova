@@ -1,3 +1,20 @@
-import Link from'next/link';import type{Route}from'next';import{notFound}from'next/navigation';import AppShell from'@/components/app-shell';import{contextoApp}from'@/lib/contexto-app';
-export const dynamic='force-dynamic';
-export default async function UnidadePage({params}:{params:Promise<{id:string}>}){const{id}=await params;const{supabase,perfil}=await contextoApp();const[{data:u},{data:rels},{data:pessoas},{data:diarios},{data:cx}]=await Promise.all([supabase.from('unidades').select('id,nome,cidade,uf').eq('id',id).maybeSingle(),supabase.from('relatorios_unidade').select('*').eq('unidade_id',id).order('data_ref',{ascending:false}).limit(30),supabase.from('profiles').select('id,nome').eq('unidade_id',id).eq('role','vendedor').eq('status','ativo').order('nome'),supabase.from('relatorios_diarios').select('*').eq('unidade_id',id).order('data_ref',{ascending:false}).limit(500),supabase.from('vw_conexoes_status').select('user_id,status').eq('unidade_id',id)]);if(!u)notFound();const ult=new Map<string,Record<string,unknown>>();for(const r of diarios??[])if(!ult.has(r.user_id as string))ult.set(r.user_id as string,r as Record<string,unknown>);const con=new Map((cx??[]).map(c=>[c.user_id as string,c.status as string]));const atual=rels?.[0];return <AppShell papel={perfil.role} nome={perfil.nome} unidade={perfil.unidade} atual="/unidades"><div className="mx-auto max-w-[1100px] px-5 pb-28 pt-7 lg:px-10 lg:pb-16 lg:pt-10"><Link href="/unidades" className="text-sm font-semibold text-petroleo">← Rede</Link><h1 className="display mt-4 text-[30px] font-semibold">{u.nome as string}</h1><p className="mt-1 text-sm text-tinta-2">{[u.cidade,u.uf].filter(Boolean).join(' · ')}</p><div className="mt-6 grid gap-3 sm:grid-cols-4">{[['Nota',atual?.score_geral==null?'—':Math.round(Number(atual.score_geral))],['Leads',atual?.leads_atendidos??'—'],['Conversões',atual?.conversoes_confirmadas??'—'],['Perdidas',atual?.oportunidades_perdidas??'—']].map(([r,v])=><div key={String(r)} className="rounded-card border border-linha bg-superficie p-5"><p className="display text-3xl font-semibold">{String(v)}</p><p className="text-xs text-tinta-2">{r}</p></div>)}</div><section className="mt-6 rounded-card border border-linha bg-superficie"><h2 className="display p-5 text-lg font-semibold">Vendedores</h2>{(pessoas??[]).map(p=>{const r=ult.get(p.id as string);return <Link href={`/equipe/${p.id}` as Route} key={p.id as string} className="grid grid-cols-[minmax(0,1fr)_70px_80px_100px] border-t border-linha px-5 py-4 text-sm"><strong>{p.nome as string}</strong><span>{r?.score_geral==null?'—':Math.round(Number(r.score_geral))}</span><span>{String(r?.leads_atendidos??'—')} leads</span><span className={con.get(p.id as string)==='conectada'?'text-verde':'text-vermelho'}>{con.get(p.id as string)??'sem conexão'}</span></Link>})}</section></div></AppShell>}
+import { notFound } from 'next/navigation';
+import { Shell } from '@/components/ui';
+import { contextoApp } from '@/lib/contexto-app';
+import { VisaoUnidade } from '../../equipe/visao-unidade';
+
+export const dynamic = 'force-dynamic';
+
+export default async function UnidadePage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    const { supabase, perfil } = await contextoApp();
+    const { data: u } = await supabase.from('unidades').select('id,nome,cidade,uf').eq('id', id)
+        .maybeSingle<{ id: string; nome: string; cidade: string | null; uf: string | null }>();
+    if (!u) notFound();
+    return (
+        <Shell papel={perfil.role} nome={perfil.nome} unidade={perfil.unidade} atual="/unidades">
+            <VisaoUnidade supabase={supabase} unidadeId={u.id} nomeUnidade={[u.cidade, u.uf].filter(Boolean).join(' · ') || 'Loja'}
+                          titulo={u.nome} voltar={{ href: '/unidades', rotulo: 'Rede' }} />
+        </Shell>
+    );
+}
