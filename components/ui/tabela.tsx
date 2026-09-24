@@ -18,17 +18,17 @@ export function Tabela({ titulo, acao, colunas, grade, linhas, vazio, larguraMin
     return (
         <Cartao recuo="nenhum" className="overflow-hidden">
             {(titulo || acao) && (
-                <div className="flex items-center justify-between gap-3 px-5 py-4 lg:px-6">
+                <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-5">
                     {titulo && <h2 className="display text-lg font-bold">{titulo}</h2>}
                     {acao}
                 </div>
             )}
             {linhas.length === 0 ? (
-                <div className="border-t border-linha-2 px-5 py-6 text-sm text-tinta-3 lg:px-6">{vazio}</div>
+                <div className="border-t border-linha-2 px-4 py-5 text-sm text-tinta-3 lg:px-5">{vazio}</div>
             ) : (
                 <div className={compacta ? '' : 'overflow-x-auto'}>
                     <div style={{ minWidth: compacta ? undefined : larguraMin }}>
-                        <div className={`${grid} gap-3 bg-fundo px-5 py-2.5 text-[11.5px] font-bold uppercase tracking-[0.06em] text-tinta-3 lg:px-6`}
+                        <div className={`${grid} gap-3 bg-fundo px-4 py-2 text-[11.5px] font-bold uppercase tracking-[0.06em] text-tinta-3 lg:px-5`}
                              style={{ gridTemplateColumns: grade }}>
                             {colunas.map((c) => <span key={c}>{c}</span>)}
                         </div>
@@ -36,9 +36,9 @@ export function Tabela({ titulo, acao, colunas, grade, linhas, vazio, larguraMin
                             const cor = l.atenuada ? 'bg-fundo/60 text-tinta-3' : '';
                             const celulas = l.celulas.map((c, i) => <span key={i} className="min-w-0">{c}</span>);
                             const temResumo = compacta && l.resumo !== undefined;
-                            const linhaGrade = `${temResumo ? 'hidden sm:grid' : 'grid'} items-center gap-3 border-t border-linha-2 px-5 py-3.5 text-sm lg:px-6 ${cor} ${l.href ? 'hover:bg-fundo' : ''}`;
+                            const linhaGrade = `${temResumo ? 'hidden sm:grid' : 'grid'} items-center gap-3 border-t border-linha-2 px-4 py-2.5 text-sm lg:px-5 ${cor} ${l.href ? 'hover:bg-fundo' : ''}`;
                             const resumo = temResumo && (
-                                <div className={`border-t border-linha-2 px-5 py-3 sm:hidden ${cor}`}>{l.resumo}</div>
+                                <div className={`border-t border-linha-2 px-4 py-3 sm:hidden ${cor}`}>{l.resumo}</div>
                             );
                             if (l.href) {
                                 return (

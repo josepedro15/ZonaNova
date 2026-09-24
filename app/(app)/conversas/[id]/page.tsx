@@ -110,7 +110,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                     </>} />
 
                 <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
-                    <Cartao className="flex flex-col gap-4 lg:col-span-7">
+                    <Cartao className="flex flex-col gap-4 lg:col-span-7 2xl:col-span-6">
                         <div className="flex items-center justify-between gap-3">
                             <h2 className="text-xs font-bold uppercase tracking-[0.09em] text-tinta-3">Conversa</h2>
                             {evidencias.length > 0 && (
@@ -128,16 +128,18 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                         )}
                     </Cartao>
 
-                    <aside className="flex flex-col gap-4 lg:sticky lg:top-6 lg:col-span-5">
+                    {/* Em tela bem larga, a análise ocupa duas colunas: empilhada numa faixa
+                        estreita, ela ficava muito mais alta que o necessário. */}
+                    <aside className="grid content-start gap-4 lg:sticky lg:top-6 lg:col-span-5 2xl:col-span-6 2xl:grid-cols-2">
                         {!analise ? (
-                            <Cartao variante="tracejado">
+                            <Cartao variante="tracejado" className="2xl:col-span-2">
                                 <h2 className="display text-lg font-bold">Análise ainda não disponível</h2>
                                 <p className="mt-2 text-sm text-tinta-2">Esta conversa entra no próximo fechamento diário, às 00h30.</p>
                             </Cartao>
                         ) : (
                             <>
                                 {payload.proxima_acao ? (
-                                    <Cartao variante="heroi" className="flex flex-col gap-3.5">
+                                    <Cartao variante="heroi" className="flex flex-col gap-3.5 2xl:col-span-2">
                                         <span className="text-xs font-bold uppercase tracking-[0.09em] text-white/75">Próxima ação</span>
                                         <p className="display text-[17px] font-bold leading-snug">{payload.proxima_acao}</p>
                                         {payload.script_sugerido && (
@@ -151,7 +153,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                 ) : payload.script_sugerido ? (
                                     // Sem próxima ação, o script ainda é útil: sem isto, ele sumia da tela
                                     // (regressão vs. a versão antiga desta página).
-                                    <Cartao className="flex flex-col gap-2.5">
+                                    <Cartao className="flex flex-col gap-2.5 2xl:col-span-2">
                                         <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-azul">Responda assim</span>
                                         <p className="text-sm leading-relaxed">{payload.script_sugerido}</p>
                                         <BotaoCopiar texto={payload.script_sugerido} />

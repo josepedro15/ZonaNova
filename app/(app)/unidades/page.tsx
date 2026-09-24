@@ -86,7 +86,7 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                                                     opcoes={Object.entries(INDICADORES).map(([valor, i]) => ({ valor, rotulo: i.rotulo }))} />} />
 
                 <div className="grid gap-5 lg:grid-cols-12">
-                    <Cartao variante="heroi" className="flex flex-col gap-3 lg:col-span-4">
+                    <Cartao variante="heroi" className="flex flex-col gap-3 lg:col-span-4 2xl:col-span-3">
                         <span className="text-[13px] text-white/75">{atual ? `Nota da rede · ${dataCurta(`${atual.data_ref}T12:00:00-03:00`)}` : 'Nota da rede'}</span>
                         <span className="flex items-baseline gap-3">
                             <Numero valor={atual?.score_geral == null ? '—' : Math.round(Number(atual.score_geral))} tamanho="xl" />
@@ -104,7 +104,7 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                         <Sparkline invertida rotulo="Nota da rede nos últimos 60 dias" valores={[...serieRede].reverse().map((r) => (r.score_geral == null ? null : Number(r.score_geral)))} />
                     </Cartao>
 
-                    <Cartao className="flex flex-col gap-3 lg:col-span-8">
+                    <Cartao className="flex flex-col gap-3 lg:col-span-8 2xl:col-span-9">
                         <h2 className="display text-lg font-bold">{ind.rotulo} por loja, últimas 12 semanas</h2>
                         <GraficoLinhas rotulo={`${ind.rotulo} por loja nas últimas 12 semanas`} formato={ind.formato}
                                        rotulosX={[mesCurto(diaMenos(fim, 7 * 12)), mesCurto(fim)]}
@@ -118,7 +118,7 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                 </div>
 
                 <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
-                    <div className="lg:col-span-8">
+                    <div className="lg:col-span-8 2xl:col-span-9">
                         <Tabela titulo="Ranking das lojas" acao={<span className="text-[12.5px] text-tinta-3">clique para abrir a loja</span>}
                                 vazio="Nenhuma loja ativa."
                                 colunas={['#', 'Loja', 'Gestor', 'Nota', 'Vend.', 'Leads', 'Conv.', 'Resp.', `${JANELA} dias`]}
@@ -161,7 +161,7 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                                 })} />
                     </div>
 
-                    <aside className="flex flex-col gap-5 lg:col-span-4">
+                    <aside className="flex flex-col gap-4 lg:col-span-4 2xl:col-span-3">
                         <Cartao className="flex flex-col gap-3">
                             <h2 className="display text-lg font-bold">Onde você precisa entrar</h2>
                             {!caiu && semGestor.length === 0 && <p className="text-[13px] text-tinta-2">Nenhuma loja pedindo atenção agora.</p>}

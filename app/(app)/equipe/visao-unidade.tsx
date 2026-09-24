@@ -163,7 +163,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
             </section>
 
             <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
-                <div className="lg:col-span-8">
+                <div className="lg:col-span-8 2xl:col-span-9">
                     <Tabela titulo="Vendedores" acao={<span className="text-[12.5px] text-tinta-3">ordenado por nota</span>}
                             vazio="Nenhum vendedor ativo neste escopo."
                             colunas={['Vendedor', 'Nota', 'Leads', 'Conv.', 'Resp.', '7 dias', 'Conexão']}
@@ -212,7 +212,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                             })} />
                 </div>
 
-                <aside className="flex flex-col gap-5 lg:col-span-4">
+                <aside className="flex flex-col gap-4 lg:col-span-4 2xl:col-span-3">
                     <Cartao className="flex flex-col gap-3.5">
                         <div>
                             <h2 className="display text-lg font-bold">Com quem falar hoje</h2>
@@ -221,7 +221,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                         {sugestoes.length === 0 ? (
                             <p className="text-[13px] text-tinta-2">Ninguém caiu na semana. Bom sinal.</p>
                         ) : sugestoes.map((s) => (
-                            <div key={s.pessoa.id} className="flex flex-col gap-2 rounded-[10px] bg-fundo p-4">
+                            <div key={s.pessoa.id} className="flex flex-col gap-1.5 rounded-[10px] bg-fundo p-3.5">
                                 <div className="flex items-center justify-between gap-2">
                                     <span className="flex min-w-0 flex-col">
                                         <span className="truncate text-sm font-bold">{s.pessoa.nome}</span>

@@ -33,11 +33,12 @@ export function GraficoLinhas({ series, formato, rotulosX, rotulo }: {
     });
     return (
         <figure className="m-0">
-            <svg viewBox="0 0 780 212" className="h-auto w-full" role="img" aria-label={rotulo}>
-                {[Y0, (Y0 + Y1) / 2, Y1].map((g) => <line key={g} x1={X0} x2={X1} y1={g} y2={g} className="stroke-linha-2" />)}
+            {/* Altura fixa: com h-auto, numa coluna larga o gráfico passava de 350px de altura. */}
+            <svg viewBox="0 0 780 212" preserveAspectRatio="none" className="h-[200px] w-full lg:h-[240px]" role="img" aria-label={rotulo}>
+                {[Y0, (Y0 + Y1) / 2, Y1].map((g) => <line key={g} x1={X0} x2={X1} y1={g} y2={g} className="stroke-linha-2" vectorEffect="non-scaling-stroke" />)}
                 {cinzaPrimeiro.map((s) => (
                     <path key={s.id} d={caminhoSvg(s.valores.map((v, i) => (v === null ? null : [x(i), y(v)])))} fill="none"
-                          strokeWidth={s.destaque ? 3 : 2} strokeLinecap="round" strokeLinejoin="round"
+                          strokeWidth={s.destaque ? 3 : 2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
                           className={s.destaque === 'azul' ? 'stroke-azul' : s.destaque === 'risco' ? 'stroke-risco' : 'stroke-linha-campo'} />
                 ))}
             </svg>
