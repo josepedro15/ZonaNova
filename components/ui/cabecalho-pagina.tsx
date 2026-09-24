@@ -9,7 +9,7 @@ export function CabecalhoPagina({ sobre, titulo, acoes, voltar }: {
     return (
         <header className="flex flex-col gap-3">
             {voltar && (
-                <Link href={voltar.href} className="flex items-center gap-1.5 self-start text-[13px] font-semibold text-azul">
+                <Link href={voltar.href} className="flex min-h-11 items-center gap-1.5 self-start text-[13px] font-semibold text-azul">
                     <Icone nome="seta_esquerda" tamanho={14} />{voltar.rotulo}
                 </Link>
             )}
