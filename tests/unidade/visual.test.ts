@@ -119,6 +119,11 @@ test('na conversa, cada evidência grifa só a primeira mensagem onde aparece', 
     assert.equal(r[1].every((p) => p.grifo === null), true);
 });
 
+test('grifa trecho entre aspas curvas', () => {
+    assert.deepEqual(grifar('Bom dia! É obra nova ou repintura?', ['"é obra nova ou repintura?"'])[1],
+        { texto: 'É obra nova ou repintura?', grifo: 1 });
+});
+
 // --- SVG ----------------------------------------------------------------------
 
 test('caminho SVG recomeça depois de um buraco', () => {

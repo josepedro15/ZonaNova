@@ -72,7 +72,7 @@ export type Pedaco = { texto: string; grifo: number | null };
 function limparTrecho(trecho: string): string {
     let t = trecho.trim();
     for (let i = 0; i < 2; i++) {
-        t = t.replace(/^["""'«»]+|["""'«»]+$/g, '').replace(/^(\.\.\.|…)+|(\.\.\.|…)+$/g, '').trim();
+        t = t.replace(/^["“”'«»]+|["“”'«»]+$/g, '').replace(/^(\.\.\.|…)+|(\.\.\.|…)+$/g, '').trim();
     }
     return t;
 }
