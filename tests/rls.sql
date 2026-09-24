@@ -358,6 +358,27 @@ select pg_temp.ok('gestor de Bento lê a contestação da unidade dele',
 select pg_temp.como('11111111-1111-1111-1111-111111111111');
 select pg_temp.ok('supervisor ativo lê a contestação',
        (select count(*) from aderencia_contestacoes), 1);
+
+reset role;
+-- mec_observacoes: mesmo escopo de aderencia_conversa (conversa de Bento).
+insert into public.mec_observacoes (conversa_id, user_id, unidade_id, data_ref, playbook_id, etapa, sinal, item_chave, valor, trecho)
+values ('cccccccc-0000-0000-0000-000000000003', '66666666-6666-6666-6666-666666666666',
+        'aaaaaaaa-0000-0000-0000-000000000002', current_date, 'dddddddd-0000-0000-0000-000000000001',
+        'sondagem', 'sondagem_item', 'sondagem_a', true, 'o que está construindo?');
+
+set role authenticated;
+select pg_temp.como('44444444-4444-4444-4444-444444444444');
+select pg_temp.ok('vendedor do Centro NÃO lê observação do MEC de Bento',
+       (select count(*) from mec_observacoes), 0);
+select pg_temp.como('22222222-2222-2222-2222-222222222222');
+select pg_temp.ok('gestor do Centro NÃO lê observação do MEC de Bento',
+       (select count(*) from mec_observacoes), 0);
+select pg_temp.como('33333333-3333-3333-3333-333333333333');
+select pg_temp.ok('gestor de Bento lê a observação do MEC da unidade dele',
+       (select count(*) from mec_observacoes), 1);
+select pg_temp.como('11111111-1111-1111-1111-111111111111');
+select pg_temp.ok('supervisor lê a observação do MEC',
+       (select count(*) from mec_observacoes), 1);
 reset role;
 
 -- ---------------------------------------------------------------------------
