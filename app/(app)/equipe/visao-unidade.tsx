@@ -16,18 +16,19 @@ const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const minutos = (s: number | string | null | undefined) => (s == null ? null : Math.round(Number(s) / 60));
 
 /**
- * A equipe de uma loja: serve o gestor (`/equipe`) e o supervisor
- * (`/unidades/[id]`). `unidadeId` null é o escopo inteiro que a RLS deixa
- * ver — o comportamento de antes para supervisor e admin em /equipe.
+ * A equipe de uma loja (ou várias): serve o gestor (`/equipe`, uma ou mais
+ * lojas via `gestor_unidades`) e o supervisor (`/unidades/[id]`, uma loja
+ * só). `unidadeIds` null é o escopo inteiro que a RLS deixa ver — o
+ * comportamento de antes para supervisor e admin em /equipe.
  */
-export async function VisaoUnidade({ supabase, unidadeId, nomeUnidade, titulo, voltar }: {
-    supabase: Supabase; unidadeId: string | null; nomeUnidade: string; titulo: string; voltar?: { href: Route; rotulo: string };
+export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, voltar }: {
+    supabase: Supabase; unidadeIds: string[] | null; nomeUnidade: string; titulo: string; voltar?: { href: Route; rotulo: string };
 }) {
     const hoje = dataHoje();
     const agora = new Date();
     const doisDias = new Date(agora.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
 
-    let qPessoas = supabase.from('profiles').select('id,nome').eq('role', 'vendedor').eq('status', 'ativo').order('nome');
+    let qPessoas = supabase.from('profiles').select('id,nome,unidade_id,unidades!profiles_unidade_id_fkey(nome)').eq('role', 'vendedor').eq('status', 'ativo').order('nome');
     let qDiarios = supabase.from('relatorios_diarios').select('user_id,data_ref,score_geral,leads_atendidos,conversoes_confirmadas,tempo_medio_resposta_s')
         .gte('data_ref', diaMenos(hoje, 15)).order('data_ref', { ascending: false }).limit(1000);
     let qConexoes = supabase.from('vw_conexoes_status').select('user_id,status,ultimo_evento_em');
@@ -36,23 +37,28 @@ export async function VisaoUnidade({ supabase, unidadeId, nomeUnidade, titulo, v
         .select('unidade_id,data_ref,score_geral,leads_atendidos,conversoes_confirmadas,oportunidades_perdidas,tempo_medio_resposta_s,taxa_resposta')
         .order('data_ref', { ascending: false }).limit(60);
     let qAderencia = supabase.from('aderencia_diaria').select('user_id,data_ref,por_etapa').gte('data_ref', diaMenos(hoje, 7)).order('data_ref', { ascending: false });
-    let qAnalises = supabase.from('analises_conversa').select('payload').gte('data_ref', diaMenos(hoje, 7)).limit(1000);
-    // Só 48 h de conversa: a espera que importa ao gestor é a de agora.
+    let qAnalises = supabase.from('analises_conversa').select('payload').gte('data_ref', diaMenos(hoje, 7)).order('data_ref', { ascending: false }).limit(1000);
+    // Só 48 h de conversa: a espera que importa ao gestor é a de agora. A
+    // mensagens(...) embutida também é filtrada pelas mesmas 48h — sem isso,
+    // cada conversa ativa trazia o histórico inteiro. Acima de 500 conversas
+    // ativas em 48h, a contagem de espera fica aproximada (só as 500 mais
+    // recentes entram na conta).
     let qConversas = supabase.from('conversas').select('id,user_id,mensagens(direcao,automatica,enviada_em)')
-        .gte('ultima_mensagem_em', doisDias).eq('bloqueada', false);
-    if (unidadeId) {
-        qPessoas = qPessoas.eq('unidade_id', unidadeId);
-        qDiarios = qDiarios.eq('unidade_id', unidadeId);
-        qConexoes = qConexoes.eq('unidade_id', unidadeId);
-        qPendentes = qPendentes.eq('unidade_id', unidadeId);
-        qUnidade = qUnidade.eq('unidade_id', unidadeId);
-        qAderencia = qAderencia.eq('unidade_id', unidadeId);
-        qAnalises = qAnalises.eq('unidade_id', unidadeId);
-        qConversas = qConversas.eq('unidade_id', unidadeId);
+        .gte('ultima_mensagem_em', doisDias).gte('mensagens.enviada_em', doisDias).eq('bloqueada', false)
+        .order('ultima_mensagem_em', { ascending: false }).limit(500);
+    if (unidadeIds) {
+        qPessoas = qPessoas.in('unidade_id', unidadeIds);
+        qDiarios = qDiarios.in('unidade_id', unidadeIds);
+        qConexoes = qConexoes.in('unidade_id', unidadeIds);
+        qPendentes = qPendentes.in('unidade_id', unidadeIds);
+        qUnidade = qUnidade.in('unidade_id', unidadeIds);
+        qAderencia = qAderencia.in('unidade_id', unidadeIds);
+        qAnalises = qAnalises.in('unidade_id', unidadeIds);
+        qConversas = qConversas.in('unidade_id', unidadeIds);
     }
 
     const [{ data: pessoas }, { data: diarios }, { data: conexoes }, { count: pendentes }, { data: daUnidade }, { data: rede }, { data: aderencias }, { data: analises }, { data: conversas }] = await Promise.all([
-        qPessoas.returns<{ id: string; nome: string }[]>(),
+        qPessoas.returns<{ id: string; nome: string; unidade_id: string; unidades: { nome: string } | null }[]>(),
         qDiarios.returns<Diario[]>(),
         qConexoes.returns<{ user_id: string; status: string; ultimo_evento_em: string | null }[]>(),
         qPendentes,
@@ -64,6 +70,11 @@ export async function VisaoUnidade({ supabase, unidadeId, nomeUnidade, titulo, v
     ]);
 
     const equipe = pessoas ?? [];
+    // Mais de uma loja no escopo (RLS inteira, ou gestor com várias lojas em
+    // gestor_unidades): sem isso, a lista mistura vendedores de lojas
+    // diferentes sem dizer de qual loja é cada um.
+    const multiplas = unidadeIds === null || unidadeIds.length > 1;
+    const lojaDoVendedor = new Map(equipe.map((p) => [p.id, p.unidades?.nome ?? null]));
     // Os números do topo são de UM dia, o último fechado, juntando as unidades
     // do escopo (ponderado por leads) — a mesma regra do rollup.
     const dias = juntarPorDia(daUnidade ?? []);
@@ -159,7 +170,13 @@ export async function VisaoUnidade({ supabase, unidadeId, nomeUnidade, titulo, v
                                     href: `/equipe/${p.id}`,
                                     atenuada: !r,
                                     celulas: [
-                                        <span key="v" className="flex items-center gap-2.5 font-semibold"><Avatar nome={p.nome} tamanho={32} />{p.nome}</span>,
+                                        <span key="v" className="flex items-center gap-2.5">
+                                            <Avatar nome={p.nome} tamanho={32} />
+                                            <span className="flex min-w-0 flex-col">
+                                                <span className="truncate font-semibold">{p.nome}</span>
+                                                {multiplas && <span className="truncate text-xs font-normal text-tinta-3">{lojaDoVendedor.get(p.id) ?? '—'}</span>}
+                                            </span>
+                                        </span>,
                                         nota === null
                                             ? <span key="n" className="text-[12.5px] italic">{r ? 'sem nota' : 'sem dado'}</span>
                                             : <span key="n" className="flex items-center gap-2.5"><span className="display num w-7 text-base font-bold">{nota}</span><span className="grow"><Barra pct={nota} tom={tomFaixa(nota, 50, 65)} rotulo={`Nota de ${p.nome}`} /></span>{atrasado && <span className="text-[11px] text-atencao-texto">{diaMes(r.data_ref)}</span>}</span>,
@@ -173,6 +190,7 @@ export async function VisaoUnidade({ supabase, unidadeId, nomeUnidade, titulo, v
                                         <span className="flex items-center gap-3">
                                             <Avatar nome={p.nome} tamanho={32} />
                                             <span className="flex min-w-0 grow flex-col"><span className="truncate text-sm font-semibold">{p.nome}</span>
+                                                {multiplas && <span className="truncate text-xs text-tinta-3">{lojaDoVendedor.get(p.id) ?? '—'}</span>}
                                                 <span className="text-xs text-tinta-3">{nota === null ? 'sem nota' : `nota ${nota}`}{variacao !== null && ` · ${setaDoTom(tomDelta(variacao, 'maior'))} ${Math.abs(variacao)} na semana`}</span></span>
                                             {seloConexao}
                                         </span>
@@ -192,8 +210,11 @@ export async function VisaoUnidade({ supabase, unidadeId, nomeUnidade, titulo, v
                         ) : sugestoes.map((s) => (
                             <div key={s.pessoa.id} className="flex flex-col gap-2 rounded-[10px] bg-fundo p-4">
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="text-sm font-bold">{s.pessoa.nome}</span>
-                                    <span className="text-[12.5px] font-bold text-risco-texto">▼ {Math.abs(s.queda)} na semana</span>
+                                    <span className="flex min-w-0 flex-col">
+                                        <span className="truncate text-sm font-bold">{s.pessoa.nome}</span>
+                                        {multiplas && <span className="truncate text-xs font-normal text-tinta-3">{lojaDoVendedor.get(s.pessoa.id) ?? '—'}</span>}
+                                    </span>
+                                    <span className="shrink-0 text-[12.5px] font-bold text-risco-texto">▼ {Math.abs(s.queda)} na semana</span>
                                 </div>
                                 <p className="text-[13px] leading-relaxed text-tinta-2">
                                     {s.etapaFraca ? `${s.etapaFraca.nome} em ${s.etapaFraca.pct}% no último relatório do MEC.` : 'Nota caindo sem uma etapa do MEC abaixo das outras.'}

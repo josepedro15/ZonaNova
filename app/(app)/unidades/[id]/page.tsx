@@ -13,7 +13,7 @@ export default async function UnidadePage({ params }: { params: Promise<{ id: st
     if (!u) notFound();
     return (
         <Shell papel={perfil.role} nome={perfil.nome} unidade={perfil.unidade} atual="/unidades">
-            <VisaoUnidade supabase={supabase} unidadeId={u.id} nomeUnidade={[u.cidade, u.uf].filter(Boolean).join(' · ') || 'Loja'}
+            <VisaoUnidade supabase={supabase} unidadeIds={[u.id]} nomeUnidade={[u.cidade, u.uf].filter(Boolean).join(' · ') || 'Loja'}
                           titulo={u.nome} voltar={{ href: '/unidades', rotulo: 'Rede' }} />
         </Shell>
     );
