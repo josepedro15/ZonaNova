@@ -69,6 +69,7 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
         .sort((a, b) => Number(b.l?.score_geral ?? -1) - Number(a.l?.score_geral ?? -1));
 
     const variacaoRede = atual ? variacaoDoPeriodo(serieRede, (r) => r.score_geral, atual.data_ref, JANELA) : null;
+    const temNota = atual?.score_geral != null;
     const cx = conexoes ?? [];
     const conectadas = cx.filter((c) => c.status === 'conectada').length;
     const fora = cx.filter((c) => c.status !== 'conectada');
@@ -86,13 +87,13 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                         <span className="text-[13px] text-white/75">Nota da rede · {JANELA} dias</span>
                         <span className="flex items-baseline gap-3">
                             <Numero valor={atual?.score_geral == null ? '—' : Math.round(Number(atual.score_geral))} tamanho="xl" />
-                            {variacaoRede !== null && (
+                            {temNota && variacaoRede !== null && (
                                 <span className="rounded-full bg-white/12 px-2.5 py-1 text-[13px] font-semibold">
                                     {setaDoTom(tomDelta(Math.round(variacaoRede), 'maior'))} {Math.abs(Math.round(variacaoRede))}
                                 </span>
                             )}
                         </span>
-                        {atual?.score_geral != null && (
+                        {temNota && (
                             <span className="text-[13px] text-white/75">
                                 {variacaoRede !== null ? `vs. os ${JANELA} dias anteriores` : `sem ${JANELA} dias anteriores para comparar`}
                             </span>
