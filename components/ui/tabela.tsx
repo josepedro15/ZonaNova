@@ -35,8 +35,9 @@ export function Tabela({ titulo, acao, colunas, grade, linhas, vazio, larguraMin
                         {linhas.map((l) => {
                             const cor = l.atenuada ? 'bg-fundo/60 text-tinta-3' : '';
                             const celulas = l.celulas.map((c, i) => <span key={i} className="min-w-0">{c}</span>);
-                            const linhaGrade = `${grid} items-center gap-3 border-t border-linha-2 px-5 py-3.5 text-sm lg:px-6 ${cor} ${l.href ? 'hover:bg-fundo' : ''}`;
-                            const resumo = compacta && (
+                            const temResumo = compacta && l.resumo !== undefined;
+                            const linhaGrade = `${temResumo ? 'hidden sm:grid' : 'grid'} items-center gap-3 border-t border-linha-2 px-5 py-3.5 text-sm lg:px-6 ${cor} ${l.href ? 'hover:bg-fundo' : ''}`;
+                            const resumo = temResumo && (
                                 <div className={`border-t border-linha-2 px-5 py-3 sm:hidden ${cor}`}>{l.resumo}</div>
                             );
                             if (l.href) {

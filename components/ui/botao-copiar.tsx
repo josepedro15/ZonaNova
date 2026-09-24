@@ -16,7 +16,7 @@ export function BotaoCopiar({ texto }: { texto: string }) {
                         setCopiado(false);
                     }
                 }}
-                className="inline-flex min-h-9 items-center gap-1.5 self-start rounded-ctl border border-linha bg-superficie px-3 text-[13px] font-semibold text-azul">
+                className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-ctl border border-linha bg-superficie px-3 text-[13px] font-semibold text-azul">
             <Icone nome={copiado ? 'check' : 'copiar'} tamanho={14} />{copiado ? 'Copiado' : 'Copiar texto'}
         </button>
     );

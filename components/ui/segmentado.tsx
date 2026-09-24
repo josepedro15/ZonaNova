@@ -9,7 +9,7 @@ export function Segmentado({ rotulo, opcoes, atual, base, param }: {
         <nav aria-label={rotulo} className="inline-flex rounded-[10px] border border-linha bg-superficie p-[3px]">
             {opcoes.map((o) => (
                 <Link key={o.valor} href={`${base}?${param}=${o.valor}` as Route} aria-current={o.valor === atual ? 'page' : undefined}
-                      className={`flex min-h-9 items-center rounded-[7px] px-3.5 text-[13px] font-semibold ${o.valor === atual ? 'bg-azul text-white' : 'text-tinta-2 hover:bg-superficie-2'}`}>
+                      className={`flex min-h-11 items-center rounded-[7px] px-3.5 text-[13px] font-semibold ${o.valor === atual ? 'bg-azul text-white' : 'text-tinta-2 hover:bg-superficie-2'}`}>
                     {o.rotulo}
                 </Link>
             ))}
