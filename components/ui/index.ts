@@ -20,3 +20,4 @@ export { Alerta } from './alerta';
 export { Sparkline } from './sparkline';
 export { GraficoLinhas, type SerieGrafico } from './grafico-linhas';
 export { BotaoCopiar } from './botao-copiar';
+export { default as Shell, type Papel } from './shell';
