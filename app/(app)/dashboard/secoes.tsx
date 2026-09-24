@@ -159,11 +159,11 @@ export function HojeAteAgora({ className = '', conversas, respostaMedia, respost
     return (
         <Cartao className={`flex flex-col ${className}`}>
             <h3 className="display mb-2 text-lg font-bold">Hoje até agora</h3>
-            <LinhaHoje rotulo="Conversas" detalhe={mediaLeads === null ? undefined : `sua média: ${Math.round(mediaLeads)} leads por dia`} valor={<Numero valor={conversas} />} />
+            <LinhaHoje rotulo="Conversas" detalhe={mediaLeads === null ? 'sem histórico para comparar ainda' : `sua média: ${Math.round(mediaLeads)} leads por dia`} valor={<Numero valor={conversas} />} />
             <LinhaHoje rotulo="Resposta média"
-                       detalhe={respostaMedia !== null && respostaOntemMin !== null
+                       detalhe={respostaMedia === null ? undefined : respostaOntemMin !== null
                            ? <Comparacao delta={respostaMedia - respostaOntemMin} melhorQuando="menor">{comparaTempo(respostaMedia, respostaOntemMin, 'ontem')}</Comparacao>
-                           : undefined}
+                           : 'ontem não teve relatório para comparar'}
                        valor={<Numero valor={respostaMedia ?? '—'} unidade={respostaMedia === null ? undefined : ' min'} />} />
             <LinhaHoje rotulo="Clientes respondidos" detalhe={escreveram > 0 ? `${respondidos} de ${escreveram} que escreveram hoje` : undefined}
                        valor={<Numero valor={taxa ?? '—'} unidade={taxa === null ? undefined : '%'} />}>
@@ -204,14 +204,15 @@ export function RelatorioDoDia({ relatorio, variacao, historico, mediaLeads, med
                 <span className="text-xs leading-relaxed text-white/65">14 dias. Tracejado: dia só com suporte ou social, sem nota. Só negociação entra na nota.</span>
             </Cartao>
             <div className="grid grid-cols-2 gap-3 lg:col-span-8 lg:gap-5">
-                <Kpi rotulo="Leads atendidos" valor={relatorio.leads_atendidos} legenda={mediaLeads === null ? undefined : `sua média: ${Math.round(mediaLeads)} por dia`} />
+                <Kpi rotulo="Leads atendidos" valor={relatorio.leads_atendidos} legenda={mediaLeads === null ? 'sem histórico para comparar ainda' : `sua média: ${Math.round(mediaLeads)} por dia`} />
                 <Kpi rotulo="Conversões" valor={relatorio.conversoes_confirmadas} legenda="identificadas pela IA na conversa" />
                 <Kpi rotulo="Oportunidades perdidas" valor={relatorio.oportunidades_perdidas}
-                     legenda={<Link href="/conversas" className="font-semibold text-azul">Ver conversas →</Link>} />
+                     legenda={<Link href="/conversas" className="inline-flex min-h-11 items-center font-semibold text-azul">Ver conversas →</Link>} />
                 <Kpi rotulo="Resposta média" valor={respostaMin ?? '—'} unidade={respostaMin === null ? undefined : ' min'}
                      comparacao={respostaMin !== null && mediaRespostaMin !== null
                          ? <Comparacao delta={respostaMin - Math.round(mediaRespostaMin)} melhorQuando="menor">{comparaTempo(respostaMin, mediaRespostaMin)}</Comparacao>
-                         : undefined} />
+                         : undefined}
+                     legenda={respostaMin !== null && mediaRespostaMin === null ? 'sem histórico para comparar ainda' : undefined} />
             </div>
         </div>
     );
