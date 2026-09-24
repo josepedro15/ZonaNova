@@ -120,7 +120,7 @@ test('na conversa, cada evidência grifa só a primeira mensagem onde aparece', 
 });
 
 test('grifa trecho entre aspas curvas', () => {
-    assert.deepEqual(grifar('Bom dia! É obra nova ou repintura?', ['"é obra nova ou repintura?"'])[1],
+    assert.deepEqual(grifar('Bom dia! É obra nova ou repintura?', ['“é obra nova ou repintura?”'])[1], 
         { texto: 'É obra nova ou repintura?', grifo: 1 });
 });
 
