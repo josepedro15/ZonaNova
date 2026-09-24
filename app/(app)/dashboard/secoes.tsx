@@ -107,7 +107,7 @@ export function EsperandoVoce({ className = '', titulo, esperando }: {
     return (
         <Cartao className={`flex flex-col gap-2 ${className}`}>
             <div>
-                <h3 className="display flex items-center gap-2.5 text-lg font-bold">{titulo}{esperando.length > 0 && <Selo tom="risco">{esperando.length}</Selo>}</h3>
+                <h3 className="display flex items-center gap-2.5 text-lg font-bold">{titulo}{esperando.length > 0 && <Selo tom={tomEspera(esperando[0].espera)}>{esperando.length}</Selo>}</h3>
                 <p className="mt-1 text-[13px] text-tinta-3">
                     {esperando.length ? 'O cliente falou por último e ninguém respondeu. Quem espera há mais tempo vem primeiro.' : 'Ninguém esperando resposta agora.'}
                 </p>

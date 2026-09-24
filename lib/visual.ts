@@ -29,6 +29,11 @@ export function tomDelta(delta: number | null, melhorQuando: Sentido): Tom {
     return (melhorQuando === 'maior') === (delta > 0) ? 'bom' : 'risco';
 }
 
+/** Tempo médio de resposta de uma pessoa ou loja: acima de 15 min pede atenção. */
+export function tomResposta(minutos: number): Tom {
+    return minutos > 15 ? 'atencao' : 'neutro';
+}
+
 /** A seta acompanha a cor: quem não distingue as cores lê a seta. */
 export function setaDoTom(tom: Tom): '▲' | '▼' | '=' {
     if (tom === 'bom') return '▲';
@@ -132,15 +137,4 @@ export function caminhoSvg(pontos: readonly ([number, number] | null)[]): string
         aberto = true;
     }
     return partes.join(' ');
-}
-
-/** Empurra para baixo rótulos que ficariam a menos de `distancia` um do outro. */
-export function afastarRotulos(ys: readonly number[], distancia: number): number[] {
-    const ordem = ys.map((y, i) => ({ y, i })).sort((a, b) => a.y - b.y);
-    for (let k = 1; k < ordem.length; k++) {
-        if (ordem[k].y - ordem[k - 1].y < distancia) ordem[k].y = ordem[k - 1].y + distancia;
-    }
-    const saida = new Array<number>(ys.length);
-    for (const o of ordem) saida[o.i] = o.y;
-    return saida;
 }

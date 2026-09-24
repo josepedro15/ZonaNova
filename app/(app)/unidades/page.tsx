@@ -2,7 +2,7 @@ import { Alerta, CabecalhoPagina, Cartao, GraficoLinhas, Numero, Pagina, Segment
 import { contextoApp, dataCurta, dataHoje } from '@/lib/contexto-app';
 import { paginar } from '@/lib/paginar';
 import { destaquesDaRede, diaMenos, serieSemanal, variacaoDoPeriodo } from '@/lib/derivacoes';
-import { setaDoTom, tomDelta, type Sentido } from '@/lib/visual';
+import { setaDoTom, tomDelta, tomResposta, type Sentido } from '@/lib/visual';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,7 +70,10 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
 
     const variacaoRede = atual ? variacaoDoPeriodo(serieRede, (r) => r.score_geral, atual.data_ref, JANELA) : null;
     const temNota = atual?.score_geral != null;
-    const cx = conexoes ?? [];
+    // Vendedor desativado ou loja fechada não conta aqui: inflaria "fora do
+    // ar" com gente que já saiu e apareceria como "Vendedor · " sem nome.
+    const idsAtivos = new Set((pessoas ?? []).map((p) => p.id));
+    const cx = (conexoes ?? []).filter((c) => idsAtivos.has(c.user_id) && lojaDe.has(c.unidade_id));
     const conectadas = cx.filter((c) => c.status === 'conectada').length;
     const fora = cx.filter((c) => c.status !== 'conectada');
 
@@ -84,7 +87,7 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
 
                 <div className="grid gap-5 lg:grid-cols-12">
                     <Cartao variante="heroi" className="flex flex-col gap-3 lg:col-span-4">
-                        <span className="text-[13px] text-white/75">Nota da rede · {JANELA} dias</span>
+                        <span className="text-[13px] text-white/75">{atual ? `Nota da rede · ${dataCurta(`${atual.data_ref}T12:00:00-03:00`)}` : 'Nota da rede'}</span>
                         <span className="flex items-baseline gap-3">
                             <Numero valor={atual?.score_geral == null ? '—' : Math.round(Number(atual.score_geral))} tamanho="xl" />
                             {temNota && variacaoRede !== null && (
@@ -95,7 +98,7 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                         </span>
                         {temNota && (
                             <span className="text-[13px] text-white/75">
-                                {variacaoRede !== null ? `vs. os ${JANELA} dias anteriores` : `sem ${JANELA} dias anteriores para comparar`}
+                                {variacaoRede !== null ? `média de ${JANELA} dias vs. os ${JANELA} anteriores` : `sem ${JANELA} dias anteriores para comparar`}
                             </span>
                         )}
                         <Sparkline invertida rotulo="Nota da rede nos últimos 60 dias" valores={[...serieRede].reverse().map((r) => (r.score_geral == null ? null : Number(r.score_geral)))} />
@@ -125,6 +128,7 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                                     const tom = tomDelta(v === null ? null : Math.round(v), ind.melhorQuando);
                                     const nota = l?.score_geral == null ? null : Math.round(Number(l.score_geral));
                                     const resp = l?.tempo_medio_resposta_s == null ? null : Math.round(Number(l.tempo_medio_resposta_s) / 60);
+                                    const respTom = resp === null ? null : tomResposta(resp);
                                     const gestor = gestorDe.get(u.id);
                                     const variacao = v === null ? <span key="v">—</span> : <span key="v" className={`font-semibold ${TEXTO[tom]}`}>{setaDoTom(tom)} {ind.formato(Math.abs(v))}</span>;
                                     return {
@@ -139,7 +143,10 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                                             <span key="d" className="num">{l?.vendedores_ativos ?? '—'}</span>,
                                             <span key="l" className="num">{l?.leads_atendidos ?? '—'}</span>,
                                             <span key="c" className="num">{l?.conversoes_confirmadas ?? '—'}</span>,
-                                            <span key="r" className={`num ${resp !== null && resp > 15 ? 'font-semibold text-atencao-texto' : ''}`}>{resp === null ? '—' : `${resp} min`}</span>,
+                                            <span key="r" className={`num ${respTom === 'atencao' ? 'font-semibold text-atencao-texto' : ''}`}>
+                                                {resp === null ? '—' : `${resp} min`}
+                                                {respTom === 'atencao' && <span className="text-[11px] text-atencao-texto"> · lenta</span>}
+                                            </span>,
                                             variacao,
                                         ],
                                         resumo: (
@@ -180,9 +187,16 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                                 <span className="bg-azul" style={{ width: `${cx.length ? (conectadas / cx.length) * 100 : 0}%` }} />
                                 <span className="bg-risco" style={{ width: `${cx.length ? (fora.length / cx.length) * 100 : 0}%` }} />
                             </div>
-                            {fora.length === 0 ? <p className="text-[13px] text-tinta-2">Todos os números conectados.</p> : fora.slice(0, 6).map((c) => (
+                            {cx.length === 0 ? (
+                                <p className="text-[13px] text-tinta-3">Nenhum número conectado à rede ainda.</p>
+                            ) : fora.length === 0 ? (
+                                <p className="text-[13px] text-tinta-2">Todos os números conectados.</p>
+                            ) : fora.slice(0, 6).map((c) => (
                                 <div key={c.user_id} className="flex items-center justify-between gap-2 border-t border-linha-2 pt-2 text-[13px]">
-                                    <span className="min-w-0 truncate"><strong>{nomeDe.get(c.user_id) ?? 'Vendedor'}</strong> <span className="text-tinta-3">· {lojaDe.get(c.unidade_id) ?? ''}</span></span>
+                                    <span className="min-w-0 truncate">
+                                        <strong>{nomeDe.get(c.user_id) ?? 'Vendedor'}</strong>
+                                        {lojaDe.get(c.unidade_id) && <span className="text-tinta-3"> · {lojaDe.get(c.unidade_id)}</span>}
+                                    </span>
                                     <span className="shrink-0 font-semibold text-risco-texto">{c.ultimo_evento_em ? `desde ${dataCurta(c.ultimo_evento_em)}` : 'nunca conectou'}</span>
                                 </div>
                             ))}

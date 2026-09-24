@@ -1,11 +1,11 @@
 import { notFound } from 'next/navigation';
 import {
-    Avatar, Barra, Botao, BotaoCopiar, BotaoLink, CabecalhoPagina, Cartao, Numero, Pagina, Selo, Shell,
+    Avatar, Barra, Botao, BotaoCopiar, BotaoLink, CabecalhoPagina, Cartao, Numero, Pagina, SELO, Selo, Shell,
 } from '@/components/ui';
 import { contextoApp, dataCurta } from '@/lib/contexto-app';
 import { esperaDoCliente, esperaEmTexto, semTelefone, telefoneBonito } from '@/lib/painel';
 import { aderenciaPercentual } from '@/lib/analise';
-import { grifarConversa, type Tom } from '@/lib/visual';
+import { grifarConversa, tomEspera, type Tom } from '@/lib/visual';
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
 import { contestarAderencia } from '@/app/actions/gestao';
 import { bloquearContato } from '@/app/actions/conexao';
@@ -122,7 +122,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                         </div>
                         <Transcricao mensagens={mensagens} grifos={grifos} />
                         {espera !== null && (
-                            <p className="flex items-center gap-2.5 rounded-[10px] bg-risco-sof px-3.5 py-3 text-[13.5px] font-semibold text-risco-texto">
+                            <p className={`flex items-center gap-2.5 rounded-[10px] px-3.5 py-3 text-[13.5px] font-semibold ${SELO[tomEspera(espera)]}`}>
                                 O cliente falou por último. Sem resposta há {esperaEmTexto(espera)}.
                             </p>
                         )}
@@ -136,7 +136,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                             </Cartao>
                         ) : (
                             <>
-                                {payload.proxima_acao && (
+                                {payload.proxima_acao ? (
                                     <Cartao variante="heroi" className="flex flex-col gap-3.5">
                                         <span className="text-xs font-bold uppercase tracking-[0.09em] text-white/75">Próxima ação</span>
                                         <p className="display text-[17px] font-bold leading-snug">{payload.proxima_acao}</p>
@@ -148,7 +148,15 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                             </div>
                                         )}
                                     </Cartao>
-                                )}
+                                ) : payload.script_sugerido ? (
+                                    // Sem próxima ação, o script ainda é útil: sem isto, ele sumia da tela
+                                    // (regressão vs. a versão antiga desta página).
+                                    <Cartao className="flex flex-col gap-2.5">
+                                        <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-azul">Responda assim</span>
+                                        <p className="text-sm leading-relaxed">{payload.script_sugerido}</p>
+                                        <BotaoCopiar texto={payload.script_sugerido} />
+                                    </Cartao>
+                                ) : null}
 
                                 <Cartao className="flex flex-col gap-4">
                                     <div className="flex flex-wrap gap-1.5">
@@ -204,7 +212,11 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                                             <span className="text-[13.5px] font-semibold">{NOMES_ETAPA[a.etapa as Etapa] ?? a.etapa}</span>
                                                             <span className="text-xs text-tinta-3">{a.justificativa}</span>
                                                         </div>
-                                                        <Selo tom={selo.tom} className={selo.tracejado ? 'border border-dashed border-linha-campo bg-superficie' : ''}>{selo.rotulo}</Selo>
+                                                        {selo.tracejado ? (
+                                                            <span className="inline-flex items-center whitespace-nowrap rounded-full border border-dashed border-linha-campo bg-superficie px-2.5 py-1 text-xs font-semibold text-tinta-2">{selo.rotulo}</span>
+                                                        ) : (
+                                                            <Selo tom={selo.tom}>{selo.rotulo}</Selo>
+                                                        )}
                                                     </div>
                                                     {veredito && <span className="text-xs font-semibold text-azul">Contestada — {veredito === 'pendente' ? 'aguardando revisão' : veredito}</span>}
                                                     {podeContestar && veredito !== 'pendente' && (
@@ -213,7 +225,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                                             <label className="sr-only" htmlFor={`motivo-${a.id}`}>Motivo da contestação</label>
                                                             <input id={`motivo-${a.id}`} required name="motivo" placeholder="Contestar esta marcação…"
                                                                    className="min-h-11 min-w-0 flex-1 rounded-ctl border border-linha-campo px-2.5 text-xs" />
-                                                            <Botao variante="texto" type="submit" className="text-xs">Enviar</Botao>
+                                                            <Botao variante="texto" type="submit">Enviar</Botao>
                                                         </form>
                                                     )}
                                                 </div>

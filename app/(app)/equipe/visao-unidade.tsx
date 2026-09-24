@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import {
-    Alerta, Avatar, Barra, CabecalhoPagina, Cartao, Comparacao, Kpi, Numero, Pagina, Selo, Tabela, TEXTO,
+    Alerta, Avatar, Barra, CabecalhoPagina, Cartao, Comparacao, Kpi, Pagina, Selo, Tabela, TEXTO,
 } from '@/components/ui';
 import { dataHoje, type contextoApp } from '@/lib/contexto-app';
 import { esperaDoCliente, juntarPorDia, type LinhaDia, type Msg } from '@/lib/painel';
 import { comQuemFalar, contarObjecoes, diaMenos, variacaoSemanal, type NotaDia } from '@/lib/derivacoes';
-import { setaDoTom, tomDelta, tomFaixa } from '@/lib/visual';
+import { setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
 
 type Supabase = Awaited<ReturnType<typeof contextoApp>>['supabase'];
 type Diario = NotaDia & { user_id: string; leads_atendidos: number; conversoes_confirmadas: number; tempo_medio_resposta_s: number | null };
@@ -108,6 +108,15 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     const perdidas = ultimo?.oportunidades_perdidas ?? null;
     const sobre = [nomeUnidade, `${equipe.length} vendedores`, ultimo && `relatório de ${diaMes(ultimo.data_ref)}`].filter(Boolean).join(' · ');
 
+    // Conversões: a seta compara o número absoluto com o dia anterior; a taxa
+    // (% dos leads) é outra informação e vai na legenda, não dentro da seta.
+    const anteriorConv = anterior?.conversoes_confirmadas == null ? null : Number(anterior.conversoes_confirmadas);
+    const deltaConv = conv !== null && anteriorConv !== null ? conv - anteriorConv : null;
+    const taxaConv = conv !== null && leads ? `${((conv / leads) * 100).toFixed(1).replace('.', ',')}% dos leads` : null;
+    const legendaConv = taxaConv ?? (conv !== null && deltaConv === null ? 'sem dia anterior para comparar' : undefined);
+    const anteriorPerdidas = anterior?.oportunidades_perdidas == null ? null : Number(anterior.oportunidades_perdidas);
+    const deltaPerdidas = perdidas !== null && anteriorPerdidas !== null ? perdidas - anteriorPerdidas : null;
+
     // Número nunca vem solto (constraint global): quando a comparação/legenda
     // natural do Kpi ficaria vazia mas o valor é um número real, cai numa
     // legenda de ausência em vez de deixar o número sozinho.
@@ -145,11 +154,11 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                 <Kpi rotulo="Leads atendidos" valor={leads ?? '—'}
                      legenda={legendaLeads ?? (leads !== null ? 'sem dia anterior para comparar' : undefined)} />
                 <Kpi rotulo="Conversões" valor={conv ?? '—'}
-                     comparacao={conv !== null && anterior ? <Comparacao delta={conv - Number(anterior.conversoes_confirmadas ?? 0)}>{leads ? `${((conv / leads) * 100).toFixed(1).replace('.', ',')}% dos leads` : 'vs. o dia anterior'}</Comparacao> : undefined}
-                     legenda={conv !== null && !anterior ? 'sem dia anterior para comparar' : undefined} />
+                     comparacao={deltaConv !== null ? <Comparacao delta={deltaConv}>{`${Math.abs(deltaConv)} vs. o dia anterior`}</Comparacao> : undefined}
+                     legenda={legendaConv} />
                 <Kpi rotulo="Perdidas" valor={perdidas ?? '—'}
-                     comparacao={ultimo && anterior ? <Comparacao delta={Number(ultimo.oportunidades_perdidas ?? 0) - Number(anterior.oportunidades_perdidas ?? 0)} melhorQuando="menor">vs. o dia anterior</Comparacao> : undefined}
-                     legenda={perdidas !== null && !anterior ? 'sem dia anterior para comparar' : undefined} />
+                     comparacao={deltaPerdidas !== null ? <Comparacao delta={deltaPerdidas} melhorQuando="menor">vs. o dia anterior</Comparacao> : undefined}
+                     legenda={perdidas !== null && deltaPerdidas === null ? 'sem dia anterior para comparar' : undefined} />
                 <Kpi rotulo="Resposta média" valor={minutos(ultimo?.tempo_medio_resposta_s) ?? '—'} unidade={ultimo?.tempo_medio_resposta_s == null ? undefined : ' min'} legenda="média ponderada por leads" />
             </section>
 
@@ -163,6 +172,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                                 const cx = conexao.get(p.id);
                                 const ligado = cx?.status === 'conectada';
                                 const resp = minutos(r?.tempo_medio_resposta_s);
+                                const respTom = resp === null ? null : tomResposta(resp);
                                 const atrasado = r && ultimo && r.data_ref !== ultimo.data_ref;
                                 const seloConexao = <Selo tom={ligado ? 'bom' : 'risco'} ponto>{ligado ? 'Conectado' : 'Fora do ar'}</Selo>;
                                 return {
@@ -182,7 +192,10 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                                             : <span key="n" className="flex items-center gap-2.5"><span className="display num w-7 text-base font-bold">{nota}</span><span className="grow"><Barra pct={nota} tom={tomFaixa(nota, 50, 65)} rotulo={`Nota de ${p.nome}`} /></span>{atrasado && <span className="text-[11px] text-atencao-texto">{diaMes(r.data_ref)}</span>}</span>,
                                         <span key="l" className="num">{r?.leads_atendidos ?? '—'}</span>,
                                         <span key="c" className="num">{r?.conversoes_confirmadas ?? '—'}</span>,
-                                        <span key="r" className={`num ${resp !== null && resp > 15 ? 'font-semibold text-atencao-texto' : ''}`}>{resp === null ? '—' : `${resp} min`}</span>,
+                                        <span key="r" className={`num ${respTom === 'atencao' ? 'font-semibold text-atencao-texto' : ''}`}>
+                                            {resp === null ? '—' : `${resp} min`}
+                                            {respTom === 'atencao' && <span className="text-[11px] text-atencao-texto"> · lenta</span>}
+                                        </span>,
                                         variacao === null ? <span key="t">—</span> : <span key="t" className={`font-semibold ${TEXTO[tomDelta(variacao, 'maior')]}`}>{setaDoTom(tomDelta(variacao, 'maior'))} {Math.abs(variacao)}</span>,
                                         <span key="x">{seloConexao}</span>,
                                     ],
@@ -232,7 +245,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                             <div key={o.objecao} className="grid grid-cols-[120px_minmax(0,1fr)_28px] items-center gap-2.5 text-[13px]">
                                 <span className="truncate">{o.objecao}</span>
                                 <Barra pct={(o.total / maiorObjecao) * 100} rotulo={o.objecao} />
-                                <Numero valor={o.total} tamanho="md" className="text-right text-sm" />
+                                <span className="display num text-right text-sm font-bold">{o.total}</span>
                             </div>
                         ))}
                     </Cartao>

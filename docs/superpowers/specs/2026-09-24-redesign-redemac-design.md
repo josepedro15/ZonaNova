@@ -54,7 +54,7 @@ para que a hierarquia deixe de depender de cada página acertar sozinha.
 | `superficie-2` | `#F0F3F8` | avatar, chip neutro, cabeçalho de tabela |
 | `linha` / `linha-2` | `#E3E7EF` / `#EEF1F5` | borda de cartão / divisória interna |
 | `linha-campo` | `#C5CCD8` | borda de input, tracejado |
-| `tinta` / `tinta-2` / `tinta-3` | `#0E1726` / `#4A5568` / `#6B7589` | texto (tinta-3 ≥ 4.5:1 sobre branco) |
+| `tinta` / `tinta-2` / `tinta-3` | `#0E1726` / `#4A5568` / `#626C80` | texto (tinta-3 ≥ 4.5:1 sobre branco) |
 | `bom` / `bom-sof` / `bom-texto` | `#0B7A6E` / `#E3F4F1` / `#0B6A60` | acima da média, respondida, conectado |
 | `bom-claro` | `#4CC9B0` | ponto de "conectado" sobre o azul da sidebar |
 | `atencao` / `atencao-sof` / `atencao-texto` | `#B26B00` / `#FDF1DC` / `#8A5300` | espera 30 min–2 h, queda leve |

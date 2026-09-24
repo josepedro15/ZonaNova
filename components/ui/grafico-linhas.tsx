@@ -1,12 +1,14 @@
-import { afastarRotulos, caminhoSvg } from '@/lib/visual';
+import { caminhoSvg } from '@/lib/visual';
 
 export type SerieGrafico = { id: string; nome: string; valores: (number | null)[]; destaque?: 'azul' | 'risco' };
 
-const X0 = 8, X1 = 590, Y0 = 16, Y1 = 196;
+const X0 = 8, X1 = 772, Y0 = 16, Y1 = 196;
 
 /**
  * Linhas por loja. Só as séries com `destaque` ganham cor; as outras ficam
- * cinza, para o gráfico não virar arco-íris. O rótulo vai no fim de cada linha.
+ * cinza, para o gráfico não virar arco-íris. Os rótulos não vão mais dentro
+ * do SVG (ilegíveis em telas estreitas e cortados com muitas lojas): viram
+ * uma legenda em HTML abaixo do gráfico, com as séries em destaque primeiro.
  */
 export function GraficoLinhas({ series, formato, rotulosX, rotulo }: {
     series: SerieGrafico[]; formato: (n: number) => string; rotulosX: [string, string]; rotulo: string;
@@ -23,7 +25,12 @@ export function GraficoLinhas({ series, formato, rotulosX, rotulo }: {
         for (let i = s.valores.length - 1; i >= 0; i--) { const v = s.valores[i]; if (v !== null) return [{ s, v }]; }
         return [];
     });
-    const ys = afastarRotulos(finais.map((f) => y(f.v) + 4), 14);
+    // Legenda: destaque azul, depois risco, depois as cinzas por ordem alfabética.
+    const ordem = (t?: 'azul' | 'risco') => (t === 'azul' ? 0 : t === 'risco' ? 1 : 2);
+    const legenda = [...finais].sort((a, b) => {
+        const d = ordem(a.s.destaque) - ordem(b.s.destaque);
+        return d !== 0 ? d : a.s.nome.localeCompare(b.s.nome, 'pt-BR');
+    });
     return (
         <figure className="m-0">
             <svg viewBox="0 0 780 212" className="h-auto w-full" role="img" aria-label={rotulo}>
@@ -33,14 +40,16 @@ export function GraficoLinhas({ series, formato, rotulosX, rotulo }: {
                           strokeWidth={s.destaque ? 3 : 2} strokeLinecap="round" strokeLinejoin="round"
                           className={s.destaque === 'azul' ? 'stroke-azul' : s.destaque === 'risco' ? 'stroke-risco' : 'stroke-linha-campo'} />
                 ))}
-                {finais.map((f, k) => (
-                    <text key={f.s.id} x={X1 + 12} y={ys[k]}
-                          className={`text-[12px] ${f.s.destaque === 'azul' ? 'fill-azul font-bold' : f.s.destaque === 'risco' ? 'fill-risco-texto font-bold' : 'fill-tinta-2'}`}>
-                        {f.s.nome} {formato(f.v)}{f.s.destaque === 'risco' ? ' ▼' : f.s.destaque === 'azul' ? ' ▲' : ''}
-                    </text>
-                ))}
             </svg>
-            <figcaption className="flex w-3/4 justify-between text-xs text-tinta-3"><span>{rotulosX[0]}</span><span>{rotulosX[1]}</span></figcaption>
+            <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+                {legenda.map(({ s, v }) => (
+                    <li key={s.id} className={`flex items-center gap-1.5 ${s.destaque === 'azul' ? 'font-bold text-azul' : s.destaque === 'risco' ? 'font-bold text-risco-texto' : 'text-tinta-2'}`}>
+                        <span className={`h-[3px] w-4 rounded ${s.destaque === 'azul' ? 'bg-azul' : s.destaque === 'risco' ? 'bg-risco' : 'bg-linha-campo'}`} aria-hidden="true" />
+                        {s.nome} {formato(v)}{s.destaque === 'risco' ? ' ▼' : s.destaque === 'azul' ? ' ▲' : ''}
+                    </li>
+                ))}
+            </ul>
+            <figcaption className="mt-2 flex w-full justify-between text-xs text-tinta-3"><span>{rotulosX[0]}</span><span>{rotulosX[1]}</span></figcaption>
         </figure>
     );
 }

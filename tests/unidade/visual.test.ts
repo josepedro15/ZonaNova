@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    afastarRotulos, caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, media,
-    setaDoTom, tomDelta, tomEspera, tomFaixa,
+    caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, media,
+    setaDoTom, tomDelta, tomEspera, tomFaixa, tomResposta,
 } from '../../lib/visual.ts';
 
 const MIN = 60 * 1000;
@@ -130,6 +130,9 @@ test('caminho SVG recomeça depois de um buraco', () => {
     assert.equal(caminhoSvg([[0, 10], [5, 20], null, [15, 5]]), 'M0 10 L5 20 M15 5');
 });
 
-test('rótulos próximos são afastados, mantendo a ordem original', () => {
-    assert.deepEqual(afastarRotulos([100, 60, 104], 14), [100, 60, 114]);
+// --- resposta -------------------------------------------------------------
+
+test('resposta: até 15 min é neutra, acima de 15 pede atenção', () => {
+    assert.equal(tomResposta(15), 'neutro');
+    assert.equal(tomResposta(16), 'atencao');
 });
