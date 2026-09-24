@@ -1,58 +1,81 @@
 @import "tailwindcss";
 
 /* =============================================================================
- * Tokens da direção A — papel quente, tinta petróleo, acento ocre.
- * Os valores saem de design/README.md; a marca da Zona Nova ainda é
- * placeholder, então isto muda quando chegarem logo e cores reais.
+ * Identidade Redemac Zona Nova — valores de rede.zonanova.com.br.
+ * Spec: docs/superpowers/specs/2026-09-24-redesign-redemac-design.md §4.
+ * O verde da marca é só marca: nunca em dado, para não ser lido como "bom".
  * ========================================================================== */
 
 @theme {
-  --color-papel:       #faf8f4;
-  --color-superficie:  #ffffff;
-  --color-tinta:       #161b1d;
-  --color-tinta-2:     #5f686b;
-  --color-tinta-3:     #8a9296;
-  --color-linha:       #e7e2d9;
-  --color-linha-2:     #f0ece4;
+  --color-azul:        #002276;
+  --color-azul-2:      #0B3494;
+  --color-azul-sof:    #E9EEF9;
+  --color-verde-marca: #0F9531;
 
-  --color-petroleo:      #0f5c6b;
-  --color-petroleo-esc:  #0d4b58;
-  --color-petroleo-sof:  #e3f0f2;
-  --color-ocre:          #b8712a;
-  --color-ocre-sof:      #fdf4e7;
-  --color-dourado:       #d9a441;
+  --color-fundo:        #F5F7FA;
+  --color-superficie:   #FFFFFF;
+  --color-superficie-2: #F0F3F8;
+  --color-linha:        #E3E7EF;
+  --color-linha-2:      #EEF1F5;
+  --color-linha-campo:  #C5CCD8;
+  --color-tinta:        #0E1726;
+  --color-tinta-2:      #4A5568;
+  --color-tinta-3:      #6B7589;
 
-  --color-verde:     #2f7d52;  --color-verde-sof:   #e4f2ea;
-  --color-ambar:     #b07d10;  --color-ambar-sof:   #fbf0d8;
-  --color-vermelho:  #b3382f;  --color-vermelho-sof:#fbe8e6;
+  --color-bom:           #0B7A6E;
+  --color-bom-sof:       #E3F4F1;
+  --color-bom-texto:     #0B6A60;
+  --color-bom-claro:     #4CC9B0;
+  --color-atencao:       #B26B00;
+  --color-atencao-sof:   #FDF1DC;
+  --color-atencao-texto: #8A5300;
+  --color-risco:         #C2362B;
+  --color-risco-sof:     #FCE9E7;
+  --color-risco-texto:   #A52C22;
+  --color-evidencia:     #E0A43A;
+  --color-evidencia-sof: #FDF1DC;
 
-  /* Bordas e textos que vivem SOBRE as superfícies suaves acima. Estavam
-   * escritos à mão em hex pelas páginas, o que os deixava de fora de qualquer
-   * troca de marca — o `bg-ocre-sof` mudaria e o texto por cima não. */
-  --color-linha-campo:    #ddd7cc;  /* borda de input */
-  --color-linha-quente:   #f0dfc4;  /* borda sobre ocre-sof / ambar-sof */
-  --color-papel-2:        #f4f1ea;  /* caixa neutra sobre o papel */
-  --color-ocre-texto:     #8a5a22;  /* título sobre ocre-sof */
-  --color-ocre-texto-2:   #4a3a26;  /* corpo sobre ocre-sof */
-  --color-ambar-texto:    #8a6209;  /* texto sobre ambar-sof */
-  --color-vermelho-linha: #f2ccc8;  /* borda sobre vermelho-sof */
-  --color-vermelho-texto: #8f2c25;  /* texto sobre vermelho-sof */
+  /* Apelidos da marca provisória. Existem só para as telas ainda não migradas
+   * saírem na cor nova; somem na fase 5, quando o grep não achar mais uso. */
+  --color-papel:          #F5F7FA;
+  --color-papel-2:        #F0F3F8;
+  --color-petroleo:       #002276;
+  --color-petroleo-esc:   #002276;
+  --color-petroleo-sof:   #E9EEF9;
+  --color-ocre:           #0B3494;
+  --color-ocre-sof:       #E9EEF9;
+  --color-ocre-texto:     #002276;
+  --color-ocre-texto-2:   #1E2B45;
+  --color-dourado:        #E0A43A;
+  --color-linha-quente:   #D5DEF2;
+  --color-verde:          #0B7A6E;
+  --color-verde-sof:      #E3F4F1;
+  --color-ambar:          #B26B00;
+  --color-ambar-sof:      #FDF1DC;
+  --color-ambar-texto:    #8A5300;
+  --color-vermelho:       #C2362B;
+  --color-vermelho-sof:   #FCE9E7;
+  --color-vermelho-linha: #F2CCC8;
+  --color-vermelho-texto: #A52C22;
 
-  /* Pilhas locais: o build de produção não depende da disponibilidade do Google Fonts. */
-  --font-display: 'Avenir Next', Avenir, 'Helvetica Neue', Helvetica, sans-serif;
-  --font-sans:    Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  /* Vêm do node_modules (@fontsource-variable), importadas em app/layout.tsx:
+   * o build não depende de rede. */
+  --font-display: 'Montserrat Variable', Montserrat, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans:    'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
 
   --radius-card: 12px;
+  --radius-ctl:  8px;
   --radius-lg:   14px;
 }
 
 :root { color-scheme: light; }
 
 body {
-  background: var(--color-papel);
+  background: var(--color-fundo);
   color: var(--color-tinta);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-.display { font-family: var(--font-display); letter-spacing: -0.03em; }
+.display { font-family: var(--font-display); letter-spacing: -0.02em; }
+.num { font-variant-numeric: tabular-nums; }

@@ -1,14 +1,11 @@
+import Image from 'next/image';
+import logo from '@/public/marca/logo.png';
+import logoBranco from '@/public/marca/logo-branco.png';
+
 /**
- * A marca, num sítio só.
- *
- * O monograma "ZN", as cores e a tipografia são **placeholder**: não existe
- * logo, paleta nem fonte reais da Zona Nova (ver `design/README.md`). Estavam
- * copiados à mão em quatro páginas, o que faria a troca ser uma caça ao rato.
- * Agora a identidade entra por aqui e pelos tokens de `app/globals.css` — e
- * mais nada precisa mudar.
- *
- * Quando a marca real chegar: trocar o <span>ZN</span> por um <Image> ou <svg>
- * do logo, e os valores dos tokens `petroleo`/`papel`/`--font-display`.
+ * A marca, num sítio só: o logo oficial da Redemac Zona Nova (PNG do site,
+ * 428×204). `invertida` usa a versão de letras brancas, para fundo azul.
+ * A API é a mesma da marca provisória, e as páginas não precisaram mudar.
  */
 export default function Marca({
     tamanho = 'sm',
@@ -21,34 +18,21 @@ export default function Marca({
     legenda?: string;
     invertida?: boolean;
 }) {
-    const grande = tamanho === 'md';
-
-    const simbolo = (
-        <div
-            className={`flex items-center justify-center bg-petroleo ${
-                grande ? 'size-12 rounded-[13px]' : 'size-[26px] rounded-[7px]'
-            }`}
-        >
-            <span className={`display font-bold text-papel ${grande ? 'text-[19px]' : 'text-[13px]'}`}>
-                ZN
-            </span>
-        </div>
+    const largura = tamanho === 'md' ? 168 : 104;
+    const imagem = (
+        <Image src={invertida ? logoBranco : logo} alt="Redemac Zona Nova" width={largura} priority />
     );
-
-    const nome = (
-        <div className={`flex flex-col ${orientacao === 'vertical' ? 'items-center gap-0.5' : ''}`}>
-            <span className={`display font-semibold ${invertida ? 'text-papel' : ''} ${grande ? 'text-[18px]' : 'text-sm'}`}>
-                Zona Nova
-            </span>
-            {legenda && (
-                <span className={`${invertida ? 'text-white/55' : 'text-tinta-3'} ${grande ? 'text-xs' : 'text-[11px]'}`}>{legenda}</span>
-            )}
-        </div>
+    if (!legenda) return imagem;
+    const texto = (
+        <span className={`text-xs ${invertida ? 'text-white/65' : 'text-tinta-3'}`}>{legenda}</span>
     );
-
     return orientacao === 'vertical' ? (
-        <div className="flex flex-col items-center gap-3">{simbolo}{nome}</div>
+        <div className="flex flex-col items-center gap-3">{imagem}{texto}</div>
     ) : (
-        <div className="flex items-center gap-2.5">{simbolo}{nome}</div>
+        <div className="flex items-center gap-3">
+            {imagem}
+            <span className={`h-7 w-px ${invertida ? 'bg-white/25' : 'bg-linha'}`} aria-hidden="true" />
+            {texto}
+        </div>
     );
 }
