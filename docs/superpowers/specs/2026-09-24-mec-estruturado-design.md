@@ -153,7 +153,7 @@ para não quebrar telas nem análises antigas.
 | Tela | O que muda |
 |---|---|
 | `/conversas/[id]`, bloco "MEC nesta conversa" | Cada etapa ganha seu checklist: sondagem com as 7 informações (✓/✕ + trecho no hover/toque); objeções com código do catálogo e os 3 passos (●●○); frases proibidas destacadas; técnica de fechamento. Etapas de seção provisória levam o selo "seção do Book em revisão". |
-| `/meu-mec` (vendedor) | Topo com "Sondagem: 3,4 de 7 informações por conversa". As 7 informações em barras (% das conversas em que capturou), com a mais esquecida em destaque e um exemplo de pergunta tirado do Book. Contador de "Algo mais?" com os trechos. Perguntas abertas × fechadas. |
+| `/meu-mec` (vendedor) | Topo com "Sondagem: 3,4 de 7 informações por conversa". As 7 informações em barras (% das conversas em que capturou), com a mais esquecida em destaque, pelo texto do item do Book. Contador de "Algo mais?" com os trechos. Perguntas abertas × fechadas. |
 | `/equipe/mec` (gestor) | A matriz vendedor × etapa ganha uma segunda matriz **vendedor × informação da sondagem**: coluna fraca = treino coletivo; linha fraca = conversa individual (doc 7 §7.7). |
 | `/equipe`, "Objeções da semana" | Passa a contar por **código do catálogo** (`mec_observacoes`), com "fora do catálogo" separado. O `contarObjecoes` por texto livre fica só como fallback para dias anteriores ao corte. |
 | `/mec` (supervisor) | Colunas novas por unidade: sondagem média, % de contorno completo e distribuição do tipo de fechamento. |
@@ -166,8 +166,12 @@ conversa com sondagem aplicável"), cor sempre com texto, tudo em `components/ui
 - A partir do deploy, as análises novas trazem `mec_detalhe`. As antigas
   ficam sem ele, e as telas mostram "sem detalhe do MEC para este dia" em vez de
   zero.
-- Um corte de data (`MEC_DETALHE_DESDE`, gravado em configuração) evita
-  misturar dias com e sem detalhe numa mesma média.
+- Dia misto (parte das conversas analisada antes do detalhe existir) não
+  distorce a média: a conta da sondagem só considera conversas que **têm** o
+  detalhe gravado e em que a sondagem cabia. Não precisa de data de corte.
+- O detalhe liga por unidade com a variável de ambiente `MEC_DETALHE_UNIDADES`:
+  vazia desliga, `*` liga para todas, senão uma lista de ids de unidade
+  separados por vírgula (usada no piloto).
 - Reprocessar dias antigos usa a ação que já existe no admin
   (`reprocessarDia`). Quanto reprocessar é decisão do usuário (§10).
 
@@ -195,11 +199,11 @@ conversa com sondagem aplicável"), cor sempre com texto, tudo em `components/ui
 | 3 · Telas | conversa, Meu MEC, Equipe/MEC, Objeções por código, /mec | conferidas a 390 e 1440 |
 | 4 · Rede | liga para todas as unidades; reprocessamento decidido em §10 | painel de custo dentro do previsto |
 
-## 10. Decisões que são suas
+## 10. Decisões tomadas (24/09/2026, pelo usuário, seguindo as recomendações)
 
-1. **Reprocessar o histórico?** Nenhum, os últimos 14 dias ou tudo. Custa uma análise inteira por conversa reprocessada (o custo real sai do painel do admin depois do piloto). Recomendação: **14 dias**, o bastante para as telas nascerem com tendência.
-2. **Quem marca as 20 conversas de calibração?** Recomendação: um gestor que conheça bem o Book, com uma planilha que eu preparo a partir das conversas reais.
-3. **Unidade piloto.** Recomendação: a de maior volume de negociação, para a calibração sair rápida.
+1. **Reprocessar os últimos 14 dias** depois do piloto aprovado, para as telas nascerem com tendência.
+2. **A calibração é feita por um gestor que conhece bem o Book**, numa planilha preparada a partir de 20 conversas reais de negociação da unidade piloto.
+3. **Unidade piloto: a de maior volume de negociação** nos últimos 14 dias, escolhida por consulta no banco no início da fase 2.
 
 ## 11. Riscos
 
