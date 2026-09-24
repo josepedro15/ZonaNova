@@ -56,6 +56,7 @@ para que a hierarquia deixe de depender de cada página acertar sozinha.
 | `linha-campo` | `#C5CCD8` | borda de input, tracejado |
 | `tinta` / `tinta-2` / `tinta-3` | `#0E1726` / `#4A5568` / `#6B7589` | texto (tinta-3 ≥ 4.5:1 sobre branco) |
 | `bom` / `bom-sof` / `bom-texto` | `#0B7A6E` / `#E3F4F1` / `#0B6A60` | acima da média, respondida, conectado |
+| `bom-claro` | `#4CC9B0` | ponto de "conectado" sobre o azul da sidebar |
 | `atencao` / `atencao-sof` / `atencao-texto` | `#B26B00` / `#FDF1DC` / `#8A5300` | espera 30 min–2 h, queda leve |
 | `risco` / `risco-sof` / `risco-texto` | `#C2362B` / `#FCE9E7` / `#A52C22` | espera > 2 h, fora do ar, queda forte |
 | `evidencia` / `evidencia-sof` | `#E0A43A` / `#FDF1DC` | grifo de trecho citado pela análise |
@@ -119,12 +120,18 @@ do código.
 | `Tabela` | grade de linhas clicáveis com cabeçalho; colunas por `grid-template-columns` | `colunas`, `linhas`, `vazio` |
 | `Avatar` | iniciais ou ícone de pessoa quando não há nome (regra atual de `iniciais()`) | `nome` |
 | `EstadoVazio` | losango + título + texto; nunca nota zero | `titulo`, `texto`, `acao?` |
-| `Periodo` | seletor segmentado que troca `?periodo=` por link (sem JS) | `opcoes`, `atual` |
+| `Segmentado` | seletor segmentado que troca um parâmetro da URL por link (sem JS): indicador da Rede, e depois período | `rotulo`, `opcoes`, `atual`, `base`, `param` |
+| `Pagina` | contêiner de conteúdo: largura máxima, padding e espaçamento entre blocos | `children` |
+| `Alerta` | faixa colorida com ícone, título, texto e ação (alertas da equipe, "onde você precisa entrar") | `tom`, `icone`, `titulo`, `acao?` |
+| `Sparkline` / `GraficoLinhas` | linha simples no cartão-herói; linhas por loja com destaque em duas e rótulo no fim | `valores` / `series`, `formato` |
 | `BotaoCopiar` | copia texto para a área de transferência (client) | `texto` |
 
 Regras de tom e comparação viram **funções puras em `lib/visual.ts`**, com
-teste unitário: `tomEspera(ms)`, `tomDelta(delta, melhorQuando)`,
-`formatarDelta(...)`, `iniciais(nome)` (movida do dashboard). Os componentes
+teste unitário: `tomEspera(ms)`, `tomFaixa(valor, risco, atencao)`, `tomDelta(delta, melhorQuando)`,
+`setaDoTom(tom)`, `comparaTempo(...)`, `media(...)`, `iniciais(nome)` (movida do dashboard),
+`grifar`/`grifarConversa`, `caminhoSvg`, `afastarRotulos`. Derivações de dado
+(variação semanal, com quem falar, objeções, séries e destaques da rede) ficam
+em `lib/derivacoes.ts`, também testadas. Os componentes
 só as chamam.
 
 ## 6. Telas
@@ -160,7 +167,9 @@ novo, a origem está indicada. Tudo vem de tabela existente, lida pela RLS de se
 (componente `VisaoUnidade`), como já diz o doc 5.
 - Alertas: números fora do ar (`vw_conexoes_status`), clientes esperando
   (conversas da unidade com `esperaDoCliente`), cadastros pendentes.
-- 5 KPIs da unidade × rede (`relatorios_unidade`, `relatorios_rede`).
+- 5 KPIs da unidade × rede (`relatorios_unidade`, `relatorios_rede`), do último
+  relatório fechado. O seletor Ontem / 7 dias / 30 dias do mockup fica para a
+  fase 3: exige agregar por período, e a fase 2 não mexe nisso.
 - Tabela de vendedores com barra de nota e tendência de 7 dias (`relatorios_diarios`).
 - **Com quem falar hoje**: os 2 vendedores com maior queda de nota em 7 dias, e
   a etapa do MEC mais fraca de cada um (`aderencia_diaria.por_etapa`). Função
