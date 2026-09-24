@@ -19,7 +19,7 @@ export function Cartao({
     children: ReactNode;
 } & Omit<HTMLAttributes<HTMLElement>, 'className' | 'children'>) {
     return (
-        <Tag className={`rounded-card ${VARIANTE[variante]} ${recuo === 'normal' ? 'p-5 lg:p-6' : ''} ${className}`} {...resto}>
+        <Tag className={`rounded-card ${VARIANTE[variante]} ${recuo === 'normal' ? 'p-4 lg:p-5' : ''} ${className}`} {...resto}>
             {children}
         </Tag>
     );

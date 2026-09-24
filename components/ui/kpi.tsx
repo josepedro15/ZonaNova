@@ -7,7 +7,7 @@ export function Kpi({ rotulo, valor, unidade, comparacao, legenda, heroi = false
     rotulo: string; valor: ReactNode; unidade?: string; comparacao?: ReactNode; legenda?: ReactNode; heroi?: boolean;
 }) {
     return (
-        <Cartao variante={heroi ? 'heroi' : 'padrao'} as="div" className="flex flex-col gap-2">
+        <Cartao variante={heroi ? 'heroi' : 'padrao'} as="div" className="flex flex-col gap-1.5">
             <span className={`text-[13px] ${heroi ? 'text-white/75' : 'text-tinta-2'}`}>{rotulo}</span>
             <Numero valor={valor} unidade={unidade} />
             {comparacao}

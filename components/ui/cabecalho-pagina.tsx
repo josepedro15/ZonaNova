@@ -16,7 +16,7 @@ export function CabecalhoPagina({ sobre, titulo, acoes, voltar }: {
             <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
                     {sobre && <p className="text-[13.5px] text-tinta-3">{sobre}</p>}
-                    <h1 className="display mt-1.5 text-[26px] font-bold lg:text-[32px]">{titulo}</h1>
+                    <h1 className="display mt-1 text-[24px] font-bold lg:text-[28px]">{titulo}</h1>
                 </div>
                 {acoes && <div className="flex flex-wrap items-center gap-2.5">{acoes}</div>}
             </div>

@@ -126,14 +126,13 @@ export function EsperandoVoce({ className = '', titulo, esperando }: {
     );
 }
 
-function LinhaHoje({ rotulo, detalhe, valor, children }: { rotulo: string; detalhe?: ReactNode; valor: ReactNode; children?: ReactNode }) {
+function NumeroHoje({ rotulo, valor, detalhe, children }: { rotulo: string; valor: ReactNode; detalhe?: ReactNode; children?: ReactNode }) {
     return (
-        <div className="flex flex-col gap-2.5 border-t border-linha-2 py-4">
-            <div className="flex items-center justify-between gap-4">
-                <div className="flex flex-col gap-1"><span className="text-[13px] text-tinta-2">{rotulo}</span>{detalhe && <span className="text-[12.5px] text-tinta-3">{detalhe}</span>}</div>
-                {valor}
-            </div>
+        <div className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-[12.5px] text-tinta-2">{rotulo}</span>
+            {valor}
             {children}
+            {detalhe && <span className="text-xs leading-snug text-tinta-3">{detalhe}</span>}
         </div>
     );
 }
@@ -157,21 +156,23 @@ export function HojeAteAgora({ className = '', conversas, respostaMedia, respost
         );
     }
     return (
-        <Cartao className={`flex flex-col ${className}`}>
-            <h3 className="display mb-2 text-lg font-bold">Hoje até agora</h3>
-            <LinhaHoje rotulo="Conversas" detalhe={mediaLeads === null ? 'sem histórico para comparar ainda' : `sua média: ${Math.round(mediaLeads)} leads por dia`} valor={<Numero valor={conversas} />} />
-            <LinhaHoje rotulo="Resposta média"
-                       detalhe={respostaMedia === null ? undefined : respostaOntemMin !== null
-                           ? <Comparacao delta={respostaMedia - respostaOntemMin} melhorQuando="menor">{comparaTempo(respostaMedia, respostaOntemMin, 'ontem')}</Comparacao>
-                           : 'ontem não teve relatório para comparar'}
-                       valor={<Numero valor={respostaMedia ?? '—'} unidade={respostaMedia === null ? undefined : ' min'} />} />
-            <LinhaHoje rotulo="Clientes respondidos" detalhe={escreveram > 0 ? `${respondidos} de ${escreveram} que escreveram hoje` : undefined}
-                       valor={<Numero valor={taxa ?? '—'} unidade={taxa === null ? undefined : '%'} />}>
-                {taxa !== null && <Barra pct={taxa} rotulo="Clientes respondidos" />}
-            </LinhaHoje>
-            <p className="mt-auto rounded-[10px] bg-fundo px-3.5 py-3 text-[12.5px] leading-relaxed text-tinta-2">
-                Números ao vivo. A nota de hoje sai no fechamento, às 00h30.
-            </p>
+        <Cartao className={`flex flex-col gap-3 ${className}`}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <h3 className="display text-lg font-bold">Hoje até agora</h3>
+                <span className="text-xs text-tinta-3">ao vivo · a nota de hoje sai às 00h30</span>
+            </div>
+            <div className="grid grid-cols-3 gap-4 border-t border-linha-2 pt-3">
+                <NumeroHoje rotulo="Conversas" valor={<Numero valor={conversas} />}
+                            detalhe={mediaLeads === null ? 'sem histórico para comparar ainda' : `sua média: ${Math.round(mediaLeads)} por dia`} />
+                <NumeroHoje rotulo="Resposta média" valor={<Numero valor={respostaMedia ?? '—'} unidade={respostaMedia === null ? undefined : ' min'} />}
+                            detalhe={respostaMedia === null ? undefined : respostaOntemMin !== null
+                                ? <Comparacao delta={respostaMedia - respostaOntemMin} melhorQuando="menor">{comparaTempo(respostaMedia, respostaOntemMin, 'ontem')}</Comparacao>
+                                : 'ontem não teve relatório para comparar'} />
+                <NumeroHoje rotulo="Respondidos" valor={<Numero valor={taxa ?? '—'} unidade={taxa === null ? undefined : '%'} />}
+                            detalhe={escreveram > 0 ? `${respondidos} de ${escreveram} que escreveram` : undefined}>
+                    {taxa !== null && <Barra pct={taxa} rotulo="Clientes respondidos" />}
+                </NumeroHoje>
+            </div>
         </Cartao>
     );
 }
@@ -182,12 +183,12 @@ export function RelatorioDoDia({ relatorio, variacao, historico, mediaLeads, med
     const nota = relatorio.score_geral == null ? null : Math.round(Number(relatorio.score_geral));
     const respostaMin = relatorio.tempo_medio_resposta_s == null ? null : Math.round(Number(relatorio.tempo_medio_resposta_s) / 60);
     return (
-        <div className="grid gap-5 lg:grid-cols-12">
-            <Cartao variante="heroi" className="flex flex-col gap-3.5 lg:col-span-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6 lg:gap-4 xl:grid-cols-2 2xl:grid-cols-6">
+            <Cartao variante="heroi" className="col-span-2 flex flex-col gap-2.5">
                 <span className="text-[13px] text-white/75">Sua nota</span>
                 {nota === null ? (
                     <>
-                        <span className="display text-2xl font-bold">Não teve nota</span>
+                        <span className="display text-xl font-bold">Não teve nota</span>
                         <span className="text-[12.5px] leading-relaxed text-white/75">Só houve suporte e conversa social. Isso não conta contra você.</span>
                     </>
                 ) : (
@@ -201,9 +202,9 @@ export function RelatorioDoDia({ relatorio, variacao, historico, mediaLeads, med
                     </>
                 )}
                 <SerieDias dias={historico} invertida />
-                <span className="text-xs leading-relaxed text-white/65">14 dias. Tracejado: dia só com suporte ou social, sem nota. Só negociação entra na nota.</span>
+                <span className="text-xs leading-snug text-white/65">14 dias · tracejado: só suporte ou social, sem nota</span>
             </Cartao>
-            <div className="grid grid-cols-2 gap-3 lg:col-span-8 lg:gap-5">
+            <div className="contents">
                 <Kpi rotulo="Leads atendidos" valor={relatorio.leads_atendidos} legenda={mediaLeads === null ? 'sem histórico para comparar ainda' : `sua média: ${Math.round(mediaLeads)} por dia`} />
                 <Kpi rotulo="Conversões" valor={relatorio.conversoes_confirmadas} legenda="identificadas pela IA na conversa" />
                 <Kpi rotulo="Oportunidades perdidas" valor={relatorio.oportunidades_perdidas}
@@ -226,9 +227,9 @@ export function Treino({ className = '', coaching }: { className?: string; coach
                 {coaching.resumo && <p className="display mt-2 text-[17px] font-bold leading-snug">{coaching.resumo}</p>}
             </div>
             {!!coaching.melhorias?.length && (
-                <ol className="grid gap-3 lg:grid-cols-3">
+                <ol className="flex flex-col gap-2">
                     {coaching.melhorias.map((m, i) => (
-                        <li key={m} className="flex gap-3 rounded-[10px] bg-superficie p-4 lg:flex-col">
+                        <li key={m} className="flex items-start gap-3 rounded-[10px] bg-superficie px-3.5 py-3">
                             <span className="display flex size-[26px] shrink-0 items-center justify-center rounded-[7px] bg-azul text-[13px] font-bold text-white">{i + 1}</span>
                             <span className="text-[13.5px] leading-snug">{m}</span>
                         </li>

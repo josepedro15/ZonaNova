@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-const TAMANHO = { md: 'text-[26px]', lg: 'text-[34px]', xl: 'text-[48px] lg:text-[56px]' } as const;
+const TAMANHO = { md: 'text-[26px]', lg: 'text-[30px]', xl: 'text-[44px] lg:text-[48px]' } as const;
 
 /** Número de KPI: Montserrat, algarismos tabulares, unidade menor e mais apagada. */
 export function Numero({ valor, unidade, tamanho = 'lg', className = '' }: {

@@ -94,38 +94,44 @@ export default async function Dashboard() {
                 {!ligado && <AvisoConexao conexao={conexao} />}
                 {gere && <AvisoAprovacoes pendentes={pendentes ?? 0} />}
 
-                <RotuloSecao complemento="ao vivo, atualiza a cada mensagem">Agora</RotuloSecao>
-                <div className="grid gap-5 lg:grid-cols-12">
-                    <EsperandoVoce className="lg:col-span-7" esperando={esperando} titulo={deHoje.length === 0 ? 'Ficou de ontem' : 'Esperando você'} />
-                    <HojeAteAgora className="lg:col-span-5" conversas={deHoje.length} respostaMedia={respostaMedia}
-                                  respostaOntemMin={respostaOntem == null ? null : Math.round(Number(respostaOntem) / 60)}
-                                  taxa={taxa} respondidos={respondidos} escreveram={comFala.length}
-                                  mediaLeads={media(recentes.map((r) => r.leads_atendidos))} ligado={ligado} />
+                {/* Em tela larga, o que é de agora e o relatório de ontem ficam lado a
+                    lado: empilhados, metade da tela ficava vazia. */}
+                <div className="grid gap-5 xl:grid-cols-12 xl:items-start">
+                    <div className="flex flex-col gap-4 xl:col-span-5">
+                        <RotuloSecao complemento="ao vivo">Agora</RotuloSecao>
+                        <EsperandoVoce esperando={esperando} titulo={deHoje.length === 0 ? 'Ficou de ontem' : 'Esperando você'} />
+                        <HojeAteAgora conversas={deHoje.length} respostaMedia={respostaMedia}
+                                      respostaOntemMin={respostaOntem == null ? null : Math.round(Number(respostaOntem) / 60)}
+                                      taxa={taxa} respondidos={respondidos} escreveram={comFala.length}
+                                      mediaLeads={media(recentes.map((r) => r.leads_atendidos))} ligado={ligado} />
+                    </div>
+
+                    <div className="flex flex-col gap-4 xl:col-span-7">
+                        <RotuloSecao
+                            complemento={relatorio ? `${diaPorExtenso(relatorio.data_ref)} · fecha às 00h30` : undefined}
+                            acao={<Link href="/evolucao" className="flex min-h-11 items-center text-[13px] font-semibold text-azul">Ver evolução →</Link>}>
+                            {relatorio?.data_ref === ontem || !relatorio ? 'Seu relatório de ontem' : 'Seu último relatório'}
+                        </RotuloSecao>
+                        {relatorio ? (
+                            <>
+                                <RelatorioDoDia relatorio={relatorio} historico={historico}
+                                                variacao={variacaoSemanal(rels.filter((r) => r.data_ref <= relatorio.data_ref))}
+                                                mediaLeads={media(anteriores.map((r) => r.leads_atendidos))}
+                                                mediaRespostaMin={media(anteriores.map((r) => (r.tempo_medio_resposta_s == null ? null : Number(r.tempo_medio_resposta_s) / 60)))} />
+                                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_300px]">
+                                    {temTreino && <Treino coaching={coaching} />}
+                                    <MecResumo className={temTreino ? '' : 'lg:col-span-2 xl:col-span-1 2xl:col-span-2'} aderencia={aderencia ?? null} />
+                                </div>
+                            </>
+                        ) : (
+                            <EstadoVazio titulo="O relatório ainda não fechou">
+                                Enquanto isso, os números ao lado vêm direto das suas conversas. O primeiro relatório sai no fechamento, às 00h30.
+                            </EstadoVazio>
+                        )}
+                        {!!observacoes?.length && <DoGestor observacoes={observacoes} />}
+                    </div>
                 </div>
 
-                <RotuloSecao
-                    complemento={relatorio ? `${diaPorExtenso(relatorio.data_ref)} · fecha todo dia às 00h30` : undefined}
-                    acao={<Link href="/evolucao" className="flex min-h-11 items-center text-[13px] font-semibold text-azul">Ver evolução →</Link>}>
-                    {relatorio?.data_ref === ontem || !relatorio ? 'Seu relatório de ontem' : 'Seu último relatório'}
-                </RotuloSecao>
-                {relatorio ? (
-                    <>
-                        <RelatorioDoDia relatorio={relatorio} historico={historico}
-                                        variacao={variacaoSemanal(rels.filter((r) => r.data_ref <= relatorio.data_ref))}
-                                        mediaLeads={media(anteriores.map((r) => r.leads_atendidos))}
-                                        mediaRespostaMin={media(anteriores.map((r) => (r.tempo_medio_resposta_s == null ? null : Number(r.tempo_medio_resposta_s) / 60)))} />
-                        <div className="grid gap-5 lg:grid-cols-12">
-                            {temTreino && <Treino className="lg:col-span-8" coaching={coaching} />}
-                            <MecResumo className={temTreino ? 'lg:col-span-4' : 'lg:col-span-12'} aderencia={aderencia ?? null} />
-                        </div>
-                    </>
-                ) : (
-                    <EstadoVazio titulo="O relatório ainda não fechou">
-                        Enquanto isso, os números de cima vêm direto das suas conversas. O primeiro relatório sai no fechamento, às 00h30.
-                    </EstadoVazio>
-                )}
-
-                {!!observacoes?.length && <DoGestor observacoes={observacoes} />}
                 <ConversasDeHoje conversas={deHoje} agora={agora} />
             </Pagina>
         </Shell>
