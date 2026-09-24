@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, media,
+    caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, listaDeTextos, media, rotuloPotencial, urgenciaAlta,
     setaDoTom, tomDelta, tomEspera, tomFaixa, tomResposta,
 } from '../../lib/visual.ts';
 
@@ -135,4 +135,30 @@ test('caminho SVG recomeça depois de um buraco', () => {
 test('resposta: até 15 min é neutra, acima de 15 pede atenção', () => {
     assert.equal(tomResposta(15), 'neutro');
     assert.equal(tomResposta(16), 'atencao');
+});
+
+// --- campos que a IA já gera ----------------------------------------------------
+
+test('listaDeTextos tira vazio, repetido e o que não é texto', () => {
+    assert.deepEqual(listaDeTextos(['  Sondou a obra ', '', 'sondou a obra', 42, null, 'Ofereceu rejunte']), ['Sondou a obra', 'Ofereceu rejunte']);
+});
+
+// O jsonb de itens do MEC nasce como {} no banco: objeto não é lista.
+test('listaDeTextos de algo que não é lista devolve lista vazia', () => {
+    assert.deepEqual(listaDeTextos({}), []);
+    assert.deepEqual(listaDeTextos(undefined), []);
+    assert.deepEqual(listaDeTextos('texto solto'), []);
+});
+
+test('potencial vira rótulo com acento; valor desconhecido some', () => {
+    assert.equal(rotuloPotencial('medio'), 'Potencial médio');
+    assert.equal(rotuloPotencial('alto'), 'Potencial alto');
+    assert.equal(rotuloPotencial('altíssimo'), null);
+    assert.equal(rotuloPotencial(null), null);
+});
+
+test('urgência alta é 4 ou 5', () => {
+    assert.equal(urgenciaAlta(4), true);
+    assert.equal(urgenciaAlta(3), false);
+    assert.equal(urgenciaAlta(null), false);
 });

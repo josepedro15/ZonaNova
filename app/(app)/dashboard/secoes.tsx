@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import {
-    Avatar, Barra, BotaoLink, Cartao, Comparacao, Icone, Kpi, Numero, Selo, SerieDias, Tabela, TEXTO, TempoEspera,
+    Avatar, Barra, BotaoLink, Cartao, Comparacao, Icone, Kpi, Numero, SELO, Selo, SerieDias, Tabela, TEXTO, TempoEspera,
     type DiaSerie,
 } from '@/components/ui';
-import { comparaTempo, setaDoTom, tomDelta, tomEspera, tomFaixa } from '@/lib/visual';
+import { comparaTempo, listaDeTextos, setaDoTom, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
 import { ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
 import { esperaDoCliente, esperaEmTexto, semTelefone, telefoneBonito, type Msg } from '@/lib/painel';
 import { dataCurtaBrasilia, horaBrasilia } from './formato';
@@ -15,6 +15,8 @@ export type ConversaComMensagens = {
     cliente_telefone: string;
     ultima_mensagem_em: string;
     mensagens: (Msg & { tipo: string; conteudo: string | null })[];
+    // Só as análises da própria conversa; a mais recente dá urgência e potencial.
+    analises_conversa?: { data_ref: string; urgencia: number | null; potencial_venda: string | null }[];
 };
 
 export type RelatorioDiario = {
@@ -29,7 +31,18 @@ export type RelatorioDiario = {
 };
 
 export type AderenciaDia = { data_ref: string; aderencia_geral: number | null; por_etapa: Record<string, number | null> | null };
-export type Coaching = { resumo?: string; melhorias?: string[]; elogio?: string; desafio?: string };
+export type Coaching = {
+    resumo?: string; melhorias?: string[]; elogio?: string; desafio?: string;
+    // Também saem do fechamento diário e não apareciam em tela nenhuma.
+    padroes_sucesso?: unknown; padroes_falha?: unknown; objecoes_frequentes?: unknown; alertas?: unknown;
+};
+
+/** Há algo para mostrar no treino? Evita cartão vazio. */
+export function temConteudoDeTreino(c: Coaching): boolean {
+    return !!(c.resumo || c.melhorias?.length || c.elogio || c.desafio
+        || listaDeTextos(c.alertas).length || listaDeTextos(c.padroes_sucesso).length
+        || listaDeTextos(c.padroes_falha).length || listaDeTextos(c.objecoes_frequentes).length);
+}
 
 /**
  * Quem espera há quatro horas quer resposta, e resposta acontece no WhatsApp:
@@ -84,12 +97,19 @@ const VISIVEIS = 5;
 
 function ItemEspera({ conversa, espera }: { conversa: ConversaComMensagens; espera: number }) {
     const destino = destinoDaEspera(conversa);
+    const analise = [...(conversa.analises_conversa ?? [])].sort((a, b) => b.data_ref.localeCompare(a.data_ref))[0];
+    const urgente = urgenciaAlta(analise?.urgencia);
+    const potencialAlto = analise?.potencial_venda === 'alto';
     return (
         <li className="border-t border-linha-2">
             <a {...destino} className="flex min-h-11 items-center gap-3.5 py-3 text-tinta">
                 <Avatar nome={conversa.cliente_nome} />
                 <span className="flex min-w-0 grow flex-col gap-0.5">
-                    <span className="truncate text-sm font-semibold">{nomeDaConversa(conversa)}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-sm font-semibold">{nomeDaConversa(conversa)}</span>
+                        {urgente && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${SELO.atencao}`}>Urgente</span>}
+                        {potencialAlto && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${SELO.azul}`}>Potencial alto</span>}
+                    </span>
                     <span className="truncate text-[13px] text-tinta-3">{ultimaFalaDoCliente(conversa)}</span>
                 </span>
                 <TempoEspera ms={espera} />
@@ -220,12 +240,21 @@ export function RelatorioDoDia({ relatorio, variacao, historico, mediaLeads, med
 }
 
 export function Treino({ className = '', coaching }: { className?: string; coaching: Coaching }) {
+    const alertas = listaDeTextos(coaching.alertas).slice(0, 3);
+    const deuCerto = listaDeTextos(coaching.padroes_sucesso).slice(0, 3);
+    const deuErrado = listaDeTextos(coaching.padroes_falha).slice(0, 3);
+    const objecoes = listaDeTextos(coaching.objecoes_frequentes).slice(0, 6);
     return (
         <Cartao variante="suave" className={`flex flex-col gap-4 ${className}`}>
             <div>
                 <span className="text-xs font-bold uppercase tracking-[0.09em] text-azul">Seu treino de hoje</span>
                 {coaching.resumo && <p className="display mt-2 text-[17px] font-bold leading-snug">{coaching.resumo}</p>}
             </div>
+            {alertas.length > 0 && (
+                <ul aria-label="Alertas do dia" className="flex flex-col gap-1.5 rounded-[10px] bg-atencao-sof px-3.5 py-3">
+                    {alertas.map((a) => <li key={a} className="flex gap-2 text-[13px] leading-snug text-atencao-texto"><Icone nome="alerta" tamanho={15} className="mt-px shrink-0" />{a}</li>)}
+                </ul>
+            )}
             {!!coaching.melhorias?.length && (
                 <ol className="flex flex-col gap-2">
                     {coaching.melhorias.map((m, i) => (
@@ -240,6 +269,28 @@ export function Treino({ className = '', coaching }: { className?: string; coach
                 <div className="grid gap-3 lg:grid-cols-2">
                     {coaching.elogio && <p className="text-[13px] leading-relaxed"><strong className="text-azul">O que funcionou:</strong> {coaching.elogio}</p>}
                     {coaching.desafio && <p className="text-[13px] leading-relaxed"><strong className="text-azul">Desafio:</strong> {coaching.desafio}</p>}
+                </div>
+            )}
+            {(deuCerto.length > 0 || deuErrado.length > 0) && (
+                <div className="grid gap-3 lg:grid-cols-2">
+                    {deuCerto.length > 0 && (
+                        <div className="flex flex-col gap-1.5">
+                            <span className="text-xs font-bold uppercase tracking-[0.06em] text-azul">Deu certo</span>
+                            <ul className="flex flex-col gap-1">{deuCerto.map((p) => <li key={p} className="flex gap-2 text-[13px] leading-snug"><span aria-hidden="true" className="font-bold text-bom-texto">✓</span>{p}</li>)}</ul>
+                        </div>
+                    )}
+                    {deuErrado.length > 0 && (
+                        <div className="flex flex-col gap-1.5">
+                            <span className="text-xs font-bold uppercase tracking-[0.06em] text-azul">Deu errado</span>
+                            <ul className="flex flex-col gap-1">{deuErrado.map((p) => <li key={p} className="flex gap-2 text-[13px] leading-snug"><span aria-hidden="true" className="font-bold text-risco-texto">✕</span>{p}</li>)}</ul>
+                        </div>
+                    )}
+                </div>
+            )}
+            {objecoes.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                    <span className="text-xs font-bold uppercase tracking-[0.06em] text-azul">Objeções que você ouviu</span>
+                    <ul className="flex flex-wrap gap-1.5">{objecoes.map((o) => <li key={o} className="rounded-md bg-superficie px-2 py-0.5 text-[12px] text-tinta-2">{o}</li>)}</ul>
                 </div>
             )}
         </Cartao>

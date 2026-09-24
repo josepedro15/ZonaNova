@@ -8,7 +8,7 @@ import { variacaoSemanal } from '@/lib/derivacoes';
 import { dataPorExtenso, diaPorExtenso, horaBrasilia, inicioDoDia, saudacao } from './formato';
 import {
     AvisoAprovacoes, AvisoConexao, ConversasDeHoje, DoGestor, EsperandoVoce, HojeAteAgora, MecResumo, RelatorioDoDia, Treino,
-    type AderenciaDia, type Coaching, type ConversaComMensagens, type RelatorioDiario,
+    temConteudoDeTreino, type AderenciaDia, type Coaching, type ConversaComMensagens, type RelatorioDiario,
 } from './secoes';
 
 // O painel lê o que chegou há instantes pelo webhook. Gerado uma vez no build
@@ -32,7 +32,7 @@ export default async function Dashboard() {
         supabase.from('vw_conexoes_status').select('status, numero, ultimo_evento_em').eq('user_id', user!.id)
             .maybeSingle<{ status: string; numero: string | null; ultimo_evento_em: string | null }>(),
         supabase.from('conversas')
-            .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, mensagens(direcao, automatica, enviada_em, tipo, conteudo)')
+            .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, mensagens(direcao, automatica, enviada_em, tipo, conteudo), analises_conversa(data_ref, urgencia, potencial_venda)')
             .gte('ultima_mensagem_em', janela.toISOString()).eq('bloqueada', false)
             .order('ultima_mensagem_em', { ascending: false }).returns<ConversaComMensagens[]>(),
         supabase.from('relatorios_diarios')
@@ -79,7 +79,7 @@ export default async function Dashboard() {
     const anteriores = relatorio ? rels.filter((r) => r.data_ref < relatorio.data_ref).slice(0, 7) : [];
     const respostaOntem = porDia.get(ontem)?.tempo_medio_resposta_s;
     const coaching = (relatorio?.payload ?? {}) as Coaching;
-    const temTreino = !!(coaching.resumo || coaching.melhorias?.length || coaching.elogio || coaching.desafio);
+    const temTreino = temConteudoDeTreino(coaching);
 
     return (
         <Shell papel="vendedor" nome={perfil?.nome ?? ''} unidade={perfil?.unidades?.nome} atual="/dashboard" conexao={ligado ? 'conectada' : 'fora'}>

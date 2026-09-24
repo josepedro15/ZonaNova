@@ -138,3 +138,36 @@ export function caminhoSvg(pontos: readonly ([number, number] | null)[]): string
     }
     return partes.join(' ');
 }
+
+/**
+ * Lista de textos de um campo jsonb que a IA preencheu (erros, técnicas,
+ * padrões, itens do MEC). Tolera o que o banco guarda de estranho: objeto
+ * vazio (`{}` é o default de `aderencia_conversa.itens`), número, nulo.
+ * Tira vazio e repetido (ignorando maiúsculas), mantendo a primeira grafia.
+ */
+export function listaDeTextos(valor: unknown): string[] {
+    if (!Array.isArray(valor)) return [];
+    const vistos = new Set<string>();
+    const saida: string[] = [];
+    for (const item of valor) {
+        if (typeof item !== 'string') continue;
+        const texto = item.trim();
+        const chave = texto.toLocaleLowerCase('pt-BR');
+        if (!texto || vistos.has(chave)) continue;
+        vistos.add(chave);
+        saida.push(texto);
+    }
+    return saida;
+}
+
+const POTENCIAL: Record<string, string> = { baixo: 'Potencial baixo', medio: 'Potencial médio', alto: 'Potencial alto' };
+
+/** `potencial_venda` da análise em português de tela; valor fora do enum some. */
+export function rotuloPotencial(potencial: string | null | undefined): string | null {
+    return (potencial && POTENCIAL[potencial]) ?? null;
+}
+
+/** Urgência vai de 1 a 5; 4 e 5 são as que pedem resposta antes das outras. */
+export function urgenciaAlta(urgencia: number | null | undefined): boolean {
+    return typeof urgencia === 'number' && urgencia >= 4;
+}

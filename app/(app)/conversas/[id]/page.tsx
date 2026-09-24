@@ -5,7 +5,7 @@ import {
 import { contextoApp, dataCurta } from '@/lib/contexto-app';
 import { esperaDoCliente, esperaEmTexto, semTelefone, telefoneBonito } from '@/lib/painel';
 import { aderenciaPercentual } from '@/lib/analise';
-import { grifarConversa, tomEspera, type Tom } from '@/lib/visual';
+import { grifarConversa, listaDeTextos, rotuloPotencial, tomEspera, urgenciaAlta, type Tom } from '@/lib/visual';
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
 import { contestarAderencia } from '@/app/actions/gestao';
 import { bloquearContato } from '@/app/actions/conexao';
@@ -14,9 +14,11 @@ import { Transcricao, textoDaMensagem, type Mensagem } from './transcricao';
 export const dynamic = 'force-dynamic';
 
 type Payload = {
-    resumo?: string; proxima_acao?: string; script_sugerido?: string; evidencias?: { trecho: string; conclusao: string }[];
+    resumo?: string; destaque?: string; proxima_acao?: string; script_sugerido?: string;
+    evidencias?: { trecho: string; conclusao: string }[];
+    tecnicas_usadas?: unknown; erros_vendedor?: unknown; tags?: unknown;
 };
-type Marcacao = { id: string; etapa: string; aplicavel: boolean; aplicado: string | null; justificativa: string };
+type Marcacao = { id: string; etapa: string; aplicavel: boolean; aplicado: string | null; justificativa: string; itens: unknown };
 
 const TIPO: Record<string, string> = { negociacao: 'Negociação', suporte: 'Suporte', social: 'Social' };
 const STATUS: Record<string, { rotulo: string; tom: Tom }> = {
@@ -63,7 +65,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
         .order('data_ref', { ascending: false }).limit(1).maybeSingle();
     // O MEC do MESMO dia da análise exibida.
     const { data: aderencia } = analise
-        ? await supabase.from('aderencia_conversa').select('id,etapa,aplicavel,aplicado,justificativa')
+        ? await supabase.from('aderencia_conversa').select('id,etapa,aplicavel,aplicado,justificativa,itens')
             .eq('conversa_id', id).eq('data_ref', analise.data_ref).order('etapa').returns<Marcacao[]>()
         : { data: [] as Marcacao[] };
     const { data: contestacoes } = aderencia?.length
@@ -75,6 +77,10 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
     const mensagens = [...((conversa.mensagens ?? []) as Mensagem[])].sort((a, b) => a.enviada_em.localeCompare(b.enviada_em));
     const payload = (analise?.payload ?? {}) as Payload;
     const evidencias = payload.evidencias ?? [];
+    // Campos que a IA já devolvia e nenhuma tela mostrava (auditoria de 24/09).
+    const tecnicas = listaDeTextos(payload.tecnicas_usadas);
+    const erros = listaDeTextos(payload.erros_vendedor);
+    const tags = listaDeTextos(payload.tags).slice(0, 8);
     const grifos = grifarConversa(mensagens.map(textoDaMensagem), evidencias.map((e) => e.trecho));
     const espera = esperaDoCliente(
         mensagens.map((m) => ({ direcao: m.direcao as 'entrada' | 'saida', automatica: m.automatica, enviada_em: m.enviada_em })),
@@ -164,20 +170,50 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                     <div className="flex flex-wrap gap-1.5">
                                         {analise.tipo_conversa && <Selo tom="azul">{TIPO[analise.tipo_conversa as string] ?? String(analise.tipo_conversa)}</Selo>}
                                         {status && <Selo tom={status.tom}>{status.rotulo}</Selo>}
+                                        {analise.estagio_funil && <Selo>{String(analise.estagio_funil).charAt(0).toUpperCase() + String(analise.estagio_funil).slice(1).replaceAll('_', ' ')}</Selo>}
+                                        {rotuloPotencial(analise.potencial_venda) && <Selo tom={analise.potencial_venda === 'alto' ? 'azul' : 'neutro'}>{rotuloPotencial(analise.potencial_venda)}</Selo>}
+                                        {typeof analise.urgencia === 'number' && <Selo tom={urgenciaAlta(analise.urgencia) ? 'atencao' : 'neutro'}>Urgência {analise.urgencia}/5</Selo>}
                                     </div>
+                                    {tags.length > 0 && (
+                                        <ul aria-label="Tags da conversa" className="-mt-1 flex flex-wrap gap-1.5">
+                                            {tags.map((t) => <li key={t} className="rounded-md bg-superficie-2 px-2 py-0.5 text-[11.5px] text-tinta-2">#{t}</li>)}
+                                        </ul>
+                                    )}
                                     <div className="grid grid-cols-2 gap-x-5 gap-y-3">
                                         <Pontuacao rotulo="Atendimento" valor={analise.score_atendimento ?? null} />
                                         <Pontuacao rotulo="Humor do cliente" valor={analise.sentiment ?? null} />
                                         <Pontuacao rotulo="Oportunidade" valor={analise.score_oportunidade ?? null} />
                                         <Pontuacao rotulo="Risco de perder" valor={analise.score_risco ?? null} invertida />
                                     </div>
-                                    {payload.resumo && (
+                                    {(payload.resumo || payload.destaque) && (
                                         <div className="border-t border-linha-2 pt-4">
                                             <h2 className="display text-base font-bold">O que aconteceu</h2>
-                                            <p className="mt-1.5 text-[13.5px] leading-relaxed text-tinta-2">{payload.resumo}</p>
+                                            {payload.destaque && <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-tinta">{payload.destaque}</p>}
+                                            {payload.resumo && <p className="mt-1.5 text-[13.5px] leading-relaxed text-tinta-2">{payload.resumo}</p>}
                                         </div>
                                     )}
                                 </Cartao>
+
+                                {(tecnicas.length > 0 || erros.length > 0) && (
+                                    <Cartao className="grid gap-4 sm:grid-cols-2">
+                                        <div className="flex flex-col gap-2">
+                                            <h2 className="display text-base font-bold">O que funcionou</h2>
+                                            {tecnicas.length ? (
+                                                <ul className="flex flex-col gap-1.5">
+                                                    {tecnicas.map((t) => <li key={t} className="flex gap-2 text-[13px] leading-snug"><span aria-hidden="true" className="font-bold text-bom-texto">✓</span>{t}</li>)}
+                                                </ul>
+                                            ) : <p className="text-[13px] text-tinta-3">Nenhuma técnica identificada.</p>}
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <h2 className="display text-base font-bold">O que atrapalhou</h2>
+                                            {erros.length ? (
+                                                <ul className="flex flex-col gap-1.5">
+                                                    {erros.map((e) => <li key={e} className="flex gap-2 text-[13px] leading-snug"><span aria-hidden="true" className="font-bold text-risco-texto">✕</span>{e}</li>)}
+                                                </ul>
+                                            ) : <p className="text-[13px] text-tinta-3">Nenhum erro apontado.</p>}
+                                        </div>
+                                    </Cartao>
+                                )}
 
                                 {evidencias.length > 0 && (
                                     <Cartao className="flex flex-col gap-3">
@@ -213,6 +249,11 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                                         <div className="flex flex-col gap-0.5">
                                                             <span className="text-[13.5px] font-semibold">{NOMES_ETAPA[a.etapa as Etapa] ?? a.etapa}</span>
                                                             <span className="text-xs text-tinta-3">{a.justificativa}</span>
+                                                            {listaDeTextos(a.itens).length > 0 && (
+                                                                <ul aria-label="Itens observados nesta etapa" className="mt-1 flex flex-wrap gap-1">
+                                                                    {listaDeTextos(a.itens).map((item) => <li key={item} className="rounded-md bg-superficie-2 px-2 py-0.5 text-[11.5px] text-tinta-2">{item}</li>)}
+                                                                </ul>
+                                                            )}
                                                         </div>
                                                         {selo.tracejado ? (
                                                             <span className="inline-flex items-center whitespace-nowrap rounded-full border border-dashed border-linha-campo bg-superficie px-2.5 py-1 text-xs font-semibold text-tinta-2">{selo.rotulo}</span>
