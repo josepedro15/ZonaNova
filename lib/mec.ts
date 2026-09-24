@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ContagemObjecao } from './derivacoes.ts';
 
 /**
  * MEC estruturado (spec docs/superpowers/specs/2026-09-24-mec-estruturado-design.md).
@@ -165,3 +166,134 @@ export const REGRAS_DETALHE_MEC = `DETALHE DO MEC (campo mec_detalhe):
 - ordem_correta considera só os passos presentes (cachorro, depois papagaio, depois minhoca).
 - Contorno de objeções e estratégia de preço são seções provisórias do Book: meça só o que o texto diz, sem critério extra.
 - Não invente: sem trecho, a resposta é false ou null.`;
+
+export type Sinal =
+    | 'sondagem_item' | 'pergunta_aberta' | 'pergunta_fechada' | 'complementar' | 'prazo' | 'condicao'
+    | 'frase_proibida' | 'objecao' | 'desconto' | 'gerencia' | 'orcamento_concorrente' | 'fechamento' | 'final_positivo';
+
+export type Observacao = {
+    etapa: string; sinal: Sinal; item_chave: string | null; valor: boolean | null;
+    detalhe: Record<string, unknown>; trecho: string | null;
+};
+export type LinhaObservacao = Observacao & { conversa_id: string };
+
+const comTrecho = (t: string | null | undefined): string | null => (t && t.trim() ? t.trim() : null);
+
+/** Uma linha por sinal observado: é o que vai para `mec_observacoes`. */
+export function observacoesDoDetalhe(d: DetalheMec): Observacao[] {
+    const o: Observacao[] = [];
+    const linha = (etapa: string, sinal: Sinal, item_chave: string | null, valor: boolean | null, detalhe: Record<string, unknown> = {}, trecho: string | null = null) =>
+        o.push({ etapa, sinal, item_chave, valor, detalhe, trecho });
+
+    for (const i of d.sondagem.itens) {
+        const trecho = comTrecho(i.trecho);
+        // "capturada" sem prova não conta: regra de zero invenção (spec §11).
+        linha('sondagem', 'sondagem_item', i.chave, i.capturada && trecho !== null, {}, trecho);
+    }
+    linha('sondagem', 'pergunta_aberta', null, null, { contagem: d.sondagem.perguntas_abertas });
+    linha('sondagem', 'pergunta_fechada', null, null, { contagem: d.sondagem.perguntas_fechadas });
+
+    const s = d.solucao_completa;
+    for (const c of s.complementares_oferecidos) linha('solucao_completa', 'complementar', null, true, { produto: c.produto }, comTrecho(c.trecho));
+    linha('solucao_completa', 'prazo', null, s.prazo_informado);
+    linha('solucao_completa', 'condicao', null, s.condicao_informada);
+    for (const f of s.frases_proibidas) linha('solucao_completa', 'frase_proibida', f.chave, true, {}, comTrecho(f.trecho));
+
+    for (const x of d.objecoes) {
+        linha('contorno_objecoes', 'objecao', x.codigo, true, {
+            descricao: x.descricao, cachorro: x.cachorro, papagaio: x.papagaio, minhoca: x.minhoca,
+            ordem_correta: x.ordem_correta, concordou_ou_criticou: x.concordou_ou_criticou, minhoca_do_catalogo: x.minhoca_do_catalogo,
+        }, comTrecho(x.trecho));
+    }
+
+    const p = d.preco;
+    linha('estrategia_preco', 'desconto', null, p.desconto_mencionado, {}, comTrecho(p.trecho_desconto));
+    linha('estrategia_preco', 'gerencia', null, p.mencionou_gerencia);
+    linha('estrategia_preco', 'orcamento_concorrente', null, p.orcamento_concorrente, { conferiu: p.conferiu_orcamento });
+
+    const f = d.fechamento;
+    linha('fechamento', 'fechamento', f.tentou ? (f.tecnica ?? OUTRA) : null, f.tentou, {}, comTrecho(f.trecho));
+    linha('fechamento', 'final_positivo', null, f.final_positivo);
+    return o;
+}
+
+export type DetalheDia = {
+    conversas: number; conversas_com_sondagem: number;
+    sondagem_por_item: Record<string, number>; perguntas_abertas_pct: number | null;
+    objecoes: Record<string, number>; fora_do_catalogo: number;
+    contorno_completo_pct: number | null; concordou_ou_criticou: number;
+    desconto_mencionado: number; fechamento: Record<string, number>; final_positivo_pct: number | null;
+};
+export type ResumoMec = { sondagem_itens: number | null; frases_proibidas: number; detalhe: DetalheDia };
+
+const pct = (parte: number, total: number): number | null => (total ? Math.round((parte / total) * 100) : null);
+const somar = (mapa: Record<string, number>, chave: string) => { mapa[chave] = (mapa[chave] ?? 0) + 1; };
+
+/**
+ * Resume as observações de um período (dia, vendedor, loja). A sondagem só
+ * conta nas conversas em que ela cabia E que têm o detalhe gravado: um dia
+ * misto (parte analisada antes do detalhe existir) não puxa a média para baixo.
+ */
+export function resumirObservacoes(linhas: readonly LinhaObservacao[], sondagemAplicavel: ReadonlySet<string>): ResumoMec {
+    const itensSondagem = linhas.filter((l) => l.sinal === 'sondagem_item' && sondagemAplicavel.has(l.conversa_id));
+    const comSondagem = new Set(itensSondagem.map((l) => l.conversa_id));
+    const capturadas = itensSondagem.filter((l) => l.valor === true);
+    const porItem: Record<string, number> = {};
+    for (const chave of new Set(itensSondagem.map((l) => l.item_chave ?? ''))) {
+        porItem[chave] = pct(capturadas.filter((l) => l.item_chave === chave).length, comSondagem.size) ?? 0;
+    }
+    const contagem = (sinal: Sinal) => linhas.filter((l) => l.sinal === sinal).reduce((s, l) => s + Number(l.detalhe.contagem ?? 0), 0);
+    const abertas = contagem('pergunta_aberta');
+    const fechadas = contagem('pergunta_fechada');
+
+    const objecoes = linhas.filter((l) => l.sinal === 'objecao');
+    const porCodigo: Record<string, number> = {};
+    for (const o of objecoes) if (o.item_chave && o.item_chave !== FORA_DO_CATALOGO) somar(porCodigo, o.item_chave);
+    const completo = objecoes.filter((o) => o.detalhe.cachorro === true && o.detalhe.papagaio === true && o.detalhe.minhoca === true && o.detalhe.ordem_correta === true);
+
+    const fechamentos = linhas.filter((l) => l.sinal === 'fechamento');
+    const porFechamento: Record<string, number> = {};
+    for (const f of fechamentos) somar(porFechamento, f.valor ? (f.item_chave ?? OUTRA) : 'nenhum');
+    const finais = linhas.filter((l) => l.sinal === 'final_positivo');
+
+    return {
+        sondagem_itens: comSondagem.size ? Math.round((capturadas.length / comSondagem.size) * 10) / 10 : null,
+        frases_proibidas: linhas.filter((l) => l.sinal === 'frase_proibida').length,
+        detalhe: {
+            conversas: new Set(linhas.map((l) => l.conversa_id)).size,
+            conversas_com_sondagem: comSondagem.size,
+            sondagem_por_item: porItem,
+            perguntas_abertas_pct: pct(abertas, abertas + fechadas),
+            objecoes: porCodigo,
+            fora_do_catalogo: objecoes.filter((o) => o.item_chave === FORA_DO_CATALOGO).length,
+            contorno_completo_pct: pct(completo.length, objecoes.length),
+            concordou_ou_criticou: objecoes.filter((o) => o.detalhe.concordou_ou_criticou === true).length,
+            desconto_mencionado: linhas.filter((l) => l.sinal === 'desconto' && l.valor === true).length,
+            fechamento: porFechamento,
+            final_positivo_pct: pct(finais.filter((l) => l.valor === true).length, finais.length),
+        },
+    };
+}
+
+/** "Objeções da semana" pelo código do catálogo, com o rótulo do Book. */
+export function contarObjecoesPorCodigo(
+    linhas: readonly { item_chave: string | null }[], rotulos: ReadonlyMap<string, string>, quantas = 4,
+): ContagemObjecao[] {
+    const contagem = new Map<string, number>();
+    for (const l of linhas) if (l.item_chave) contagem.set(l.item_chave, (contagem.get(l.item_chave) ?? 0) + 1);
+    return [...contagem.entries()]
+        .map(([chave, total]) => ({ objecao: chave === FORA_DO_CATALOGO ? 'Fora do catálogo' : rotulos.get(chave) ?? chave, total }))
+        .sort((a, b) => b.total - a.total || a.objecao.localeCompare(b.objecao, 'pt-BR'))
+        .slice(0, quantas);
+}
+
+/** Célula da planilha de calibração: minúscula, sem espaço, lista `a|b` em ordem. */
+export function normalizarCelula(v: string): string {
+    return v.toLocaleLowerCase('pt-BR').split('|').map((s) => s.trim()).filter(Boolean).sort().join('|');
+}
+
+/** % de concordância IA × humano; célula que o humano não preencheu não conta. */
+export function concordancia(pares: readonly { ia: string; humano: string }[]): number | null {
+    const medidos = pares.filter((p) => normalizarCelula(p.humano) !== '');
+    return pct(medidos.filter((p) => normalizarCelula(p.ia) === normalizarCelula(p.humano)).length, medidos.length);
+}

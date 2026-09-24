@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     chavesDoTipo, detalheLigado, etapaProvisoria, schemaDetalhe, schemaJsonDetalhe, FORA_DO_CATALOGO, type ItemPlaybook,
+    concordancia, contarObjecoesPorCodigo, normalizarCelula, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao,
 } from '../../lib/mec.ts';
 
 export const SONDAGEM = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((l) => `sondagem_${l}`);
@@ -81,4 +82,97 @@ test('playbook sem frase proibida: nenhuma frase é aceita', () => {
     const semFrase = ITENS.filter((i) => i.tipo !== 'frase_proibida');
     assert.equal((schemaJsonDetalhe(semFrase) as any).properties.solucao_completa.properties.frases_proibidas.maxItems, 0);
     assert.throws(() => schemaDetalhe(semFrase).parse(DETALHE));
+});
+
+const comConversa = (conversa_id: string, d: DetalheMec): LinhaObservacao[] =>
+    observacoesDoDetalhe(d).map((o) => ({ ...o, conversa_id }));
+
+const variar = (mudancas: Partial<DetalheMec>) => ({ ...DETALHE, ...mudancas }) as unknown as DetalheMec;
+
+test('um detalhe vira uma linha por sinal', () => {
+    const o = observacoesDoDetalhe(DETALHE as DetalheMec);
+    // 7 sondagem + 2 perguntas + 1 complementar + prazo + condição + 1 frase + 2 objeções + 3 preço + 2 fechamento
+    assert.equal(o.length, 20);
+    assert.deepEqual(o.filter((x) => x.sinal === 'sondagem_item' && x.valor).map((x) => x.item_chave), SONDAGEM.slice(0, 3));
+    const fecha = o.find((x) => x.sinal === 'fechamento')!;
+    assert.deepEqual([fecha.item_chave, fecha.valor, fecha.etapa], ['opcoes', true, 'fechamento']);
+    assert.equal(o.find((x) => x.sinal === 'pergunta_aberta')!.detalhe.contagem, 2);
+});
+
+// Zero invenção: sem trecho, não conta.
+test('capturada sem trecho conta como não capturada', () => {
+    const d = variar({ sondagem: { ...DETALHE.sondagem, itens: SONDAGEM.map((chave) => ({ chave, capturada: true, trecho: '  ' })) } });
+    assert.equal(observacoesDoDetalhe(d).filter((x) => x.sinal === 'sondagem_item' && x.valor).length, 0);
+});
+
+test('fechamento não tentado fica sem código', () => {
+    const d = variar({ fechamento: { tentou: false, tecnica: null, trecho: null, final_positivo: false } });
+    const fecha = observacoesDoDetalhe(d).find((x) => x.sinal === 'fechamento')!;
+    assert.deepEqual([fecha.item_chave, fecha.valor], [null, false]);
+});
+
+test('resumo do dia: sondagem média, por item, perguntas, frases, objeções e fechamento', () => {
+    const c2 = variar({
+        sondagem: { ...DETALHE.sondagem, itens: SONDAGEM.map((chave, i) => ({ chave, capturada: i < 5, trecho: i < 5 ? 't' : null })) },
+        solucao_completa: { ...DETALHE.solucao_completa, frases_proibidas: [] },
+        objecoes: [],
+        preco: { ...DETALHE.preco, desconto_mencionado: false, trecho_desconto: null },
+        fechamento: { tentou: false, tecnica: null, trecho: null, final_positivo: false },
+    });
+    const r = resumirObservacoes([...comConversa('c1', DETALHE as DetalheMec), ...comConversa('c2', c2)], new Set(['c1', 'c2']));
+    assert.equal(r.sondagem_itens, 4);
+    assert.deepEqual(r.detalhe.sondagem_por_item, {
+        sondagem_a: 100, sondagem_b: 100, sondagem_c: 100, sondagem_d: 50, sondagem_e: 50, sondagem_f: 0, sondagem_g: 0,
+    });
+    assert.equal(r.detalhe.perguntas_abertas_pct, 40);
+    assert.equal(r.frases_proibidas, 1);
+    assert.deepEqual(r.detalhe.objecoes, { preco_alto: 1 });
+    assert.equal(r.detalhe.fora_do_catalogo, 1);
+    assert.equal(r.detalhe.contorno_completo_pct, 50);
+    assert.equal(r.detalhe.concordou_ou_criticou, 1);
+    assert.equal(r.detalhe.desconto_mencionado, 1);
+    assert.deepEqual(r.detalhe.fechamento, { opcoes: 1, nenhum: 1 });
+    assert.equal(r.detalhe.final_positivo_pct, 50);
+    assert.deepEqual([r.detalhe.conversas, r.detalhe.conversas_com_sondagem], [2, 2]);
+});
+
+test('sondagem só conta nas conversas em que cabia', () => {
+    const r = resumirObservacoes([...comConversa('c1', DETALHE as DetalheMec), ...comConversa('c3', DETALHE as DetalheMec)], new Set(['c1']));
+    assert.equal(r.sondagem_itens, 3);
+    assert.equal(r.detalhe.conversas_com_sondagem, 1);
+});
+
+test('sem nada para medir, o resumo é ausência e não zero', () => {
+    const r = resumirObservacoes([], new Set());
+    assert.equal(r.sondagem_itens, null);
+    assert.equal(r.detalhe.perguntas_abertas_pct, null);
+    assert.equal(r.detalhe.contorno_completo_pct, null);
+    assert.equal(r.detalhe.final_positivo_pct, null);
+    assert.deepEqual(r.detalhe.sondagem_por_item, {});
+});
+
+test('objeções por código do catálogo, com rótulo e fora do catálogo', () => {
+    const rotulos = new Map([['preco_alto', 'Preço alto'], ['pensar', 'Vou pensar']]);
+    const r = contarObjecoesPorCodigo(
+        [{ item_chave: 'pensar' }, { item_chave: 'preco_alto' }, { item_chave: 'pensar' }, { item_chave: FORA_DO_CATALOGO }],
+        rotulos,
+    );
+    assert.deepEqual(r, [
+        { objecao: 'Vou pensar', total: 2 },
+        { objecao: 'Fora do catálogo', total: 1 },
+        { objecao: 'Preço alto', total: 1 },
+    ]);
+});
+
+test('célula da planilha: maiúsculas, espaços e ordem não importam', () => {
+    assert.equal(normalizarCelula(' Pensar | preco_alto '), 'pensar|preco_alto');
+    assert.equal(normalizarCelula('preco_alto|pensar'), 'pensar|preco_alto');
+});
+
+test('concordância ignora célula que o humano deixou vazia', () => {
+    assert.equal(concordancia([
+        { ia: 'sim', humano: 'SIM' }, { ia: 'nao', humano: 'sim' },
+        { ia: 'preco_alto|pensar', humano: 'pensar | preco_alto' }, { ia: 'sim', humano: '' },
+    ]), 67);
+    assert.equal(concordancia([{ ia: 'sim', humano: '' }]), null);
 });
