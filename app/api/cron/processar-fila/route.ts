@@ -4,6 +4,7 @@ import { aposFalha } from '@/lib/fila';
 import { transcrever } from '@/lib/transcricao';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
 import { aderenciaPercentual, custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
+import { detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type ItemPlaybook, type LinhaObservacao, type TipoItem } from '@/lib/mec';
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
@@ -268,17 +269,23 @@ async function transcreverMensagem(supabase: Admin, mensagemId: string, apiKey: 
         .eq('id', msg.id);
 }
 
-async function doutrinaMec(supabase: Admin): Promise<{ texto: string; playbookId: string | null }> {
+async function doutrinaMec(supabase: Admin): Promise<{ texto: string; playbookId: string | null; itens: ItemPlaybook[] }> {
     const { data: playbook } = await supabase.from('playbooks').select('id,nome,versao').is('vigente_ate', null)
         .maybeSingle<{ id: string; nome: string; versao: string }>();
-    if (!playbook) return { playbookId: null, texto: 'Avalie acolhida, sondagem, solução completa, contorno de objeções, estratégia de preço, fechamento e acompanhamento conforme aplicabilidade.' };
+    if (!playbook) return { playbookId: null, itens: [], texto: 'Avalie acolhida, sondagem, solução completa, contorno de objeções, estratégia de preço, fechamento e acompanhamento conforme aplicabilidade.' };
     const { data: etapas } = await supabase.from('playbook_etapas').select('id,chave,nome,descricao,criterios,ordem').eq('playbook_id', playbook.id).order('ordem');
     const ids = (etapas ?? []).map((e) => e.id as string);
-    const { data: itens } = ids.length ? await supabase.from('playbook_itens').select('etapa_id,chave,rotulo,detalhe,ordem').in('etapa_id', ids).order('ordem') : { data: [] };
+    const { data: itensBanco } = ids.length ? await supabase.from('playbook_itens').select('etapa_id,chave,tipo,rotulo,detalhe,ordem').in('etapa_id', ids).order('ordem') : { data: [] };
+    const chaveDaEtapa = new Map((etapas ?? []).map((e) => [e.id as string, e.chave as string]));
+    const itens: ItemPlaybook[] = (itensBanco ?? []).map((i) => ({
+        chave: i.chave as string, tipo: i.tipo as TipoItem, rotulo: i.rotulo as string, etapa: chaveDaEtapa.get(i.etapa_id as string) ?? '',
+    }));
     return {
         playbookId: playbook.id,
+        itens,
         texto: `${playbook.nome} (${playbook.versao})\n${(etapas ?? []).map((e) => {
-            const seus = (itens ?? []).filter((i) => i.etapa_id === e.id).map((i) => `- ${i.rotulo}${i.detalhe ? `: ${i.detalhe}` : ''}`).join('\n');
+            // O código entre colchetes é o que o mec_detalhe devolve.
+            const seus = (itensBanco ?? []).filter((i) => i.etapa_id === e.id).map((i) => `- [${i.chave}] ${i.rotulo}${i.detalhe ? `: ${i.detalhe}` : ''}`).join('\n');
             return `${e.nome}: ${e.descricao}\n${seus}`;
         }).join('\n\n')}`,
     };
@@ -301,6 +308,27 @@ async function relatorioDesatualizado(supabase: Admin, userId: string, dataRef: 
     if (e1 || e2) throw new Error((e1 ?? e2)!.message);
     if (!relatorio) return true;
     return !!ultima && Date.parse(relatorio.updated_at) < Date.parse(ultima.updated_at);
+}
+
+/**
+ * Grava o detalhe do MEC de uma conversa num dia. Reanálise troca o detalhe
+ * inteiro: apaga o que havia e grava o novo (ou nada, se a conversa deixou de
+ * ser negociação ou a unidade está fora do piloto).
+ */
+async function gravarObservacoes(
+    supabase: Admin,
+    alvo: { conversaId: string; userId: string; unidadeId: string; dataRef: string; playbookId: string | null },
+    detalhe: DetalheMec | null,
+) {
+    const { error: erroApagar } = await supabase.from('mec_observacoes').delete()
+        .eq('conversa_id', alvo.conversaId).eq('data_ref', alvo.dataRef);
+    if (erroApagar) throw erroApagar;
+    if (!detalhe || !alvo.playbookId) return;
+    const { error } = await supabase.from('mec_observacoes').insert(observacoesDoDetalhe(detalhe).map((o) => ({
+        conversa_id: alvo.conversaId, user_id: alvo.userId, unidade_id: alvo.unidadeId,
+        data_ref: alvo.dataRef, playbook_id: alvo.playbookId, ...o,
+    })));
+    if (error) throw error;
 }
 
 /**
@@ -343,7 +371,9 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     }
 
     const doutrina = await doutrinaMec(supabase);
-    const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: null });
+    // Piloto por unidade (spec §7): fora da lista, a análise é exatamente a de antes.
+    const itensDetalhe = doutrina.playbookId && detalheLigado(unidadeId, process.env.MEC_DETALHE_UNIDADES) ? doutrina.itens : null;
+    const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe });
     const { error: erroAnalise } = await supabase.from('analises_conversa').upsert({
         conversa_id: conversaId, user_id: conversa.user_id, unidade_id: unidadeId, data_ref: dataRef,
         tipo_conversa: resultado.tipo_conversa, status: resultado.status, sentiment: resultado.sentiment,
@@ -363,6 +393,11 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
             evidencias: m.evidencias, itens: m.itens,
         })), { onConflict: 'conversa_id,data_ref,etapa' });
     }
+    await gravarObservacoes(
+        supabase,
+        { conversaId, userId: conversa.user_id, unidadeId, dataRef, playbookId: doutrina.playbookId },
+        resultado.tipo_conversa === 'negociacao' ? resultado.mec_detalhe ?? null : null,
+    );
     return true;
 }
 
@@ -419,8 +454,13 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
 }
 
 async function consolidarAderenciaDiaria(supabase: Admin, userId: string, unidadeId: string, dataRef: string) {
-    const { data: linhas } = await supabase.from('aderencia_conversa').select('playbook_id,etapa,aplicavel,aplicado,itens')
-        .eq('user_id', userId).eq('data_ref', dataRef);
+    const [{ data: linhas }, { data: observacoes, error }] = await Promise.all([
+        supabase.from('aderencia_conversa').select('conversa_id,playbook_id,etapa,aplicavel,aplicado,itens')
+            .eq('user_id', userId).eq('data_ref', dataRef),
+        supabase.from('mec_observacoes').select('conversa_id,etapa,sinal,item_chave,valor,detalhe,trecho')
+            .eq('user_id', userId).eq('data_ref', dataRef).returns<LinhaObservacao[]>(),
+    ]);
+    if (error) throw error;
     if (!linhas?.length) return;
     const aplicaveis = linhas.filter((l) => l.aplicavel);
     const etapas = [...new Set(aplicaveis.map((l) => String(l.etapa)))];
@@ -428,10 +468,16 @@ async function consolidarAderenciaDiaria(supabase: Admin, userId: string, unidad
         const nota = aderenciaPercentual(aplicaveis.filter((l) => l.etapa === etapa));
         return [etapa, nota === null ? null : Math.round(nota)];
     }));
+    // Detalhe do MEC (spec §5.2): só existe para conversas analisadas com ele.
+    const sondagemAplicavel = new Set(aplicaveis.filter((l) => l.etapa === 'sondagem').map((l) => String(l.conversa_id)));
+    const resumo = observacoes?.length ? resumirObservacoes(observacoes, sondagemAplicavel) : null;
     await supabase.from('aderencia_diaria').upsert({
         user_id: userId, unidade_id: unidadeId, data_ref: dataRef, playbook_id: linhas[0].playbook_id,
         aderencia_geral: aderenciaPercentual(aplicaveis),
         por_etapa: porEtapa,
+        sondagem_itens: resumo?.sondagem_itens ?? null,
+        frases_proibidas: resumo?.frases_proibidas ?? 0,
+        detalhe: resumo?.detalhe ?? {},
     }, { onConflict: 'user_id,data_ref' });
 }
 
