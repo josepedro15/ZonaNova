@@ -710,7 +710,8 @@ test('variação do período sem um dos lados é null', () => {
 
 test('série semanal: da mais antiga à mais recente, semana vazia é null', () => {
     const linhas = [l('2026-09-23', 'x', 70), l('2026-09-17', 'x', 60), l('2026-09-16', 'x', 64)];
-    assert.deepEqual(serieSemanal(linhas, (x) => x.v, '2026-09-23', 3), [null, 62, 70]);
+    // Semanas (fim − 7k, fim]: 16/09 cai na do meio; 17/09 e 23/09 na última.
+    assert.deepEqual(serieSemanal(linhas, (x) => x.v, '2026-09-23', 3), [null, 64, 65]);
 });
 
 // --- destaques da rede ----------------------------------------------------------
