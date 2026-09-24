@@ -5,6 +5,7 @@ import {
     chavesDoTipo, detalheLigado, etapaProvisoria, schemaDetalhe, schemaJsonDetalhe, FORA_DO_CATALOGO, type ItemPlaybook,
     concordancia, contarObjecoesPorCodigo, normalizarCelula, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao,
 } from '../../lib/mec.ts';
+import { montarSchemaAnalise } from '../../lib/analise.ts';
 
 export const SONDAGEM = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((l) => `sondagem_${l}`);
 export const ITENS: ItemPlaybook[] = [
@@ -175,4 +176,18 @@ test('concordância ignora célula que o humano deixou vazia', () => {
         { ia: 'preco_alto|pensar', humano: 'pensar | preco_alto' }, { ia: 'sim', humano: '' },
     ]), 67);
     assert.equal(concordancia([{ ia: 'sim', humano: '' }]), null);
+});
+
+test('sem itens, o schema da análise é o de sempre', () => {
+    const { json } = montarSchemaAnalise(null) as { json: any };
+    assert.equal(json.properties.mec_detalhe, undefined);
+    assert.equal(json.required.includes('mec_detalhe'), false);
+});
+
+test('com itens, mec_detalhe é obrigatório e pode ser null', () => {
+    const { json, zod } = montarSchemaAnalise(ITENS) as { json: any; zod: any };
+    assert.equal(json.required.includes('mec_detalhe'), true);
+    assert.deepEqual(json.properties.mec_detalhe.anyOf[1], { type: 'null' });
+    assert.equal(zod.shape.mec_detalhe.safeParse(null).success, true);
+    assert.equal(zod.shape.mec_detalhe.safeParse(DETALHE).success, true);
 });

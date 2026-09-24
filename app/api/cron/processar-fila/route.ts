@@ -343,7 +343,7 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     }
 
     const doutrina = await doutrinaMec(supabase);
-    const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto });
+    const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: null });
     const { error: erroAnalise } = await supabase.from('analises_conversa').upsert({
         conversa_id: conversaId, user_id: conversa.user_id, unidade_id: unidadeId, data_ref: dataRef,
         tipo_conversa: resultado.tipo_conversa, status: resultado.status, sentiment: resultado.sentiment,

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { schemaDetalhe, schemaJsonDetalhe, type DetalheMec, type ItemPlaybook } from './mec.ts';
 
 export type MensagemAnalise = {
     direcao: 'entrada' | 'saida';
@@ -65,6 +66,25 @@ export const schemaJsonAnalise = {
         } } },
     },
 } as const;
+
+export type ResultadoComDetalhe = ResultadoAnalise & { mec_detalhe?: DetalheMec | null };
+
+/**
+ * O schema da análise para um playbook. Sem itens (sem playbook vigente, ou
+ * unidade fora do piloto), é exatamente o de sempre; com itens, ganha o bloco
+ * obrigatório `mec_detalhe` (null fora de negociação), com os enums do Book.
+ */
+export function montarSchemaAnalise(itens: readonly ItemPlaybook[] | null): { zod: z.ZodType<ResultadoComDetalhe>; json: Record<string, unknown> } {
+    if (!itens) return { zod: schemaAnalise as unknown as z.ZodType<ResultadoComDetalhe>, json: schemaJsonAnalise as unknown as Record<string, unknown> };
+    return {
+        zod: schemaAnalise.extend({ mec_detalhe: schemaDetalhe(itens).nullable() }) as unknown as z.ZodType<ResultadoComDetalhe>,
+        json: {
+            ...schemaJsonAnalise,
+            required: [...schemaJsonAnalise.required, 'mec_detalhe'],
+            properties: { ...schemaJsonAnalise.properties, mec_detalhe: { anyOf: [schemaJsonDetalhe(itens), { type: 'null' }] } },
+        },
+    };
+}
 
 export function dataEmSaoPaulo(instante: Date): string {
     return new Intl.DateTimeFormat('en-CA', {
