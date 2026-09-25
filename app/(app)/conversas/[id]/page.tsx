@@ -9,7 +9,9 @@ import { grifarConversa, listaDeTextos, rotuloPotencial, tomEspera, urgenciaAlta
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
 import { contestarAderencia } from '@/app/actions/gestao';
 import { bloquearContato } from '@/app/actions/conexao';
+import { carregarPlaybook } from '@/lib/mec-dados';
 import { Transcricao, textoDaMensagem, type Mensagem } from './transcricao';
+import { ChecklistMec, type ObsTela } from './checklist-mec';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +20,7 @@ type Payload = {
     evidencias?: { trecho: string; conclusao: string }[];
     tecnicas_usadas?: unknown; erros_vendedor?: unknown; tags?: unknown;
 };
-type Marcacao = { id: string; etapa: string; aplicavel: boolean; aplicado: string | null; justificativa: string; itens: unknown };
+type Marcacao = { id: string; etapa: string; aplicavel: boolean; aplicado: string | null; justificativa: string; itens: unknown; playbook_id: string };
 
 const TIPO: Record<string, string> = { negociacao: 'Negociação', suporte: 'Suporte', social: 'Social' };
 const STATUS: Record<string, { rotulo: string; tom: Tom }> = {
@@ -65,7 +67,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
         .order('data_ref', { ascending: false }).limit(1).maybeSingle();
     // O MEC do MESMO dia da análise exibida.
     const { data: aderencia } = analise
-        ? await supabase.from('aderencia_conversa').select('id,etapa,aplicavel,aplicado,justificativa,itens')
+        ? await supabase.from('aderencia_conversa').select('id,etapa,aplicavel,aplicado,justificativa,itens,playbook_id')
             .eq('conversa_id', id).eq('data_ref', analise.data_ref).order('etapa').returns<Marcacao[]>()
         : { data: [] as Marcacao[] };
     const { data: contestacoes } = aderencia?.length
@@ -73,6 +75,14 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
             .in('aderencia_id', aderencia.map((a) => a.id)).returns<{ aderencia_id: string; veredito: string }[]>()
         : { data: [] };
     const contestada = new Map((contestacoes ?? []).map((c) => [c.aderencia_id, c.veredito]));
+    // Detalhe estruturado do MEC (spec 2026-09-24): só existe para análises feitas com ele.
+    const [{ data: observacoes }, pb] = analise && aderencia?.length
+        ? await Promise.all([
+            supabase.from('mec_observacoes').select('etapa,sinal,item_chave,valor,detalhe,trecho')
+                .eq('conversa_id', id).eq('data_ref', analise.data_ref).returns<ObsTela[]>(),
+            carregarPlaybook(supabase, aderencia[0].playbook_id),
+        ])
+        : [{ data: [] as ObsTela[] }, null];
 
     const mensagens = [...((conversa.mensagens ?? []) as Mensagem[])].sort((a, b) => a.enviada_em.localeCompare(b.enviada_em));
     const payload = (analise?.payload ?? {}) as Payload;
@@ -249,11 +259,13 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                                         <div className="flex flex-col gap-0.5">
                                                             <span className="text-[13.5px] font-semibold">{NOMES_ETAPA[a.etapa as Etapa] ?? a.etapa}</span>
                                                             <span className="text-xs text-tinta-3">{a.justificativa}</span>
-                                                            {listaDeTextos(a.itens).length > 0 && (
+                                                            {!(observacoes ?? []).some((o) => o.etapa === a.etapa) && listaDeTextos(a.itens).length > 0 && (
                                                                 <ul aria-label="Itens observados nesta etapa" className="mt-1 flex flex-wrap gap-1">
                                                                     {listaDeTextos(a.itens).map((item) => <li key={item} className="rounded-md bg-superficie-2 px-2 py-0.5 text-[11.5px] text-tinta-2">{item}</li>)}
                                                                 </ul>
                                                             )}
+                                                            <ChecklistMec etapa={a.etapa} obs={(observacoes ?? []).filter((o) => o.etapa === a.etapa)}
+                                                                          rotulos={pb?.rotulos ?? new Map()} provisoria={pb?.provisorias.has(a.etapa) ?? false} />
                                                         </div>
                                                         {selo.tracejado ? (
                                                             <span className="inline-flex items-center whitespace-nowrap rounded-full border border-dashed border-linha-campo bg-superficie px-2.5 py-1 text-xs font-semibold text-tinta-2">{selo.rotulo}</span>
