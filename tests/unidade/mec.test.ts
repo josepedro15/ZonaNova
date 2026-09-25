@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
     chavesDoTipo, detalheLigado, etapaProvisoria, schemaDetalhe, schemaJsonDetalhe, FORA_DO_CATALOGO, type ItemPlaybook,
     concordancia, contarObjecoesPorCodigo, normalizarCelula, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao,
-    chaveConversaDia, porConversaDia, juntarObjecoes,
+    chaveConversaDia, porConversaDia, juntarObjecoes, conferirDetalhe,
 } from '../../lib/mec.ts';
 import { montarSchemaAnalise } from '../../lib/analise.ts';
 
@@ -276,4 +276,44 @@ test('schema da análise é strict em todo objeto (com itens e com playbook vazi
             assert.deepEqual([...no.required].sort(), Object.keys(no.properties).sort(), caminho);
         }
     }
+});
+
+const TRANSCRIPT = [
+    'C: "oi, quero tinta pra fachada, 2700 não faz nem sentido né"',
+    'V: "é pra área externa? trecho 0 e trecho 1"',
+    'V: [automática] "algo mais?"',
+    'C: "algo mais? não"',
+    'V: "Algo mais, senhor?"',
+].join('\n');
+
+test('conferirDetalhe: frase proibida só vale com a frase do Book numa fala do vendedor', () => {
+    const d = variar({ solucao_completa: { ...DETALHE.solucao_completa, frases_proibidas: [
+        { chave: 'algo_mais', trecho: 'nem' },
+        { chave: 'algo_mais', trecho: 'algo mais? não' },
+        { chave: 'algo_mais', trecho: 'Algo mais, senhor?' },
+    ] } } as any);
+    const r = conferirDetalhe(d, TRANSCRIPT, ITENS);
+    assert.deepEqual(r.solucao_completa.frases_proibidas, [{ chave: 'algo_mais', trecho: 'Algo mais, senhor?' }]);
+});
+
+test('conferirDetalhe: mensagem automática não conta como frase do vendedor', () => {
+    const d = variar({ solucao_completa: { ...DETALHE.solucao_completa, frases_proibidas: [{ chave: 'algo_mais', trecho: 'algo mais?' }] } } as any);
+    assert.deepEqual(conferirDetalhe(d, 'V: [automática] "algo mais?"', ITENS).solucao_completa.frases_proibidas, []);
+});
+
+test('conferirDetalhe: informação capturada com trecho que não está na conversa vira não capturada', () => {
+    const r = conferirDetalhe(DETALHE as unknown as DetalheMec, TRANSCRIPT, ITENS);
+    assert.deepEqual(r.sondagem.itens.slice(0, 3), [
+        { chave: 'sondagem_a', capturada: true, trecho: 'trecho 0' },
+        { chave: 'sondagem_b', capturada: true, trecho: 'trecho 1' },
+        { chave: 'sondagem_c', capturada: false, trecho: null },
+    ]);
+});
+
+test('conferirDetalhe: não altera o resto nem o objeto de entrada', () => {
+    const entrada = structuredClone(DETALHE) as unknown as DetalheMec;
+    const r = conferirDetalhe(entrada, TRANSCRIPT, ITENS);
+    assert.deepEqual(entrada, DETALHE);
+    assert.deepEqual(r.objecoes, DETALHE.objecoes);
+    assert.deepEqual(r.fechamento, DETALHE.fechamento);
 });

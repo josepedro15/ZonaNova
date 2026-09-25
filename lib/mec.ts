@@ -180,6 +180,56 @@ export type LinhaObservacao = Observacao & { conversa_id: string };
 
 const comTrecho = (t: string | null | undefined): string | null => (t && t.trim() ? t.trim() : null);
 
+const normalizar = (s: string): string =>
+    s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/** Falas do transcript de `montarTranscript` (`V: [marcas] "texto em JSON"`). */
+function falasDoTranscript(transcript: string): { vendedor: boolean; automatica: boolean; texto: string }[] {
+    const falas: { vendedor: boolean; automatica: boolean; texto: string }[] = [];
+    for (const linha of transcript.split('\n')) {
+        const m = /^(V|C):((?:\s\[[^\]]*\])*)\s(".*")$/.exec(linha);
+        if (!m) continue;
+        try {
+            falas.push({ vendedor: m[1] === 'V', automatica: m[2].includes('[automática]'), texto: normalizar(JSON.parse(m[3]) as string) });
+        } catch { /* linha cortada: fica de fora */ }
+    }
+    return falas;
+}
+
+/**
+ * Confere as provas do detalhe contra a própria conversa antes de gravar. Na
+ * chamada real a IA marcou "Algo mais?" com o trecho "nem": sem esta conferência
+ * o vendedor seria punido por algo que não disse.
+ * - frase proibida: o trecho tem de conter a frase do Book e estar numa fala
+ *   humana do vendedor;
+ * - informação da sondagem: o trecho tem de estar em alguma fala; senão, não
+ *   foi capturada.
+ */
+export function conferirDetalhe(d: DetalheMec, transcript: string, itens: readonly ItemPlaybook[]): DetalheMec {
+    const falas = falasDoTranscript(transcript);
+    const doVendedor = falas.filter((f) => f.vendedor && !f.automatica).map((f) => f.texto);
+    const todas = falas.map((f) => f.texto);
+    const rotulo = new Map(itens.map((i) => [i.chave, normalizar(i.rotulo)]));
+    const esta = (trecho: string | null, onde: string[]) => {
+        const t = trecho ? normalizar(trecho) : '';
+        return t !== '' && onde.some((f) => f.includes(t));
+    };
+    return {
+        ...d,
+        sondagem: {
+            ...d.sondagem,
+            itens: d.sondagem.itens.map((i) => (i.capturada && !esta(i.trecho, todas) ? { ...i, capturada: false, trecho: null } : i)),
+        },
+        solucao_completa: {
+            ...d.solucao_completa,
+            frases_proibidas: d.solucao_completa.frases_proibidas.filter((f) => {
+                const frase = rotulo.get(f.chave);
+                return esta(f.trecho, doVendedor) && (!frase || normalizar(f.trecho ?? '').includes(frase));
+            }),
+        },
+    };
+}
+
 /** Uma linha por sinal observado: é o que vai para `mec_observacoes`. */
 export function observacoesDoDetalhe(d: DetalheMec): Observacao[] {
     const o: Observacao[] = [];

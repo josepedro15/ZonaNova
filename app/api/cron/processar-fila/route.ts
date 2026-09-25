@@ -4,7 +4,7 @@ import { aposFalha } from '@/lib/fila';
 import { transcrever } from '@/lib/transcricao';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
 import { aderenciaPercentual, custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
-import { detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type ItemPlaybook, type LinhaObservacao, type TipoItem } from '@/lib/mec';
+import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type ItemPlaybook, type LinhaObservacao, type TipoItem } from '@/lib/mec';
 import { paginar } from '@/lib/paginar';
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
@@ -386,6 +386,9 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     const doutrina = await doutrinaMec(supabase, comDetalhe);
     const itensDetalhe = doutrina.playbookId && comDetalhe ? doutrina.itens : null;
     const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe });
+    // As provas do detalhe são conferidas contra a conversa antes de gravar
+    // (frase proibida fora da fala do vendedor, trecho que não existe).
+    if (itensDetalhe && resultado.mec_detalhe) resultado.mec_detalhe = conferirDetalhe(resultado.mec_detalhe, transcript, itensDetalhe);
 
     // A análise (que guarda o hash do transcript) é gravada por último: se
     // algo falhar antes, a nova tentativa não cai no atalho de "transcript
