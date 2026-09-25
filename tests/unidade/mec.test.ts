@@ -214,3 +214,51 @@ test('com itens, mec_detalhe é obrigatório e pode ser null', () => {
     assert.equal(zod.shape.mec_detalhe.safeParse(null).success, true);
     assert.equal(zod.shape.mec_detalhe.safeParse(DETALHE).success, true);
 });
+
+const ANALISE_BASE = {
+    tipo_conversa: 'negociacao', status: 'em_andamento', sentiment: 60, score_atendimento: 70, score_oportunidade: 50, score_risco: 30,
+    estagio_funil: 'proposta', potencial_venda: 'medio', urgencia: 3, resumo: 'r', destaque: 'd', proxima_acao: 'p', script_sugerido: 's',
+    objecoes: [], tecnicas_usadas: [], erros_vendedor: [], tags: [], evidencias: [{ trecho: 't', conclusao: 'c' }],
+    mec: ['acolhida', 'sondagem', 'solucao_completa', 'contorno_objecoes', 'estrategia_preco', 'fechamento', 'acompanhamento']
+        .map((etapa) => ({ etapa, aplicavel: true, aplicado: 'sim', justificativa: 'j', evidencias: [], itens: [] })),
+};
+
+test('detalhe inválido vira null e não derruba a análise', () => {
+    const { zod } = montarSchemaAnalise(ITENS) as { zod: any };
+    const repetida = DETALHE.sondagem.itens.map((i) => ({ ...i, chave: 'sondagem_a' }));
+    const avisos: unknown[] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => { avisos.push(args); };
+    try {
+        const r = zod.safeParse({ ...ANALISE_BASE, mec_detalhe: { ...DETALHE, sondagem: { ...DETALHE.sondagem, itens: repetida } } });
+        assert.equal(r.success, true);
+        assert.equal(r.data.mec_detalhe, null);
+        assert.equal(r.data.score_atendimento, 70);
+    } finally {
+        console.warn = warn;
+    }
+    assert.equal(avisos.length, 1);
+    assert.equal(zod.safeParse({ ...ANALISE_BASE, mec_detalhe: DETALHE }).data.mec_detalhe.fechamento.tecnica, 'opcoes');
+});
+
+// Modo strict da OpenAI: todo objeto fecha as propriedades e exige todas elas.
+function objetosDoSchema(no: unknown, caminho = '$', achados: { caminho: string; no: any }[] = []) {
+    if (Array.isArray(no)) no.forEach((x, i) => objetosDoSchema(x, `${caminho}[${i}]`, achados));
+    else if (no && typeof no === 'object') {
+        const o = no as any;
+        if (o.type === 'object' && o.properties) achados.push({ caminho, no: o });
+        for (const [k, v] of Object.entries(o)) objetosDoSchema(v, `${caminho}.${k}`, achados);
+    }
+    return achados;
+}
+
+test('schema da análise é strict em todo objeto (com itens e com playbook vazio)', () => {
+    for (const itens of [ITENS, []]) {
+        const objetos = objetosDoSchema(montarSchemaAnalise(itens).json);
+        assert.ok(objetos.length > 10);
+        for (const { caminho, no } of objetos) {
+            assert.equal(no.additionalProperties, false, caminho);
+            assert.deepEqual([...no.required].sort(), Object.keys(no.properties).sort(), caminho);
+        }
+    }
+});

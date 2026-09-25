@@ -76,8 +76,13 @@ export type ResultadoComDetalhe = ResultadoAnalise & { mec_detalhe?: DetalheMec 
  */
 export function montarSchemaAnalise(itens: readonly ItemPlaybook[] | null): { zod: z.ZodType<ResultadoComDetalhe>; json: Record<string, unknown> } {
     if (!itens) return { zod: schemaAnalise as unknown as z.ZodType<ResultadoComDetalhe>, json: schemaJsonAnalise as unknown as Record<string, unknown> };
+    // Detalhe fora do contrato é descartado (null), não derruba a análise do dia.
+    const detalhe = schemaDetalhe(itens).nullable().catch((ctx) => {
+        console.warn('[mec_detalhe] descartado:', ctx.issues[0]?.message ?? ctx.issues);
+        return null;
+    });
     return {
-        zod: schemaAnalise.extend({ mec_detalhe: schemaDetalhe(itens).nullable() }) as unknown as z.ZodType<ResultadoComDetalhe>,
+        zod: schemaAnalise.extend({ mec_detalhe: detalhe }) as unknown as z.ZodType<ResultadoComDetalhe>,
         json: {
             ...schemaJsonAnalise,
             required: [...schemaJsonAnalise.required, 'mec_detalhe'],
