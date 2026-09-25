@@ -8,7 +8,7 @@ import { paginar } from '@/lib/paginar';
 import { esperaDoCliente, juntarPorDia, type LinhaDia, type Msg } from '@/lib/painel';
 import { comQuemFalar, contarObjecoes, diaMenos, variacaoSemanal, type NotaDia } from '@/lib/derivacoes';
 import { setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
-import { contarObjecoesPorCodigo } from '@/lib/mec';
+import { contarObjecoesPorCodigo, juntarObjecoes } from '@/lib/mec';
 import { carregarPlaybook } from '@/lib/mec-dados';
 
 type Supabase = Awaited<ReturnType<typeof contextoApp>>['supabase'];
@@ -40,7 +40,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         .select('unidade_id,data_ref,score_geral,leads_atendidos,conversoes_confirmadas,oportunidades_perdidas,tempo_medio_resposta_s,taxa_resposta')
         .order('data_ref', { ascending: false }).limit(60);
     let qAderencia = supabase.from('aderencia_diaria').select('user_id,data_ref,por_etapa').gte('data_ref', diaMenos(hoje, 7)).order('data_ref', { ascending: false });
-    let qAnalises = supabase.from('analises_conversa').select('payload').gte('data_ref', diaMenos(hoje, 7)).order('data_ref', { ascending: false }).limit(1000);
+    let qAnalises = supabase.from('analises_conversa').select('conversa_id,payload').gte('data_ref', diaMenos(hoje, 7)).order('data_ref', { ascending: false }).limit(1000);
     // Só 48 h de conversa: a espera que importa ao gestor é a de agora. A
     // mensagens(...) embutida também é filtrada pelas mesmas 48h — sem isso,
     // cada conversa ativa trazia o histórico inteiro. Acima de 500 conversas
@@ -64,7 +64,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     // uma rede inteira com muita objeção na semana perderia linhas em
     // silêncio. Pagina com paginar() em vez de .limit(2000) direto.
     const qObjecoes = (de: number, ate: number) => {
-        let q = supabase.from('mec_observacoes').select('item_chave').eq('sinal', 'objecao')
+        let q = supabase.from('mec_observacoes').select('conversa_id,item_chave').eq('sinal', 'objecao')
             .gte('data_ref', diaMenos(hoje, 7)).order('id').range(de, ate);
         if (unidadeIds) q = q.in('unidade_id', unidadeIds);
         return q;
@@ -78,9 +78,9 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         qUnidade.returns<LinhaDia[]>(),
         supabase.from('relatorios_rede').select('data_ref,score_geral').order('data_ref', { ascending: false }).limit(1).maybeSingle<{ data_ref: string; score_geral: number | null }>(),
         qAderencia.returns<{ user_id: string; data_ref: string; por_etapa: Record<string, number | null> | null }[]>(),
-        qAnalises.returns<{ payload: unknown }[]>(),
+        qAnalises.returns<{ conversa_id: string; payload: unknown }[]>(),
         qConversas.returns<{ id: string; user_id: string; mensagens: Msg[] }[]>(),
-        paginar<{ item_chave: string | null }>(qObjecoes),
+        paginar<{ conversa_id: string; item_chave: string | null }>(qObjecoes),
         carregarPlaybook(supabase, null),
     ]);
 
@@ -107,10 +107,14 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     const esperas = (conversas ?? []).map((c) => esperaDoCliente(c.mensagens, agora)).filter((e): e is number => e !== null);
     const foraDoAr = equipe.filter((p) => conexao.get(p.id)?.status !== 'conectada');
     const sugestoes = comQuemFalar(equipe, notas, etapas);
-    // Pelo código do catálogo quando já há detalhe do MEC; senão, pelo texto livre de antes.
-    const objecoes = objecoesCodigo?.length
-        ? contarObjecoesPorCodigo(objecoesCodigo, pb?.rotulos ?? new Map())
-        : contarObjecoes((analises ?? []).map((a) => a.payload));
+    // Pelo código do catálogo nas conversas que já o têm; nas outras (outras
+    // lojas, fora do piloto), pelo texto livre de antes. Uma conversa entra
+    // numa lista só, e as duas se somam pelo rótulo.
+    const comCodigo = new Set(objecoesCodigo.map((o) => o.conversa_id));
+    const objecoes = juntarObjecoes(
+        contarObjecoesPorCodigo(objecoesCodigo, pb?.rotulos ?? new Map(), Infinity),
+        contarObjecoes((analises ?? []).filter((a) => !comCodigo.has(a.conversa_id)).map((a) => a.payload), Infinity),
+    );
     const maiorObjecao = objecoes[0]?.total ?? 1;
 
     const linhas = equipe

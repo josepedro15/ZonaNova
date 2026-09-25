@@ -302,6 +302,24 @@ export function contarObjecoesPorCodigo(
         .slice(0, quantas);
 }
 
+/**
+ * Junta duas contagens de objeções (catálogo e texto livre) pelo rótulo
+ * exibido, sem diferenciar maiúsculas: soma, ordena e corta. Quem chama
+ * garante que uma conversa não entra nas duas listas.
+ */
+export function juntarObjecoes(a: readonly ContagemObjecao[], b: readonly ContagemObjecao[], quantas = 4): ContagemObjecao[] {
+    const juntas = new Map<string, ContagemObjecao>();
+    for (const o of [...a, ...b]) {
+        const chave = o.objecao.toLocaleLowerCase('pt-BR');
+        const atual = juntas.get(chave);
+        if (atual) atual.total += o.total;
+        else juntas.set(chave, { objecao: o.objecao, total: o.total });
+    }
+    return [...juntas.values()]
+        .sort((x, y) => y.total - x.total || x.objecao.localeCompare(y.objecao, 'pt-BR'))
+        .slice(0, quantas);
+}
+
 /** Célula da planilha de calibração: minúscula, sem espaço, lista `a|b` em ordem. */
 export function normalizarCelula(v: string): string {
     return v.toLocaleLowerCase('pt-BR').split('|').map((s) => s.trim()).filter(Boolean).sort().join('|');

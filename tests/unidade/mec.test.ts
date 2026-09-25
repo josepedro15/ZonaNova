@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
     chavesDoTipo, detalheLigado, etapaProvisoria, schemaDetalhe, schemaJsonDetalhe, FORA_DO_CATALOGO, type ItemPlaybook,
     concordancia, contarObjecoesPorCodigo, normalizarCelula, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao,
-    chaveConversaDia, porConversaDia,
+    chaveConversaDia, porConversaDia, juntarObjecoes,
 } from '../../lib/mec.ts';
 import { montarSchemaAnalise } from '../../lib/analise.ts';
 
@@ -186,6 +186,21 @@ test('objeções por código do catálogo, com rótulo e fora do catálogo', () 
         { objecao: 'Fora do catálogo', total: 1 },
         { objecao: 'Preço alto', total: 1 },
     ]);
+});
+
+test('objeções de código e de texto livre se somam pelo rótulo, em ordem, cortadas', () => {
+    const r = juntarObjecoes(
+        [{ objecao: 'Preço alto', total: 3 }, { objecao: 'Vou pensar', total: 1 }, { objecao: 'Fora do catálogo', total: 1 }],
+        [{ objecao: 'preço alto', total: 2 }, { objecao: 'Prazo de entrega', total: 4 }, { objecao: 'Frete', total: 1 }, { objecao: 'Cor', total: 1 }],
+    );
+    assert.deepEqual(r, [
+        { objecao: 'Preço alto', total: 5 },
+        { objecao: 'Prazo de entrega', total: 4 },
+        { objecao: 'Cor', total: 1 },
+        { objecao: 'Fora do catálogo', total: 1 },
+    ]);
+    assert.equal(juntarObjecoes([{ objecao: 'A', total: 1 }], [{ objecao: 'B', total: 2 }], 1).length, 1);
+    assert.deepEqual(juntarObjecoes([], []), []);
 });
 
 test('célula da planilha: maiúsculas, espaços e ordem não importam', () => {
