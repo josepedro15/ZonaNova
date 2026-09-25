@@ -264,8 +264,11 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                                                     {listaDeTextos(a.itens).map((item) => <li key={item} className="rounded-md bg-superficie-2 px-2 py-0.5 text-[11.5px] text-tinta-2">{item}</li>)}
                                                                 </ul>
                                                             )}
-                                                            <ChecklistMec etapa={a.etapa} obs={(observacoes ?? []).filter((o) => o.etapa === a.etapa)}
-                                                                          rotulos={pb?.rotulos ?? new Map()} provisoria={pb?.provisorias.has(a.etapa) ?? false} />
+                                                            {/* Etapa que não cabia não mostra checklist: "0 de 7" seria nota ruim, não ausência. */}
+                                                            {a.aplicavel && (
+                                                                <ChecklistMec etapa={a.etapa} obs={(observacoes ?? []).filter((o) => o.etapa === a.etapa)}
+                                                                              rotulos={pb?.rotulos ?? new Map()} provisoria={pb?.provisorias.has(a.etapa) ?? false} />
+                                                            )}
                                                         </div>
                                                         {selo.tracejado ? (
                                                             <span className="inline-flex items-center whitespace-nowrap rounded-full border border-dashed border-linha-campo bg-superficie px-2.5 py-1 text-xs font-semibold text-tinta-2">{selo.rotulo}</span>
