@@ -5,6 +5,7 @@ import { transcrever } from '@/lib/transcricao';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
 import { aderenciaPercentual, custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
 import { detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type ItemPlaybook, type LinhaObservacao, type TipoItem } from '@/lib/mec';
+import { paginar } from '@/lib/paginar';
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
@@ -269,13 +270,22 @@ async function transcreverMensagem(supabase: Admin, mensagemId: string, apiKey: 
         .eq('id', msg.id);
 }
 
-async function doutrinaMec(supabase: Admin): Promise<{ texto: string; playbookId: string | null; itens: ItemPlaybook[] }> {
-    const { data: playbook } = await supabase.from('playbooks').select('id,nome,versao').is('vigente_ate', null)
+/**
+ * O Book vigente em texto para o prompt. `comChaves` só quando a unidade tem o
+ * detalhe ligado: fora do piloto, o texto é byte a byte o de antes do detalhe.
+ */
+async function doutrinaMec(supabase: Admin, comChaves: boolean): Promise<{ texto: string; playbookId: string | null; itens: ItemPlaybook[] }> {
+    const { data: playbook, error: erroPlaybook } = await supabase.from('playbooks').select('id,nome,versao').is('vigente_ate', null)
         .maybeSingle<{ id: string; nome: string; versao: string }>();
+    if (erroPlaybook) throw erroPlaybook;
     if (!playbook) return { playbookId: null, itens: [], texto: 'Avalie acolhida, sondagem, solução completa, contorno de objeções, estratégia de preço, fechamento e acompanhamento conforme aplicabilidade.' };
-    const { data: etapas } = await supabase.from('playbook_etapas').select('id,chave,nome,descricao,criterios,ordem').eq('playbook_id', playbook.id).order('ordem');
+    const { data: etapas, error: erroEtapas } = await supabase.from('playbook_etapas').select('id,chave,nome,descricao,criterios,ordem').eq('playbook_id', playbook.id).order('ordem');
+    if (erroEtapas) throw erroEtapas;
     const ids = (etapas ?? []).map((e) => e.id as string);
-    const { data: itensBanco } = ids.length ? await supabase.from('playbook_itens').select('etapa_id,chave,tipo,rotulo,detalhe,ordem').in('etapa_id', ids).order('ordem') : { data: [] };
+    const { data: itensBanco, error: erroItens } = ids.length
+        ? await supabase.from('playbook_itens').select('etapa_id,chave,tipo,rotulo,detalhe,ordem').in('etapa_id', ids).order('ordem')
+        : { data: [], error: null };
+    if (erroItens) throw erroItens;
     const chaveDaEtapa = new Map((etapas ?? []).map((e) => [e.id as string, e.chave as string]));
     const itens: ItemPlaybook[] = (itensBanco ?? []).map((i) => ({
         chave: i.chave as string, tipo: i.tipo as TipoItem, rotulo: i.rotulo as string, etapa: chaveDaEtapa.get(i.etapa_id as string) ?? '',
@@ -285,7 +295,8 @@ async function doutrinaMec(supabase: Admin): Promise<{ texto: string; playbookId
         itens,
         texto: `${playbook.nome} (${playbook.versao})\n${(etapas ?? []).map((e) => {
             // O código entre colchetes é o que o mec_detalhe devolve.
-            const seus = (itensBanco ?? []).filter((i) => i.etapa_id === e.id).map((i) => `- [${i.chave}] ${i.rotulo}${i.detalhe ? `: ${i.detalhe}` : ''}`).join('\n');
+            const seus = (itensBanco ?? []).filter((i) => i.etapa_id === e.id)
+                .map((i) => `- ${comChaves ? `[${i.chave}] ` : ''}${i.rotulo}${i.detalhe ? `: ${i.detalhe}` : ''}`).join('\n');
             return `${e.nome}: ${e.descricao}\n${seus}`;
         }).join('\n\n')}`,
     };
@@ -370,9 +381,10 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
         return relatorioDesatualizado(supabase, conversa.user_id, dataRef);
     }
 
-    const doutrina = await doutrinaMec(supabase);
     // Piloto por unidade (spec §7): fora da lista, a análise é exatamente a de antes.
-    const itensDetalhe = doutrina.playbookId && detalheLigado(unidadeId, process.env.MEC_DETALHE_UNIDADES) ? doutrina.itens : null;
+    const comDetalhe = detalheLigado(unidadeId, process.env.MEC_DETALHE_UNIDADES);
+    const doutrina = await doutrinaMec(supabase, comDetalhe);
+    const itensDetalhe = doutrina.playbookId && comDetalhe ? doutrina.itens : null;
     const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe });
 
     // A análise (que guarda o hash do transcript) é gravada por último: se
@@ -444,7 +456,13 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
     // social ou testes técnicos. Esses itens continuam nas métricas de resposta,
     // mas o treino usa negociações quando houver ao menos uma.
     const baseCoaching = negociacoes.length ? negociacoes : analises;
-    const consolidado = await consolidarVendedor(baseCoaching.map((a) => a.payload), metricas);
+    // O detalhe do MEC não entra no coaching: o prompt da consolidação fica o de antes.
+    const semDetalhe = (payload: unknown) => {
+        const copia = { ...(payload as Record<string, unknown>) };
+        delete copia.mec_detalhe;
+        return copia;
+    };
+    const consolidado = await consolidarVendedor(baseCoaching.map((a) => semDetalhe(a.payload)), metricas);
     const unidadeId = String(analises[0].unidade_id);
     const { error: erroRel } = await supabase.from('relatorios_diarios').upsert({
         user_id: userId, unidade_id: unidadeId, data_ref: dataRef, ...metricas,
@@ -458,14 +476,14 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
 }
 
 async function consolidarAderenciaDiaria(supabase: Admin, userId: string, unidadeId: string, dataRef: string) {
-    const [{ data: linhas, error: erroLinhas }, { data: observacoes, error }] = await Promise.all([
+    const [{ data: linhas, error: erroLinhas }, observacoes] = await Promise.all([
         supabase.from('aderencia_conversa').select('conversa_id,playbook_id,etapa,aplicavel,aplicado,itens')
             .eq('user_id', userId).eq('data_ref', dataRef),
-        supabase.from('mec_observacoes').select('conversa_id,etapa,sinal,item_chave,valor,detalhe,trecho')
-            .eq('user_id', userId).eq('data_ref', dataRef).returns<LinhaObservacao[]>(),
+        // 20+ linhas por negociação: um dia cheio passa do corte de 1000 do PostgREST.
+        paginar<LinhaObservacao>((de, ate) => supabase.from('mec_observacoes').select('conversa_id,etapa,sinal,item_chave,valor,detalhe,trecho')
+            .eq('user_id', userId).eq('data_ref', dataRef).order('id').range(de, ate)),
     ]);
     if (erroLinhas) throw erroLinhas;
-    if (error) throw error;
     if (!linhas?.length) return;
     const aplicaveis = linhas.filter((l) => l.aplicavel);
     const etapas = [...new Set(aplicaveis.map((l) => String(l.etapa)))];
@@ -475,8 +493,8 @@ async function consolidarAderenciaDiaria(supabase: Admin, userId: string, unidad
     }));
     // Detalhe do MEC (spec §5.2): só existe para conversas analisadas com ele.
     const sondagemAplicavel = new Set(aplicaveis.filter((l) => l.etapa === 'sondagem').map((l) => String(l.conversa_id)));
-    const resumo = observacoes?.length ? resumirObservacoes(observacoes, sondagemAplicavel) : null;
-    await supabase.from('aderencia_diaria').upsert({
+    const resumo = observacoes.length ? resumirObservacoes(observacoes, sondagemAplicavel) : null;
+    const { error: erroDiaria } = await supabase.from('aderencia_diaria').upsert({
         user_id: userId, unidade_id: unidadeId, data_ref: dataRef, playbook_id: linhas[0].playbook_id,
         aderencia_geral: aderenciaPercentual(aplicaveis),
         por_etapa: porEtapa,
@@ -484,6 +502,7 @@ async function consolidarAderenciaDiaria(supabase: Admin, userId: string, unidad
         frases_proibidas: resumo?.frases_proibidas ?? 0,
         detalhe: resumo?.detalhe ?? {},
     }, { onConflict: 'user_id,data_ref' });
+    if (erroDiaria) throw erroDiaria;
 }
 
 const mediaPonderada = (linhas: Record<string, unknown>[], campo: string, peso = 'leads_atendidos') => {
