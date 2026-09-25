@@ -226,6 +226,21 @@ export type DetalheDia = {
 };
 export type ResumoMec = { sondagem_itens: number | null; frases_proibidas: number; detalhe: DetalheDia };
 
+/** Chave de uma conversa num dia: a análise é uma por conversa por dia (`analises_conversa`). */
+export function chaveConversaDia(conversaId: string, dataRef: string): string {
+    return `${conversaId}|${dataRef}`;
+}
+
+/**
+ * Numa janela de vários dias a unidade do resumo é (conversa, dia): uma negociação
+ * que atravessa dois dias tem duas análises e não pode somar 14 itens em "7".
+ * Devolve cópias com `conversa_id` trocado pela chave do dia; use só no que vai
+ * para `resumirObservacoes` (links continuam com o id real).
+ */
+export function porConversaDia<T extends { conversa_id: string; data_ref: string }>(linhas: readonly T[]): T[] {
+    return linhas.map((l) => ({ ...l, conversa_id: chaveConversaDia(l.conversa_id, l.data_ref) }));
+}
+
 const pct = (parte: number, total: number): number | null => (total ? Math.round((parte / total) * 100) : null);
 const somar = (mapa: Record<string, number>, chave: string) => { mapa[chave] = (mapa[chave] ?? 0) + 1; };
 

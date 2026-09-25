@@ -3,7 +3,7 @@ import { contextoApp, dataHoje } from '@/lib/contexto-app';
 import { paginar } from '@/lib/paginar';
 import { diaMenos, ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
 import { tomFaixa, type Tom } from '@/lib/visual';
-import { chavesDoTipo, resumirObservacoes, type LinhaObservacao } from '@/lib/mec';
+import { chavesDoTipo, chaveConversaDia, porConversaDia, resumirObservacoes, type LinhaObservacao } from '@/lib/mec';
 import { carregarPlaybook } from '@/lib/mec-dados';
 
 export const dynamic = 'force-dynamic';
@@ -26,20 +26,22 @@ export default async function MecEquipe() {
         supabase.from('aderencia_diaria').select('user_id,data_ref,aderencia_geral,por_etapa').order('data_ref', { ascending: false }).limit(500).returns<Dia[]>(),
         supabase.from('aderencia_contestacoes').select('id,motivo,veredito,created_at,aderencia_conversa(etapa,conversa_id,conversas(cliente_nome))')
             .order('created_at', { ascending: false }).limit(30),
-        paginar<LinhaObservacao & { user_id: string }>((de, ate) => supabase.from('mec_observacoes')
-            .select('user_id,conversa_id,etapa,sinal,item_chave,valor,detalhe,trecho')
-            .eq('sinal', 'sondagem_item').gte('data_ref', desde).order('id').range(de, ate)),
-        paginar<{ conversa_id: string }>((de, ate) => supabase.from('aderencia_conversa').select('conversa_id')
-            .eq('etapa', 'sondagem').eq('aplicavel', true).gte('data_ref', desde).order('id').range(de, ate)),
+        paginar<LinhaObservacao & { user_id: string; data_ref: string }>((de, ate) => supabase.from('mec_observacoes')
+            .select('user_id,conversa_id,data_ref,etapa,sinal,item_chave,valor,detalhe,trecho,conversas!inner(bloqueada)')
+            .eq('sinal', 'sondagem_item').eq('conversas.bloqueada', false).gte('data_ref', desde).order('id').range(de, ate)),
+        paginar<{ conversa_id: string; data_ref: string }>((de, ate) => supabase.from('aderencia_conversa').select('conversa_id,data_ref,conversas!inner(bloqueada)')
+            .eq('etapa', 'sondagem').eq('aplicavel', true).eq('conversas.bloqueada', false).gte('data_ref', desde).order('id').range(de, ate)),
         carregarPlaybook(supabase, null),
     ]);
     const ultimo = new Map<string, Dia>();
     for (const d of dias ?? []) if (!ultimo.has(d.user_id)) ultimo.set(d.user_id, d);
     const equipe = pessoas ?? [];
-    const aplicavel = new Set(sondagens.map((s) => s.conversa_id));
+    // Unidade do resumo = (conversa, dia): a janela tem uma análise por conversa por dia.
+    const aplicavel = new Set(sondagens.map((s) => chaveConversaDia(s.conversa_id, s.data_ref)));
+    const porDia = porConversaDia(observacoes);
     const informacoes = pb ? chavesDoTipo(pb.itens, 'informacao') : [];
-    const porVendedor = new Map(equipe.map((p) => [p.id, resumirObservacoes(observacoes.filter((o) => o.user_id === p.id), aplicavel)]));
-    const daEquipe = resumirObservacoes(observacoes, aplicavel);
+    const porVendedor = new Map(equipe.map((p) => [p.id, resumirObservacoes(porDia.filter((o) => o.user_id === p.id), aplicavel)]));
+    const daEquipe = resumirObservacoes(porDia, aplicavel);
     const colunaFraca = Object.entries(daEquipe.detalhe.sondagem_por_item).sort((a, b) => a[1] - b[1])[0]?.[0];
     const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 

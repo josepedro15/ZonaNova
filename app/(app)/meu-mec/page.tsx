@@ -5,7 +5,7 @@ import { contextoApp, dataHoje } from '@/lib/contexto-app';
 import { paginar } from '@/lib/paginar';
 import { diaMenos, ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
 import { tomFaixa } from '@/lib/visual';
-import { resumirObservacoes, type LinhaObservacao } from '@/lib/mec';
+import { chaveConversaDia, porConversaDia, resumirObservacoes, type LinhaObservacao } from '@/lib/mec';
 import { carregarPlaybook } from '@/lib/mec-dados';
 
 export const dynamic = 'force-dynamic';
@@ -19,11 +19,11 @@ export default async function MeuMecPage() {
     const [{ data: dias }, observacoes, sondagens, pb] = await Promise.all([
         supabase.from('aderencia_diaria').select('data_ref,aderencia_geral,por_etapa').eq('user_id', perfil.id)
             .order('data_ref', { ascending: false }).limit(1).returns<Dia[]>(),
-        paginar<LinhaObservacao>((de, ate) => supabase.from('mec_observacoes')
-            .select('conversa_id,etapa,sinal,item_chave,valor,detalhe,trecho')
-            .eq('user_id', perfil.id).gte('data_ref', desde).order('id').range(de, ate)),
-        paginar<{ conversa_id: string }>((de, ate) => supabase.from('aderencia_conversa').select('conversa_id')
-            .eq('user_id', perfil.id).eq('etapa', 'sondagem').eq('aplicavel', true).gte('data_ref', desde).order('id').range(de, ate)),
+        paginar<LinhaObservacao & { data_ref: string }>((de, ate) => supabase.from('mec_observacoes')
+            .select('conversa_id,data_ref,etapa,sinal,item_chave,valor,detalhe,trecho,conversas!inner(bloqueada)')
+            .eq('user_id', perfil.id).eq('conversas.bloqueada', false).gte('data_ref', desde).order('id').range(de, ate)),
+        paginar<{ conversa_id: string; data_ref: string }>((de, ate) => supabase.from('aderencia_conversa').select('conversa_id,data_ref,conversas!inner(bloqueada)')
+            .eq('user_id', perfil.id).eq('conversas.bloqueada', false).eq('etapa', 'sondagem').eq('aplicavel', true).gte('data_ref', desde).order('id').range(de, ate)),
         carregarPlaybook(supabase, null),
     ]);
     const dia = dias?.[0];
@@ -34,7 +34,10 @@ export default async function MeuMecPage() {
     const exemplo = new Map<string, Record<string, unknown>>();
     for (const m of marcacoes ?? []) if (m.aplicavel && !exemplo.has(m.etapa as string)) exemplo.set(m.etapa as string, m as Record<string, unknown>);
 
-    const resumo = observacoes.length ? resumirObservacoes(observacoes, new Set(sondagens.map((s) => s.conversa_id))) : null;
+    // Unidade do resumo = (conversa, dia): a janela tem uma análise por conversa por dia.
+    const resumo = observacoes.length
+        ? resumirObservacoes(porConversaDia(observacoes), new Set(sondagens.map((s) => chaveConversaDia(s.conversa_id, s.data_ref))))
+        : null;
     const rotulo = (chave: string) => pb?.rotulos.get(chave) ?? chave;
     const porItem = Object.entries(resumo?.detalhe.sondagem_por_item ?? {}).sort((a, b) => a[1] - b[1]);
     const frases = observacoes.filter((o) => o.sinal === 'frase_proibida');

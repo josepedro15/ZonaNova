@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
     chavesDoTipo, detalheLigado, etapaProvisoria, schemaDetalhe, schemaJsonDetalhe, FORA_DO_CATALOGO, type ItemPlaybook,
     concordancia, contarObjecoesPorCodigo, normalizarCelula, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao,
+    chaveConversaDia, porConversaDia,
 } from '../../lib/mec.ts';
 import { montarSchemaAnalise } from '../../lib/analise.ts';
 
@@ -141,6 +142,28 @@ test('sondagem só conta nas conversas em que cabia', () => {
     const r = resumirObservacoes([...comConversa('c1', DETALHE as DetalheMec), ...comConversa('c3', DETALHE as DetalheMec)], new Set(['c1']));
     assert.equal(r.sondagem_itens, 3);
     assert.equal(r.detalhe.conversas_com_sondagem, 1);
+});
+
+test('chave da conversa no dia junta id e data', () => {
+    assert.equal(chaveConversaDia('c1', '2026-09-20'), 'c1|2026-09-20');
+});
+
+// Uma análise por conversa por dia: numa janela de vários dias a unidade é (conversa, dia).
+test('janela de vários dias: a mesma conversa em dois dias conta como duas sondagens', () => {
+    const dia = (capturadas: number) => variar({
+        sondagem: { ...DETALHE.sondagem, itens: SONDAGEM.map((chave, i) => ({ chave, capturada: i < capturadas, trecho: i < capturadas ? 't' : null })) },
+    });
+    const linhas = [
+        ...comConversa('c1', dia(4)).map((l) => ({ ...l, data_ref: '2026-09-20' })),
+        ...comConversa('c1', dia(5)).map((l) => ({ ...l, data_ref: '2026-09-21' })),
+    ];
+    assert.equal(linhas.filter((l) => l.sinal === 'sondagem_item').length, 14);
+    const aplicavel = new Set(['2026-09-20', '2026-09-21'].map((d) => chaveConversaDia('c1', d)));
+    const r = resumirObservacoes(porConversaDia(linhas), aplicavel);
+    assert.equal(r.sondagem_itens, 4.5);
+    assert.equal(r.detalhe.conversas_com_sondagem, 2);
+    assert.ok(Object.values(r.detalhe.sondagem_por_item).every((v) => v <= 100));
+    assert.equal(linhas[0].conversa_id, 'c1');
 });
 
 test('sem nada para medir, o resumo é ausência e não zero', () => {

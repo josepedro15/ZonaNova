@@ -5,7 +5,7 @@ import { revisarContestacao } from '@/app/actions/operacao';
 import { paginar } from '@/lib/paginar';
 import { aderenciaPercentual } from '@/lib/analise';
 import { diaMenos } from '@/lib/derivacoes';
-import { resumirObservacoes, type LinhaObservacao } from '@/lib/mec';
+import { chaveConversaDia, porConversaDia, resumirObservacoes, type LinhaObservacao } from '@/lib/mec';
 import { carregarPlaybook } from '@/lib/mec-dados';
 
 export const dynamic = 'force-dynamic';
@@ -20,18 +20,21 @@ export default async function MecRede() {
             .select('id,unidade_id,etapa,aplicavel,aplicado,conversas!inner(bloqueada)')
             .eq('aplicavel', true).eq('conversas.bloqueada', false).order('id').range(de, ate)),
         supabase.from('aderencia_contestacoes').select('id,motivo,created_at,aderencia_conversa(etapa,justificativa,conversas(cliente_nome)),profiles!aderencia_contestacoes_contestado_por_fkey(nome)').eq('veredito', 'pendente').order('created_at').limit(100),
-        paginar<LinhaObservacao & { unidade_id: string }>((de, ate) => supabase.from('mec_observacoes')
-            .select('unidade_id,conversa_id,etapa,sinal,item_chave,valor,detalhe,trecho')
-            .in('sinal', ['sondagem_item', 'objecao', 'fechamento']).gte('data_ref', desde).order('id').range(de, ate)),
-        paginar<{ conversa_id: string }>((de, ate) => supabase.from('aderencia_conversa').select('conversa_id')
-            .eq('etapa', 'sondagem').eq('aplicavel', true).gte('data_ref', desde).order('id').range(de, ate)),
+        paginar<LinhaObservacao & { unidade_id: string; data_ref: string }>((de, ate) => supabase.from('mec_observacoes')
+            .select('unidade_id,conversa_id,data_ref,etapa,sinal,item_chave,valor,detalhe,trecho,conversas!inner(bloqueada)')
+            .in('sinal', ['sondagem_item', 'objecao', 'fechamento']).eq('conversas.bloqueada', false).gte('data_ref', desde).order('id').range(de, ate)),
+        paginar<{ conversa_id: string; data_ref: string }>((de, ate) => supabase.from('aderencia_conversa').select('conversa_id,data_ref,conversas!inner(bloqueada)')
+            .eq('etapa', 'sondagem').eq('aplicavel', true).eq('conversas.bloqueada', false).gte('data_ref', desde).order('id').range(de, ate)),
         carregarPlaybook(supabase, null),
     ]);
     const etapas = [...new Set((linhas ?? []).map(l => l.etapa as string))];
     // Mesma regra do worker: não verificável não entra na conta (doc 7 §7.3).
     const geral = aderenciaPercentual(linhas ?? []);
-    const aplicavel = new Set(sondagens.map((s) => s.conversa_id));
-    const porLoja = (unidades ?? []).map((u) => ({ u, r: resumirObservacoes(observacoes.filter((o) => o.unidade_id === u.id), aplicavel) }));
+    // Unidade do resumo = (conversa, dia): a janela tem uma análise por conversa por dia.
+    const aplicavel = new Set(sondagens.map((s) => chaveConversaDia(s.conversa_id, s.data_ref)));
+    const porDia = porConversaDia(observacoes);
+    const porLoja = (unidades ?? []).map((u) => ({ u, r: resumirObservacoes(porDia.filter((o) => o.unidade_id === u.id), aplicavel) }));
+    const informacoes = pb ? pb.itens.filter((i) => i.tipo === 'informacao').length : null;
     const rotuloFech = (chave: string) => (chave === 'nenhum' ? 'não tentou' : chave === 'outra' ? 'outra' : (pb?.rotulos.get(chave) ?? chave).toLowerCase());
     return <AppShell papel={perfil.role} nome={perfil.nome} unidade={perfil.unidade} atual="/mec">
         <div className="mx-auto max-w-[1180px] px-5 pb-28 pt-7 lg:px-10 lg:pb-16 lg:pt-10">
@@ -50,7 +53,7 @@ export default async function MecRede() {
                                 chave: u.id as string, href: `/unidades/${u.id}`, atenuada: r.detalhe.conversas === 0,
                                 celulas: [
                                     <span key="n" className="font-semibold">{u.nome as string}</span>,
-                                    <span key="s" className="num">{r.sondagem_itens === null ? '—' : `${String(r.sondagem_itens).replace('.', ',')} de 7`}</span>,
+                                    <span key="s" className="num">{r.sondagem_itens === null ? '—' : `${String(r.sondagem_itens).replace('.', ',')}${informacoes === null ? '' : ` de ${informacoes}`}`}</span>,
                                     <span key="c" className="num">{r.detalhe.contorno_completo_pct === null ? '—' : `${r.detalhe.contorno_completo_pct}%`}</span>,
                                     <span key="f" className="text-[12.5px] text-tinta-2">{total ? fech.map(([k, n]) => `${rotuloFech(k)} ${Math.round((n / total) * 100)}%`).join(' · ') : '—'}</span>,
                                 ],
