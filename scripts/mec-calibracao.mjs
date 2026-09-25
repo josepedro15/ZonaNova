@@ -7,7 +7,8 @@
 //   npm run mec:calibracao -- exportar <unidade_id> [quantas=20] > calibracao.csv
 //       planilha com a marcação da IA e colunas vazias para o gestor
 //   npm run mec:calibracao -- comparar calibracao.csv
-//       concordância IA × gestor por coluna e geral (critério: ≥ 85%)
+//       concordância IA × gestor por coluna; libera com ≥ 85% na sondagem E ≥ 85%
+//       no código da objeção, cada um separado (fechamento só é informado)
 //
 // Usa a service role: roda na máquina de quem opera, nunca numa tela.
 // =============================================================================
@@ -83,15 +84,26 @@ function comparar(arquivo) {
     const [cab, ...linhas] = readFileSync(arquivo, 'utf8').trim().split(/\r?\n/).map((l) => l.split(SEP));
     const pares = cab.map((c, i) => [c, i]).filter(([c]) => c.startsWith('ia_'))
         .map(([c, i]) => ({ campo: c.slice(3), ia: i, humano: cab.indexOf(`gestor_${c.slice(3)}`) }));
-    const todos = [];
+    // Spec §8: dois critérios separados. As colunas de informação (uma por item
+    // da sondagem) formam um; o código da objeção, outro. Fechamento não trava.
+    const grupos = { sondagem: [], objecoes: [] };
     for (const p of pares) {
         const valores = linhas.map((l) => ({ ia: l[p.ia] ?? '', humano: l[p.humano] ?? '' }));
-        todos.push(...valores);
+        if (p.campo === 'objecoes') grupos.objecoes.push(...valores);
+        else if (p.campo !== 'fechamento') grupos.sondagem.push(...valores);
         const c = concordancia(valores);
-        console.log(`${String(c ?? '—').padStart(4)}%  ${p.campo}`);
+        console.log(`${String(c ?? '—').padStart(4)}%  ${p.campo}${p.campo === 'fechamento' ? ' (só informativo)' : ''}`);
     }
-    const geral = concordancia(todos);
-    console.log(`\nGeral: ${geral ?? '—'}% — ${geral !== null && geral >= 85 ? 'PASSOU (≥ 85%)' : 'NÃO PASSOU: ajuste o prompt antes de ligar para a rede'}`);
+    console.log('');
+    let passou = true;
+    for (const [nome, valores] of [['sondagem', grupos.sondagem], ['objeções', grupos.objecoes]]) {
+        const c = concordancia(valores);
+        const ok = c !== null && c >= 85;
+        if (!ok) passou = false;
+        console.log(`${nome}: ${c ?? '—'}% — ${ok ? 'PASSOU (≥ 85%)' : c === null ? 'NÃO PASSOU: nenhuma célula do gestor preenchida' : 'NÃO PASSOU (< 85%)'}`);
+    }
+    console.log(passou ? '\nLiberado: os dois critérios passaram.' : '\nNÃO LIBERADO: ajuste o prompt antes de ligar para a rede.');
+    if (!passou) process.exitCode = 1;
 }
 
 try {
