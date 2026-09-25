@@ -4,9 +4,12 @@ import {
     Alerta, Avatar, Barra, CabecalhoPagina, Cartao, Comparacao, Kpi, Pagina, Selo, Tabela, TEXTO,
 } from '@/components/ui';
 import { dataHoje, type contextoApp } from '@/lib/contexto-app';
+import { paginar } from '@/lib/paginar';
 import { esperaDoCliente, juntarPorDia, type LinhaDia, type Msg } from '@/lib/painel';
 import { comQuemFalar, contarObjecoes, diaMenos, variacaoSemanal, type NotaDia } from '@/lib/derivacoes';
 import { setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
+import { contarObjecoesPorCodigo } from '@/lib/mec';
+import { carregarPlaybook } from '@/lib/mec-dados';
 
 type Supabase = Awaited<ReturnType<typeof contextoApp>>['supabase'];
 type Diario = NotaDia & { user_id: string; leads_atendidos: number; conversoes_confirmadas: number; tempo_medio_resposta_s: number | null };
@@ -56,8 +59,18 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         qAnalises = qAnalises.in('unidade_id', unidadeIds);
         qConversas = qConversas.in('unidade_id', unidadeIds);
     }
+    // Desvio do brief: o PostgREST corta em 1000 linhas por pedido mesmo com
+    // .limit(2000) (mesmo comportamento documentado em lib/paginar.ts), então
+    // uma rede inteira com muita objeção na semana perderia linhas em
+    // silêncio. Pagina com paginar() em vez de .limit(2000) direto.
+    const qObjecoes = (de: number, ate: number) => {
+        let q = supabase.from('mec_observacoes').select('item_chave').eq('sinal', 'objecao')
+            .gte('data_ref', diaMenos(hoje, 7)).order('id').range(de, ate);
+        if (unidadeIds) q = q.in('unidade_id', unidadeIds);
+        return q;
+    };
 
-    const [{ data: pessoas }, { data: diarios }, { data: conexoes }, { count: pendentes }, { data: daUnidade }, { data: rede }, { data: aderencias }, { data: analises }, { data: conversas }] = await Promise.all([
+    const [{ data: pessoas }, { data: diarios }, { data: conexoes }, { count: pendentes }, { data: daUnidade }, { data: rede }, { data: aderencias }, { data: analises }, { data: conversas }, objecoesCodigo, pb] = await Promise.all([
         qPessoas.returns<{ id: string; nome: string; unidade_id: string; unidades: { nome: string } | null }[]>(),
         qDiarios.returns<Diario[]>(),
         qConexoes.returns<{ user_id: string; status: string; ultimo_evento_em: string | null }[]>(),
@@ -67,6 +80,8 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         qAderencia.returns<{ user_id: string; data_ref: string; por_etapa: Record<string, number | null> | null }[]>(),
         qAnalises.returns<{ payload: unknown }[]>(),
         qConversas.returns<{ id: string; user_id: string; mensagens: Msg[] }[]>(),
+        paginar<{ item_chave: string | null }>(qObjecoes),
+        carregarPlaybook(supabase, null),
     ]);
 
     const equipe = pessoas ?? [];
@@ -92,7 +107,10 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     const esperas = (conversas ?? []).map((c) => esperaDoCliente(c.mensagens, agora)).filter((e): e is number => e !== null);
     const foraDoAr = equipe.filter((p) => conexao.get(p.id)?.status !== 'conectada');
     const sugestoes = comQuemFalar(equipe, notas, etapas);
-    const objecoes = contarObjecoes((analises ?? []).map((a) => a.payload));
+    // Pelo código do catálogo quando já há detalhe do MEC; senão, pelo texto livre de antes.
+    const objecoes = objecoesCodigo?.length
+        ? contarObjecoesPorCodigo(objecoesCodigo, pb?.rotulos ?? new Map())
+        : contarObjecoes((analises ?? []).map((a) => a.payload));
     const maiorObjecao = objecoes[0]?.total ?? 1;
 
     const linhas = equipe
