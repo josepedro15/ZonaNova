@@ -178,6 +178,19 @@ código. O prompt da análise é montado a partir de `playbook_etapas` e
 uma versão nova, não um deploy — e toda aderência já medida continua apontando
 para a versão sob a qual foi medida.
 
+### `mec_observacoes` (0021)
+
+Uma linha por sinal que a IA observou numa negociação: cada informação da
+sondagem (`sondagem_item`), perguntas abertas/fechadas (contagem em
+`detalhe`), complementar, prazo, condição, frase proibida, objeção (código do
+catálogo ou `fora_do_catalogo`, com os passos do contorno em `detalhe`),
+desconto, gerência, orçamento concorrente, fechamento (código da técnica ou
+`outra`) e mensagem final positiva. `item_chave` é o `playbook_itens.chave`.
+Mesma RLS de `aderencia_conversa`. O resumo do dia vai para
+`aderencia_diaria.sondagem_itens` (média de informações por conversa em que a
+sondagem cabia), `frases_proibidas` e `detalhe` (jsonb). Spec:
+`docs/superpowers/specs/2026-09-24-mec-estruturado-design.md`.
+
 ## 2.8 Retenção
 
 Mensagem de WhatsApp é dado pessoal de terceiro (o cliente). Definir na fase de
