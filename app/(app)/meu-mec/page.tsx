@@ -16,14 +16,14 @@ type Dia = { data_ref: string; aderencia_geral: number | null; por_etapa: Record
 export default async function MeuMecPage() {
     const { supabase, perfil } = await contextoApp();
     const desde = diaMenos(dataHoje(), JANELA);
-    const [{ data: dias }, observacoes, { data: sondagens }, pb] = await Promise.all([
+    const [{ data: dias }, observacoes, sondagens, pb] = await Promise.all([
         supabase.from('aderencia_diaria').select('data_ref,aderencia_geral,por_etapa').eq('user_id', perfil.id)
             .order('data_ref', { ascending: false }).limit(1).returns<Dia[]>(),
         paginar<LinhaObservacao>((de, ate) => supabase.from('mec_observacoes')
             .select('conversa_id,etapa,sinal,item_chave,valor,detalhe,trecho')
             .eq('user_id', perfil.id).gte('data_ref', desde).order('id').range(de, ate)),
-        supabase.from('aderencia_conversa').select('conversa_id').eq('user_id', perfil.id)
-            .eq('etapa', 'sondagem').eq('aplicavel', true).gte('data_ref', desde).returns<{ conversa_id: string }[]>(),
+        paginar<{ conversa_id: string }>((de, ate) => supabase.from('aderencia_conversa').select('conversa_id')
+            .eq('user_id', perfil.id).eq('etapa', 'sondagem').eq('aplicavel', true).gte('data_ref', desde).order('id').range(de, ate)),
         carregarPlaybook(supabase, null),
     ]);
     const dia = dias?.[0];
@@ -34,7 +34,7 @@ export default async function MeuMecPage() {
     const exemplo = new Map<string, Record<string, unknown>>();
     for (const m of marcacoes ?? []) if (m.aplicavel && !exemplo.has(m.etapa as string)) exemplo.set(m.etapa as string, m as Record<string, unknown>);
 
-    const resumo = observacoes.length ? resumirObservacoes(observacoes, new Set((sondagens ?? []).map((s) => s.conversa_id))) : null;
+    const resumo = observacoes.length ? resumirObservacoes(observacoes, new Set(sondagens.map((s) => s.conversa_id))) : null;
     const rotulo = (chave: string) => pb?.rotulos.get(chave) ?? chave;
     const porItem = Object.entries(resumo?.detalhe.sondagem_por_item ?? {}).sort((a, b) => a[1] - b[1]);
     const frases = observacoes.filter((o) => o.sinal === 'frase_proibida');
