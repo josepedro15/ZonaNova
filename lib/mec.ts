@@ -158,7 +158,8 @@ export type DetalheMec = z.infer<ReturnType<typeof schemaDetalhe>>;
 /** Regras do detalhe que se somam às REGRAS INEGOCIÁVEIS da análise (spec §4). */
 export const REGRAS_DETALHE_MEC = `DETALHE DO MEC (campo mec_detalhe):
 - Preencha só se tipo_conversa = negociacao; senão devolva mec_detalhe = null.
-- Use exatamente os códigos entre colchetes do MEC VIGENTE.
+- Use exatamente os códigos entre colchetes do MEC VIGENTE, e só dentro de mec_detalhe.
+- O campo mec[].itens continua como sempre: frases curtas em português do que o vendedor fez naquela etapa. Nunca coloque ali códigos (sondagem_a, preco_alto…) nem nomes de campo, e não liste o que não aconteceu.
 - Sondagem: uma entrada para cada uma das informações do Book. "capturada" = a informação está na conversa, perguntada pelo vendedor ou contada pelo cliente sem pergunta. capturada = true exige trecho literal.
 - Pergunta aberta pede relato ("como está a obra?"); fechada pede sim/não ou escolha ("é pra área externa?"). Conte só perguntas do vendedor.
 - Frase proibida: cada ocorrência literal dita pelo vendedor; mensagem [automática] não conta.
