@@ -35,6 +35,10 @@ function comecaCom(caminho: string, prefixos: string[]) {
  * Ver tests/rls.sql.
  */
 export async function proxy(request: NextRequest) {
+    // As vitrines de /dev usam dados de exemplo, sem banco: em desenvolvimento
+    // abrem sem login; em produção as próprias páginas respondem 404.
+    if (process.env.NODE_ENV !== 'production' && comecaCom(request.nextUrl.pathname, ['/dev'])) return NextResponse.next({ request });
+
     let resposta = NextResponse.next({ request });
 
     const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
