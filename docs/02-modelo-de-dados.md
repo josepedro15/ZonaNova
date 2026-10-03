@@ -107,6 +107,15 @@ vamos consultar por período, por direção e por vendedor o tempo todo).
 Telefones que o vendedor marca como "não analisar" (pessoal, fornecedor,
 entregador). Filtro aplicado antes da análise.
 
+### `contatos_internos`
+
+Lista da unidade com os números de trabalho (Depósito, caixa, financeiro). Vale
+para todos os vendedores da unidade e tem o mesmo efeito do bloqueio pessoal: o
+webhook não guarda a mensagem, e a conversa que já existia ganha
+`bloqueada = true`. O número de outro vendedor conectado (`conexoes_whatsapp.numero`)
+é tratado do mesmo jeito, sem cadastro. Leitura por escopo de unidade; escrita
+só pelo service role (`app/actions/internos.ts`). Migração 0022.
+
 ## 2.5 Resultado da análise
 
 ### `analises_conversa`

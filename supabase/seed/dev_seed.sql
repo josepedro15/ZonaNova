@@ -67,4 +67,9 @@ on conflict do nothing;
 insert into public.relatorios_rede (data_ref, score_geral, unidades_ativas) values
   (current_date, 71, 2) on conflict do nothing;
 
+insert into public.contatos_internos (unidade_id, telefone, descricao) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', '5554932100001', 'Depósito Centro'),
+  ('aaaaaaaa-0000-0000-0000-000000000002', '5554932100002', 'Depósito Bento')
+on conflict do nothing;
+
 commit;

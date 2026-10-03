@@ -479,3 +479,29 @@ begin
     then raise notice 'FALHOU  zn_custo_total é security definer (furaria a RLS)';
     else raise notice 'PASSOU  zn_custo_total soma pela RLS de quem chama'; end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 0022: contatos internos — cada loja lê a própria lista; ninguém escreve
+-- ---------------------------------------------------------------------------
+set role authenticated;
+select pg_temp.como('44444444-4444-4444-4444-444444444444');
+select pg_temp.ok('vendedor vê a lista interna da própria loja',
+       (select count(*) from contatos_internos), 1);
+select pg_temp.como('33333333-3333-3333-3333-333333333333');
+select pg_temp.ok('gestor NÃO vê a lista de loja que não gerencia',
+       (select count(*) from contatos_internos where unidade_id = 'aaaaaaaa-0000-0000-0000-000000000001'), 0);
+select pg_temp.como('11111111-1111-1111-1111-111111111111');
+select pg_temp.ok('supervisor vê a lista da rede',
+       (select count(*) from contatos_internos), 2);
+reset role;
+
+do $$
+begin
+    if has_table_privilege('authenticated', 'public.contatos_internos', 'insert')
+       or has_table_privilege('authenticated', 'public.contatos_internos', 'delete')
+    then raise notice 'FALHOU  authenticated escreve em contatos_internos';
+    else raise notice 'PASSOU  contatos_internos só se escreve pelo service role'; end if;
+    if has_table_privilege('anon', 'public.contatos_internos', 'select')
+    then raise notice 'FALHOU  anon lê contatos_internos';
+    else raise notice 'PASSOU  anon fora de contatos_internos'; end if;
+end $$;
