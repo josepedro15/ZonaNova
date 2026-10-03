@@ -5,6 +5,7 @@ import DesconectarWhatsapp from '@/components/desconectar-whatsapp';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { telefoneBonito } from '@/lib/painel';
 import { bloquearContato, desbloquearContato } from '@/app/actions/conexao';
+import { ContatosInternos } from './contatos-internos';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,8 @@ export default async function PerfilPage() {
                         {!bloqueados?.length && <p className="py-4 text-sm text-tinta-3">Nenhum contato bloqueado.</p>}
                     </div>
                 </section>
+
+                {perfil.role !== 'vendedor' && <ContatosInternos supabase={supabase} userId={user.id} role={perfil.role} />}
 
                 <section className="mt-5 rounded-card border border-linha bg-papel-2 p-5">
                     <h2 className="display text-lg font-semibold">Como os dados são usados</h2>

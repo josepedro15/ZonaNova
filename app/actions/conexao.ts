@@ -9,6 +9,7 @@ import { APP_URL } from '@/lib/env';
 import { telefoneE164, variantesTelefone } from '@/lib/painel';
 import { redirect } from 'next/navigation';
 import { desligarWhatsappDe } from '@/lib/desligar';
+import { liberarConversas } from '@/lib/exclusao-dados';
 import { revalidatePath } from 'next/cache';
 
 export type EstadoConexao = {
@@ -217,18 +218,9 @@ export async function desbloquearContato(form: FormData) {
     const admin = criarClienteAdmin();
     const { data: removido } = await admin.from('contatos_bloqueados').delete()
         .eq('id', id).eq('user_id', user.id).select('telefone').maybeSingle<{ telefone: string }>();
-    if (removido) {
-        // Outro bloqueio pode cobrir o mesmo número (com e sem o nono dígito):
-        // o que ele cobre continua bloqueado.
-        const { data: restantes } = await admin.from('contatos_bloqueados').select('telefone').eq('user_id', user.id)
-            .returns<{ telefone: string }[]>();
-        const aindaCobertos = new Set((restantes ?? []).flatMap((r) => variantesTelefone(r.telefone)));
-        const liberar = variantesTelefone(removido.telefone).filter((t) => !aindaCobertos.has(t));
-        if (liberar.length) {
-            await admin.from('conversas').update({ bloqueada: false })
-                .eq('user_id', user.id).in('cliente_telefone', liberar);
-        }
-    }
+    // Outro bloqueio (com ou sem o nono dígito), a lista da loja ou um colega
+    // conectado podem cobrir o mesmo número: o que eles cobrem continua fora.
+    if (removido) await liberarConversas(admin, { userId: user.id }, variantesTelefone(removido.telefone));
     revalidatePath('/perfil');
     revalidatePath('/dashboard');
     revalidatePath('/conversas');
