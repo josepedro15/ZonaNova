@@ -1,7 +1,8 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { CabecalhoPagina, EstadoVazio, Icone, Pagina, RotuloSecao, Selo, Shell, type DiaSerie } from '@/components/ui';
-import { desde, diasAte, esperaDoCliente, foiRespondido, primeiroNome, respostaMediaEmMinutos, temposDeResposta } from '@/lib/painel';
+import { desde, diasAte, ehCelular, esperaDoCliente, foiRespondido, primeiroNome, respostaMediaEmMinutos, temposDeResposta } from '@/lib/painel';
 import { dataEmSaoPaulo } from '@/lib/analise';
 import { media } from '@/lib/visual';
 import { variacaoSemanal } from '@/lib/derivacoes';
@@ -24,6 +25,7 @@ export default async function Dashboard() {
     // Sete dias para trás: a fila precisa alcançar quem ficou de ontem.
     const janela = new Date(comeco.getTime() - 7 * 24 * 60 * 60 * 1000);
     const dataRef = dataEmSaoPaulo(agora);
+    const celular = ehCelular((await headers()).get('user-agent'));
 
     // Tudo já passou pela RLS. Ver tests/rls.sql.
     const [{ data: perfil }, { data: conexao }, { data: conversas }, { data: relatorios }, { data: aderencia }, { data: observacoes }] = await Promise.all([
@@ -99,7 +101,7 @@ export default async function Dashboard() {
                 <div className="grid gap-5 xl:grid-cols-12 xl:items-start">
                     <div className="flex flex-col gap-4 xl:col-span-5">
                         <RotuloSecao complemento="ao vivo">Agora</RotuloSecao>
-                        <EsperandoVoce esperando={esperando} titulo={deHoje.length === 0 ? 'Ficou de ontem' : 'Esperando você'} />
+                        <EsperandoVoce esperando={esperando} celular={celular} titulo={deHoje.length === 0 ? 'Ficou de ontem' : 'Esperando você'} />
                         <HojeAteAgora conversas={deHoje.length} respostaMedia={respostaMedia}
                                       respostaOntemMin={respostaOntem == null ? null : Math.round(Number(respostaOntem) / 60)}
                                       taxa={taxa} respondidos={respondidos} escreveram={comFala.length}

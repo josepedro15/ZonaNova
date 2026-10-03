@@ -134,6 +134,22 @@ export const PREFIXO_LID = 'lid:';
 
 export const semTelefone = (numero: string) => numero.startsWith(PREFIXO_LID);
 
+/** Celular ou tablet pelo User-Agent. Na dúvida, computador. */
+export function ehCelular(userAgent: string | null | undefined): boolean {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent ?? '');
+}
+
+/**
+ * Para onde "Responder" leva. No celular, `wa.me` abre o app na conversa; no
+ * computador ele para numa página intermediária, então vai direto ao WhatsApp
+ * Web. Contato `@lid` não tem número: null, e quem chama decide o destino.
+ */
+export function linkWhatsapp(telefone: string, celular: boolean): string | null {
+    if (semTelefone(telefone)) return null;
+    const d = telefone.replace(/\D/g, '');
+    return celular ? `https://wa.me/${d}` : `https://web.whatsapp.com/send?phone=${d}`;
+}
+
 /**
  * O que a pessoa digitou, no formato que o webhook grava: E.164 sem o `+`.
  *

@@ -6,7 +6,7 @@ import {
 } from '@/components/ui';
 import { comparaTempo, listaDeTextos, setaDoTom, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
 import { ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
-import { esperaDoCliente, esperaEmTexto, semTelefone, telefoneBonito, type Msg } from '@/lib/painel';
+import { esperaDoCliente, esperaEmTexto, linkWhatsapp, telefoneBonito, type Msg } from '@/lib/painel';
 import { dataCurtaBrasilia, horaBrasilia } from './formato';
 
 export type ConversaComMensagens = {
@@ -45,14 +45,13 @@ export function temConteudoDeTreino(c: Coaching): boolean {
 }
 
 /**
- * Quem espera há quatro horas quer resposta, e resposta acontece no WhatsApp:
- * o wa.me abre aquela conversa no celular. Contato `@lid` não tem telefone, e
- * um wa.me com aqueles dígitos abriria uma pessoa qualquer; aí vai para a conversa.
+ * Resposta acontece no WhatsApp: no celular, o app; no computador, o WhatsApp
+ * Web. Contato `@lid` não tem telefone, e um link com aqueles dígitos abriria
+ * uma pessoa qualquer; aí vai para a conversa no painel.
  */
-function destinoDaEspera(c: ConversaComMensagens): { href: string; target?: string; rel?: string } {
-    return semTelefone(c.cliente_telefone)
-        ? { href: `/conversas/${c.id}` }
-        : { href: `https://wa.me/${c.cliente_telefone.replace(/\D/g, '')}`, target: '_blank', rel: 'noopener noreferrer' };
+function destinoResponder(c: { id: string; cliente_telefone: string }, celular: boolean): { href: string; target?: string; rel?: string } {
+    const href = linkWhatsapp(c.cliente_telefone, celular);
+    return href ? { href, target: '_blank', rel: 'noopener noreferrer' } : { href: `/conversas/${c.id}` };
 }
 
 /** A última coisa que o cliente disse, para o item da fila ter contexto. */
@@ -95,8 +94,8 @@ export function AvisoAprovacoes({ pendentes }: { pendentes: number }) {
 
 const VISIVEIS = 5;
 
-function ItemEspera({ conversa, espera }: { conversa: ConversaComMensagens; espera: number }) {
-    const destino = destinoDaEspera(conversa);
+function ItemEspera({ conversa, espera, celular }: { conversa: ConversaComMensagens; espera: number; celular: boolean }) {
+    const destino = destinoResponder(conversa, celular);
     const analise = [...(conversa.analises_conversa ?? [])].sort((a, b) => b.data_ref.localeCompare(a.data_ref))[0];
     const urgente = urgenciaAlta(analise?.urgencia);
     const potencialAlto = analise?.potencial_venda === 'alto';
@@ -121,8 +120,8 @@ function ItemEspera({ conversa, espera }: { conversa: ConversaComMensagens; espe
     );
 }
 
-export function EsperandoVoce({ className = '', titulo, esperando }: {
-    className?: string; titulo: string; esperando: { conversa: ConversaComMensagens; espera: number }[];
+export function EsperandoVoce({ className = '', titulo, esperando, celular }: {
+    className?: string; titulo: string; esperando: { conversa: ConversaComMensagens; espera: number }[]; celular: boolean;
 }) {
     return (
         <Cartao className={`flex flex-col gap-2 ${className}`}>
@@ -132,14 +131,14 @@ export function EsperandoVoce({ className = '', titulo, esperando }: {
                     {esperando.length ? 'O cliente falou por último e ninguém respondeu. Quem espera há mais tempo vem primeiro.' : 'Ninguém esperando resposta agora.'}
                 </p>
             </div>
-            {esperando.length > 0 && <ul className="flex flex-col">{esperando.slice(0, VISIVEIS).map((e) => <ItemEspera key={e.conversa.id} {...e} />)}</ul>}
+            {esperando.length > 0 && <ul className="flex flex-col">{esperando.slice(0, VISIVEIS).map((e) => <ItemEspera key={e.conversa.id} {...e} celular={celular} />)}</ul>}
             {esperando.length > VISIVEIS && (
                 // O selo conta todos; sem isto, "20" ao lado de cinco itens parecia erro de conta.
                 <details className="group">
                     <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-azul group-open:hidden">
                         Ver os outros {esperando.length - VISIVEIS}<Icone nome="seta_direita" tamanho={14} />
                     </summary>
-                    <ul className="flex flex-col">{esperando.slice(VISIVEIS).map((e) => <ItemEspera key={e.conversa.id} {...e} />)}</ul>
+                    <ul className="flex flex-col">{esperando.slice(VISIVEIS).map((e) => <ItemEspera key={e.conversa.id} {...e} celular={celular} />)}</ul>
                 </details>
             )}
         </Cartao>

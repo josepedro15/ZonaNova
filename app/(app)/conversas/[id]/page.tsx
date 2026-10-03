@@ -1,9 +1,10 @@
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import {
     Avatar, Barra, Botao, BotaoCopiar, BotaoLink, CabecalhoPagina, Cartao, Numero, Pagina, SELO, Selo, Shell,
 } from '@/components/ui';
 import { contextoApp, dataCurta } from '@/lib/contexto-app';
-import { esperaDoCliente, esperaEmTexto, semTelefone, telefoneBonito } from '@/lib/painel';
+import { ehCelular, esperaDoCliente, esperaEmTexto, linkWhatsapp, telefoneBonito } from '@/lib/painel';
 import { aderenciaPercentual } from '@/lib/analise';
 import { grifarConversa, listaDeTextos, rotuloPotencial, tomEspera, urgenciaAlta, type Tom } from '@/lib/visual';
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
@@ -63,6 +64,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
         .eq('id', id).eq('bloqueada', false).maybeSingle();
     // Bloqueada some para todo mundo, inclusive por link direto.
     if (!conversa) notFound();
+    const responder = linkWhatsapp(conversa.cliente_telefone, ehCelular((await headers()).get('user-agent')));
     const { data: analise } = await supabase.from('analises_conversa').select('*').eq('conversa_id', id)
         .order('data_ref', { ascending: false }).limit(1).maybeSingle();
     // O MEC do MESMO dia da análise exibida.
@@ -120,9 +122,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                 <Botao variante="secundario" type="submit">Não é atendimento</Botao>
                             </form>
                         )}
-                        {!semTelefone(conversa.cliente_telefone) && (
-                            <BotaoLink href={`https://wa.me/${conversa.cliente_telefone.replace(/\D/g, '')}`} externo>Responder no WhatsApp</BotaoLink>
-                        )}
+                        {responder && <BotaoLink href={responder} externo>Responder no WhatsApp</BotaoLink>}
                     </>} />
 
                 <div className="grid gap-5 lg:grid-cols-12 lg:items-start">

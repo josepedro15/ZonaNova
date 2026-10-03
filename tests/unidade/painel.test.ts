@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, juntarPorDia, primeiroNome, esperaDoCliente, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, primeiroNome, esperaDoCliente, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -183,4 +183,28 @@ test('dias de várias unidades somam contagens e ponderam médias', () => {
     assert.equal(d2.score_geral, 80);
     // Unidade sem nota não puxa a média para zero.
     assert.equal(juntarPorDia([linha('2026-09-21', null, 5), linha('2026-09-21', 70, 5)])[0].score_geral, 70);
+});
+
+// --- responder ---------------------------------------------------------------
+
+test('responder no computador abre direto o WhatsApp Web', () => {
+    assert.equal(linkWhatsapp('5554998124471', false), 'https://web.whatsapp.com/send?phone=5554998124471');
+});
+
+test('responder no celular abre o app pelo wa.me', () => {
+    assert.equal(linkWhatsapp('5554998124471', true), 'https://wa.me/5554998124471');
+});
+
+// Um wa.me com os dígitos de um LID abriria uma pessoa qualquer.
+test('contato @lid não ganha link de WhatsApp', () => {
+    assert.equal(linkWhatsapp('lid:123456789012345', false), null);
+    assert.equal(linkWhatsapp('lid:123456789012345', true), null);
+});
+
+test('celular é reconhecido pelo User-Agent; na dúvida, computador', () => {
+    assert.equal(ehCelular('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15'), true);
+    assert.equal(ehCelular('Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 Mobile Safari/537.36'), true);
+    assert.equal(ehCelular('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15'), false);
+    assert.equal(ehCelular('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0'), false);
+    assert.equal(ehCelular(null), false);
 });
