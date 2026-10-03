@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, listaDeTextos, media, rotuloPotencial, urgenciaAlta,
+    caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, listaDeTextos, media, rotuloPerfilCliente, rotuloPotencial, urgenciaAlta,
     setaDoTom, tomDelta, tomEspera, tomFaixa, tomResposta,
 } from '../../lib/visual.ts';
 
@@ -161,4 +161,20 @@ test('urgência alta é 4 ou 5', () => {
     assert.equal(urgenciaAlta(4), true);
     assert.equal(urgenciaAlta(3), false);
     assert.equal(urgenciaAlta(null), false);
+});
+
+test('profissão dita pelo cliente vira o rótulo, com inicial maiúscula', () => {
+    assert.equal(rotuloPerfilCliente('profissional_obra', 'carpinteiro'), 'Carpinteiro');
+});
+
+test('perfil sem profissão dita usa o nome do perfil', () => {
+    assert.equal(rotuloPerfilCliente('profissional_obra', ''), 'Profissional de obra');
+    assert.equal(rotuloPerfilCliente('consumidor_final', ''), 'Consumidor final');
+    assert.equal(rotuloPerfilCliente('empresa_revenda', null), 'Empresa ou revenda');
+});
+
+// Análise antiga não tem o campo; não identificado não merece selo.
+test('sem perfil, sem rótulo', () => {
+    assert.equal(rotuloPerfilCliente('nao_identificado', ''), null);
+    assert.equal(rotuloPerfilCliente(undefined, undefined), null);
 });

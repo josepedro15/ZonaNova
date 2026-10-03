@@ -171,3 +171,20 @@ export function rotuloPotencial(potencial: string | null | undefined): string | 
 export function urgenciaAlta(urgencia: number | null | undefined): boolean {
     return typeof urgencia === 'number' && urgencia >= 4;
 }
+
+const NOMES_PERFIL: Record<string, string> = {
+    consumidor_final: 'Consumidor final',
+    profissional_obra: 'Profissional de obra',
+    empresa_revenda: 'Empresa ou revenda',
+};
+
+/**
+ * O selo de quem é o cliente. A profissão dita ("carpinteiro") diz mais que a
+ * categoria; sem ela, a categoria. Não identificado (ou análise antiga, sem o
+ * campo) não ganha selo.
+ */
+export function rotuloPerfilCliente(perfil?: string | null, profissao?: string | null): string | null {
+    const dita = (profissao ?? '').trim();
+    if (dita) return dita.charAt(0).toLocaleUpperCase('pt-BR') + dita.slice(1);
+    return NOMES_PERFIL[perfil ?? ''] ?? null;
+}

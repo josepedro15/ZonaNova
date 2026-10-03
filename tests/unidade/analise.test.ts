@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aderenciaPercentual, custoEstimado, dataEmSaoPaulo, dataValida, hashTranscript, janelaDoDia, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise } from '../../lib/analise.ts';
+import { aderenciaPercentual, custoEstimado, dataEmSaoPaulo, dataValida, hashTranscript, janelaDoDia, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
 
 test('o dia comercial usa São Paulo na virada do UTC', () => {
     assert.equal(dataEmSaoPaulo(new Date('2026-09-22T01:30:00Z')), '2026-09-21');
@@ -79,4 +79,16 @@ test('aderência ignora não verificável e não aplicável', () => {
     ]), 75);
     assert.equal(aderenciaPercentual([{ aplicavel: true, aplicado: 'nao_verificavel' }]), null);
     assert.equal(aderenciaPercentual([]), null);
+});
+
+// Com `strict: true`, a OpenAI exige que toda propriedade esteja em `required`.
+test('todo campo do schema da análise é obrigatório para a OpenAI', () => {
+    assert.deepEqual([...schemaJsonAnalise.required].sort(), Object.keys(schemaJsonAnalise.properties).sort());
+});
+
+test('perfil do cliente fora do contrato vira não identificado, sem derrubar a análise', () => {
+    const r = schemaAnalise.shape.perfil_cliente.parse('pedreiro');
+    assert.equal(r, 'nao_identificado');
+    assert.equal(schemaAnalise.shape.profissao_cliente.parse(undefined), '');
+    assert.equal(schemaAnalise.shape.perfil_cliente.parse('profissional_obra'), 'profissional_obra');
 });

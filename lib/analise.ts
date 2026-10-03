@@ -29,6 +29,11 @@ export const schemaAnalise = z.object({
     tecnicas_usadas: z.array(z.string()),
     erros_vendedor: z.array(z.string()),
     tags: z.array(z.string()),
+    // Quem é o cliente, pelo que ELE disse — o nome do contato é o que ele pôs
+    // no próprio WhatsApp, não o da agenda do vendedor. Fora do contrato vira
+    // "não identificado" em vez de derrubar a análise (como o mec_detalhe).
+    perfil_cliente: z.enum(['consumidor_final', 'profissional_obra', 'empresa_revenda', 'nao_identificado']).catch('nao_identificado'),
+    profissao_cliente: z.string().catch(''),
     evidencias: z.array(z.object({ trecho: z.string(), conclusao: z.string() })).min(1).max(5),
     mec: z.array(z.object({
         etapa: z.enum(['acolhida', 'sondagem', 'solucao_completa', 'contorno_objecoes', 'estrategia_preco', 'fechamento', 'acompanhamento']),
@@ -44,7 +49,7 @@ export type ResultadoAnalise = z.infer<typeof schemaAnalise>;
 
 export const schemaJsonAnalise = {
     type: 'object', additionalProperties: false,
-    required: ['tipo_conversa','status','sentiment','score_atendimento','score_oportunidade','score_risco','estagio_funil','potencial_venda','urgencia','resumo','destaque','proxima_acao','script_sugerido','objecoes','tecnicas_usadas','erros_vendedor','tags','evidencias','mec'],
+    required: ['tipo_conversa','status','sentiment','score_atendimento','score_oportunidade','score_risco','estagio_funil','potencial_venda','urgencia','resumo','destaque','proxima_acao','script_sugerido','objecoes','tecnicas_usadas','erros_vendedor','tags','evidencias','mec','perfil_cliente','profissao_cliente'],
     properties: {
         tipo_conversa: { type: 'string', enum: ['negociacao','suporte','social'] },
         status: { type: 'string', enum: ['em_andamento','venda_feita','lead_frio','sem_resposta','perdida','encerrada'] },
@@ -58,6 +63,8 @@ export const schemaJsonAnalise = {
         resumo: { type: 'string' }, destaque: { type: 'string' }, proxima_acao: { type: 'string' }, script_sugerido: { type: 'string' },
         objecoes: { type: 'array', items: { type: 'string' } }, tecnicas_usadas: { type: 'array', items: { type: 'string' } },
         erros_vendedor: { type: 'array', items: { type: 'string' } }, tags: { type: 'array', items: { type: 'string' } },
+        perfil_cliente: { type: 'string', enum: ['consumidor_final','profissional_obra','empresa_revenda','nao_identificado'] },
+        profissao_cliente: { type: 'string' },
         evidencias: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['trecho','conclusao'], properties: { trecho: { type: 'string' }, conclusao: { type: 'string' } } } },
         mec: { type: 'array', minItems: 7, maxItems: 7, items: { type: 'object', additionalProperties: false, required: ['etapa','aplicavel','aplicado','justificativa','evidencias','itens'], properties: {
             etapa: { type: 'string', enum: ['acolhida','sondagem','solucao_completa','contorno_objecoes','estrategia_preco','fechamento','acompanhamento'] },

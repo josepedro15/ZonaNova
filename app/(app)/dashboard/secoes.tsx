@@ -4,7 +4,7 @@ import {
     Avatar, Barra, BotaoLink, Cartao, Comparacao, Icone, Kpi, Numero, SELO, Selo, SerieDias, Tabela, TEXTO, TempoEspera,
     type DiaSerie,
 } from '@/components/ui';
-import { comparaTempo, listaDeTextos, setaDoTom, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
+import { comparaTempo, listaDeTextos, rotuloPerfilCliente, setaDoTom, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
 import { ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
 import { esperaDoCliente, esperaEmTexto, linkWhatsapp, telefoneBonito, type Msg } from '@/lib/painel';
 import { DIAS_PARA_RETOMAR, type ItemRetomar } from '@/lib/retomar';
@@ -147,13 +147,14 @@ export function EsperandoVoce({ className = '', titulo, esperando, celular }: {
 }
 
 /** O que a última análise sugeriu fazer, para o vendedor não retomar no escuro. */
-export type AcaoRetomar = { proxima_acao?: string };
+export type AcaoRetomar = { proxima_acao?: string; perfil_cliente?: string; profissao_cliente?: string };
 
 export const chaveRetomar = (i: ItemRetomar) => `${i.conversa.id}|${i.analise.data_ref}`;
 
 function ItemRetomarContato({ item, acao, celular }: { item: ItemRetomar; acao?: AcaoRetomar; celular: boolean }) {
     const { conversa, dias, analise } = item;
     const destino = destinoResponder(conversa, celular);
+    const perfil = rotuloPerfilCliente(acao?.perfil_cliente, acao?.profissao_cliente);
     return (
         <li className="border-t border-linha-2">
             <a {...destino} className="flex min-h-11 items-center gap-3.5 py-3 text-tinta">
@@ -162,6 +163,7 @@ function ItemRetomarContato({ item, acao, celular }: { item: ItemRetomar; acao?:
                     <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate text-sm font-semibold">{conversa.cliente_nome ?? telefoneBonito(conversa.cliente_telefone)}</span>
                         {analise.potencial_venda === 'alto' && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${SELO.azul}`}>Potencial alto</span>}
+                        {perfil && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${SELO.neutro}`}>{perfil}</span>}
                     </span>
                     <span className="truncate text-[13px] text-tinta-3">{acao?.proxima_acao || 'Sem próxima ação sugerida'}</span>
                 </span>

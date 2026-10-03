@@ -6,7 +6,7 @@ import {
 import { contextoApp, dataCurta } from '@/lib/contexto-app';
 import { ehCelular, esperaDoCliente, esperaEmTexto, linkWhatsapp, telefoneBonito } from '@/lib/painel';
 import { aderenciaPercentual } from '@/lib/analise';
-import { grifarConversa, listaDeTextos, rotuloPotencial, tomEspera, urgenciaAlta, type Tom } from '@/lib/visual';
+import { grifarConversa, listaDeTextos, rotuloPerfilCliente, rotuloPotencial, tomEspera, urgenciaAlta, type Tom } from '@/lib/visual';
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
 import { contestarAderencia } from '@/app/actions/gestao';
 import { bloquearContato } from '@/app/actions/conexao';
@@ -20,6 +20,7 @@ type Payload = {
     resumo?: string; destaque?: string; proxima_acao?: string; script_sugerido?: string;
     evidencias?: { trecho: string; conclusao: string }[];
     tecnicas_usadas?: unknown; erros_vendedor?: unknown; tags?: unknown;
+    perfil_cliente?: string; profissao_cliente?: string;
 };
 type Marcacao = { id: string; etapa: string; aplicavel: boolean; aplicado: string | null; justificativa: string; itens: unknown; playbook_id: string };
 
@@ -111,7 +112,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                 <CabecalhoPagina
                     voltar={{ href: '/conversas', rotulo: 'Conversas' }}
                     titulo={<span className="flex items-center gap-3.5"><Avatar nome={conversa.cliente_nome} tamanho={48} />{nome}</span>}
-                    sobre={[telefoneBonito(conversa.cliente_telefone), vendedor?.nome && `atendida por ${vendedor.nome}`, dataCurta(conversa.ultima_mensagem_em as string)].filter(Boolean).join(' · ')}
+                    sobre={[telefoneBonito(conversa.cliente_telefone), rotuloPerfilCliente(payload.perfil_cliente, payload.profissao_cliente), vendedor?.nome && `atendida por ${vendedor.nome}`, dataCurta(conversa.ultima_mensagem_em as string)].filter(Boolean).join(' · ')}
                     acoes={<>
                         {conversa.user_id === perfil.id && (
                             // Único caminho para bloquear contato `@lid`, que não tem número para digitar no Perfil.
