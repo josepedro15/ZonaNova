@@ -9,9 +9,13 @@ type Interno = { id: string; unidade_id: string; telefone: string; descricao: st
 /** As lojas cuja lista a pessoa cuida: as que gerencia, ou a rede para supervisor e admin. */
 async function unidadesQueCuida(supabase: Supabase, userId: string, role: string): Promise<Unidade[]> {
     if (role === 'gestor') {
-        const { data } = await supabase.from('gestor_unidades').select('unidades(id,nome)').eq('gestor_id', userId)
-            .returns<{ unidades: Unidade | null }[]>();
-        return (data ?? []).flatMap((g) => (g.unidades ? [g.unidades] : []));
+        // Mesmo critério do ramo de baixo: loja desativada não ganha lista nova,
+        // e a ordem é pelo nome. Feito aqui, em JS: são poucas lojas por gestor.
+        const { data } = await supabase.from('gestor_unidades').select('unidades(id,nome,ativa)').eq('gestor_id', userId)
+            .returns<{ unidades: (Unidade & { ativa: boolean }) | null }[]>();
+        return (data ?? [])
+            .flatMap((g) => (g.unidades?.ativa ? [{ id: g.unidades.id, nome: g.unidades.nome }] : []))
+            .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     }
     const { data } = await supabase.from('unidades').select('id,nome').eq('ativa', true).order('nome').returns<Unidade[]>();
     return data ?? [];
@@ -32,7 +36,9 @@ export async function ContatosInternos({ supabase, userId, role }: { supabase: S
                 </div>
                 <span className="rounded-full bg-papel-2 px-2.5 py-1 text-xs font-semibold">{internos?.length ?? 0}</span>
             </div>
-            <form action={adicionarContatoInterno} className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_1.3fr_auto]">
+            {/* Com uma loja só, o campo dela é hidden e não ocupa célula: a grade
+                perde a primeira coluna para os três campos não ficarem tortos. */}
+            <form action={adicionarContatoInterno} className={`mt-4 grid gap-2 ${unidades.length === 1 ? 'sm:grid-cols-[1fr_1.3fr_auto]' : 'sm:grid-cols-[1fr_1fr_1.3fr_auto]'}`}>
                 {unidades.length === 1 ? (
                     <input type="hidden" name="unidadeId" value={unidades[0].id} />
                 ) : (
@@ -53,7 +59,7 @@ export async function ContatosInternos({ supabase, userId, role }: { supabase: S
                         </div>
                         <form action={removerContatoInterno}>
                             <input type="hidden" name="id" value={i.id} />
-                            <button className="text-xs font-semibold text-petroleo">Remover</button>
+                            <button className="text-xs font-semibold text-vermelho">Remover</button>
                         </form>
                     </div>
                 ))}
