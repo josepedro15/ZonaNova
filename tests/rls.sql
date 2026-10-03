@@ -498,10 +498,50 @@ reset role;
 do $$
 begin
     if has_table_privilege('authenticated', 'public.contatos_internos', 'insert')
+       or has_table_privilege('authenticated', 'public.contatos_internos', 'update')
        or has_table_privilege('authenticated', 'public.contatos_internos', 'delete')
     then raise notice 'FALHOU  authenticated escreve em contatos_internos';
     else raise notice 'PASSOU  contatos_internos só se escreve pelo service role'; end if;
     if has_table_privilege('anon', 'public.contatos_internos', 'select')
     then raise notice 'FALHOU  anon lê contatos_internos';
     else raise notice 'PASSOU  anon fora de contatos_internos'; end if;
+end $$;
+
+-- O número de um colega conectado DEPOIS da migration: a conversa antiga com
+-- ele tem de sair das telas na hora em que o número é gravado, não só no
+-- backfill da 0022. Vera (pendente, sem conexão) conecta com o telefone da
+-- cliente de Rafael; depois Letícia troca o número para a forma sem o nono
+-- dígito do mesmo telefone. Tudo é desfeito no fim.
+do $$
+declare v_rafael boolean; v_leticia boolean;
+begin
+    insert into public.conexoes_whatsapp (user_id, unidade_id, instance_name, numero, status)
+    values ('77777777-7777-7777-7777-777777777777', 'aaaaaaaa-0000-0000-0000-000000000001',
+            'zn-vera-teste', '5554991347702', 'conectada');
+    select bloqueada into v_rafael  from public.conversas where id = 'cccccccc-0000-0000-0000-000000000001';
+    select bloqueada into v_leticia from public.conversas where id = 'cccccccc-0000-0000-0000-000000000002';
+    if v_rafael and not v_leticia
+    then raise notice 'PASSOU  colega conectado depois some das conversas (insert)';
+    else raise notice 'FALHOU  colega conectado depois: rafael=% leticia=%', v_rafael, v_leticia; end if;
+
+    delete from public.conexoes_whatsapp where user_id = '77777777-7777-7777-7777-777777777777';
+    update public.conversas set bloqueada = false where id = 'cccccccc-0000-0000-0000-000000000001';
+
+    -- Só o status mudou: não é número novo, nada se marca.
+    update public.conexoes_whatsapp set status = 'caida'
+     where user_id = '55555555-5555-5555-5555-555555555555';
+    update public.conexoes_whatsapp set numero = '555491347702'
+     where user_id = '55555555-5555-5555-5555-555555555555';
+    select bloqueada into v_rafael from public.conversas where id = 'cccccccc-0000-0000-0000-000000000001';
+    if v_rafael
+    then raise notice 'PASSOU  número trocado sem o nono dígito também marca (update)';
+    else raise notice 'FALHOU  número trocado sem o nono dígito não marcou'; end if;
+
+    update public.conexoes_whatsapp set numero = '5554998887766', status = 'conectada'
+     where user_id = '55555555-5555-5555-5555-555555555555';
+    update public.conversas set bloqueada = false where id = 'cccccccc-0000-0000-0000-000000000001';
+
+    if has_function_privilege('authenticated', 'public.conversas_bloqueia_numero_de_colega()', 'execute')
+    then raise notice 'FALHOU  authenticated executa conversas_bloqueia_numero_de_colega';
+    else raise notice 'PASSOU  conversas_bloqueia_numero_de_colega fora do cliente'; end if;
 end $$;
