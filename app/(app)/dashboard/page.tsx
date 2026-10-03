@@ -6,10 +6,11 @@ import { desde, diasAte, ehCelular, esperaDoCliente, foiRespondido, primeiroNome
 import { dataEmSaoPaulo } from '@/lib/analise';
 import { media } from '@/lib/visual';
 import { variacaoSemanal } from '@/lib/derivacoes';
+import { janelaRetomar, paraRetomar, type CandidataRetomar } from '@/lib/retomar';
 import { dataPorExtenso, diaPorExtenso, horaBrasilia, inicioDoDia, saudacao } from './formato';
 import {
-    AvisoAprovacoes, AvisoConexao, ConversasDeHoje, DoGestor, EsperandoVoce, HojeAteAgora, MecResumo, RelatorioDoDia, Treino,
-    temConteudoDeTreino, type AderenciaDia, type Coaching, type ConversaComMensagens, type RelatorioDiario,
+    AvisoAprovacoes, AvisoConexao, ConversasDeHoje, DoGestor, EsperandoVoce, HojeAteAgora, MecResumo, RelatorioDoDia, RetomarContato, Treino,
+    temConteudoDeTreino, type AcaoRetomar, type AderenciaDia, type Coaching, type ConversaComMensagens, type RelatorioDiario,
 } from './secoes';
 
 // O painel lê o que chegou há instantes pelo webhook. Gerado uma vez no build
@@ -26,9 +27,10 @@ export default async function Dashboard() {
     const janela = new Date(comeco.getTime() - 7 * 24 * 60 * 60 * 1000);
     const dataRef = dataEmSaoPaulo(agora);
     const celular = ehCelular((await headers()).get('user-agent'));
+    const frias = janelaRetomar(agora);
 
     // Tudo já passou pela RLS. Ver tests/rls.sql.
-    const [{ data: perfil }, { data: conexao }, { data: conversas }, { data: relatorios }, { data: aderencia }, { data: observacoes }] = await Promise.all([
+    const [{ data: perfil }, { data: conexao }, { data: conversas }, { data: relatorios }, { data: aderencia }, { data: observacoes }, { data: candidatas }] = await Promise.all([
         supabase.from('profiles').select('nome, role, unidades!profiles_unidade_id_fkey(nome)').eq('id', user!.id)
             .maybeSingle<{ nome: string; role: string; unidades: { nome: string } | null }>(),
         supabase.from('vw_conexoes_status').select('status, numero, ultimo_evento_em').eq('user_id', user!.id)
@@ -46,6 +48,12 @@ export default async function Dashboard() {
         supabase.from('observacoes_gestor').select('id,texto,created_at')
             .eq('vendedor_id', user!.id).order('created_at', { ascending: false }).limit(3)
             .returns<{ id: string; texto: string; created_at: string }[]>(),
+        // Só as conversas do próprio vendedor: a lista é o que ELE tem para retomar.
+        supabase.from('conversas')
+            .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, analises_conversa(data_ref, tipo_conversa, status, potencial_venda, score_oportunidade)')
+            .eq('user_id', user!.id).eq('bloqueada', false)
+            .gte('ultima_mensagem_em', frias.de.toISOString()).lt('ultima_mensagem_em', frias.ate.toISOString())
+            .order('ultima_mensagem_em', { ascending: false }).limit(500).returns<CandidataRetomar[]>(),
     ]);
 
     const todas = conversas ?? [];
@@ -54,6 +62,17 @@ export default async function Dashboard() {
         .map((c) => ({ conversa: c, espera: esperaDoCliente(c.mensagens, agora) }))
         .filter((e): e is { conversa: ConversaComMensagens; espera: number } => e.espera !== null)
         .sort((a, b) => b.espera - a.espera);
+
+    // Cinquenta bastam: uma lista de trezentos ninguém percorre.
+    const retomar = paraRetomar(candidatas ?? [], agora).slice(0, 50);
+    // A próxima ação vem do payload da MESMA análise que pôs a conversa na lista.
+    const { data: payloads } = retomar.length
+        ? await supabase.from('analises_conversa').select('conversa_id,data_ref,payload')
+            .in('conversa_id', retomar.map((r) => r.conversa.id))
+            .in('data_ref', [...new Set(retomar.map((r) => r.analise.data_ref))])
+            .returns<{ conversa_id: string; data_ref: string; payload: AcaoRetomar | null }[]>()
+        : { data: [] as { conversa_id: string; data_ref: string; payload: AcaoRetomar | null }[] };
+    const acoes = new Map((payloads ?? []).map((p) => [`${p.conversa_id}|${p.data_ref}`, p.payload ?? {}]));
 
     // A fila acima olha o histórico inteiro; as métricas do dia, não.
     const respostaMedia = respostaMediaEmMinutos(deHoje.flatMap((c) => temposDeResposta(desde(c.mensagens, comeco))));
@@ -102,6 +121,7 @@ export default async function Dashboard() {
                     <div className="flex flex-col gap-4 xl:col-span-5">
                         <RotuloSecao complemento="ao vivo">Agora</RotuloSecao>
                         <EsperandoVoce esperando={esperando} celular={celular} titulo={deHoje.length === 0 ? 'Ficou de ontem' : 'Esperando você'} />
+                        <RetomarContato itens={retomar} acoes={acoes} celular={celular} />
                         <HojeAteAgora conversas={deHoje.length} respostaMedia={respostaMedia}
                                       respostaOntemMin={respostaOntem == null ? null : Math.round(Number(respostaOntem) / 60)}
                                       taxa={taxa} respondidos={respondidos} escreveram={comFala.length}

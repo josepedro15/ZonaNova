@@ -7,6 +7,7 @@ import {
 import { comparaTempo, listaDeTextos, setaDoTom, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
 import { ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
 import { esperaDoCliente, esperaEmTexto, linkWhatsapp, telefoneBonito, type Msg } from '@/lib/painel';
+import { DIAS_PARA_RETOMAR, type ItemRetomar } from '@/lib/retomar';
 import { dataCurtaBrasilia, horaBrasilia } from './formato';
 
 export type ConversaComMensagens = {
@@ -139,6 +140,64 @@ export function EsperandoVoce({ className = '', titulo, esperando, celular }: {
                         Ver os outros {esperando.length - VISIVEIS}<Icone nome="seta_direita" tamanho={14} />
                     </summary>
                     <ul className="flex flex-col">{esperando.slice(VISIVEIS).map((e) => <ItemEspera key={e.conversa.id} {...e} celular={celular} />)}</ul>
+                </details>
+            )}
+        </Cartao>
+    );
+}
+
+/** O que a última análise sugeriu fazer, para o vendedor não retomar no escuro. */
+export type AcaoRetomar = { proxima_acao?: string };
+
+export const chaveRetomar = (i: ItemRetomar) => `${i.conversa.id}|${i.analise.data_ref}`;
+
+function ItemRetomarContato({ item, acao, celular }: { item: ItemRetomar; acao?: AcaoRetomar; celular: boolean }) {
+    const { conversa, dias, analise } = item;
+    const destino = destinoResponder(conversa, celular);
+    return (
+        <li className="border-t border-linha-2">
+            <a {...destino} className="flex min-h-11 items-center gap-3.5 py-3 text-tinta">
+                <Avatar nome={conversa.cliente_nome} />
+                <span className="flex min-w-0 grow flex-col gap-0.5">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-sm font-semibold">{conversa.cliente_nome ?? telefoneBonito(conversa.cliente_telefone)}</span>
+                        {analise.potencial_venda === 'alto' && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${SELO.azul}`}>Potencial alto</span>}
+                    </span>
+                    <span className="truncate text-[13px] text-tinta-3">{acao?.proxima_acao || 'Sem próxima ação sugerida'}</span>
+                </span>
+                <span className={`whitespace-nowrap rounded-ctl px-2.5 py-1 text-[12.5px] font-bold ${SELO.atencao}`}>{dias} dias</span>
+                <span className="hidden items-center gap-1.5 rounded-ctl border border-linha px-3 py-2 text-[12.5px] font-semibold text-azul sm:inline-flex">
+                    Retomar<Icone nome={destino.target ? 'externo' : 'seta_direita'} tamanho={14} />
+                </span>
+            </a>
+        </li>
+    );
+}
+
+export function RetomarContato({ className = '', itens, acoes, celular }: {
+    className?: string; itens: ItemRetomar[]; acoes: Map<string, AcaoRetomar>; celular: boolean;
+}) {
+    const item = (i: ItemRetomar) => <ItemRetomarContato key={i.conversa.id} item={i} acao={acoes.get(chaveRetomar(i))} celular={celular} />;
+    return (
+        <Cartao className={`flex flex-col gap-2 ${className}`}>
+            <div>
+                <h3 className="display flex items-center gap-2.5 text-lg font-bold">
+                    <Icone nome="alerta" tamanho={18} className="shrink-0 text-atencao-texto" />Retomar contato
+                    {itens.length > 0 && <Selo tom="atencao">{itens.length}</Selo>}
+                </h3>
+                <p className="mt-1 text-[13px] text-tinta-3">
+                    {itens.length
+                        ? `Negociações sem conversa há mais de ${DIAS_PARA_RETOMAR} dias. Uma mensagem agora pode reabrir a venda.`
+                        : `Negociação em aberto que ficar mais de ${DIAS_PARA_RETOMAR} dias sem conversa aparece aqui.`}
+                </p>
+            </div>
+            {itens.length > 0 && <ul className="flex flex-col">{itens.slice(0, VISIVEIS).map(item)}</ul>}
+            {itens.length > VISIVEIS && (
+                <details className="group">
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-azul group-open:hidden">
+                        Ver os outros {itens.length - VISIVEIS}<Icone nome="seta_direita" tamanho={14} />
+                    </summary>
+                    <ul className="flex flex-col">{itens.slice(VISIVEIS).map(item)}</ul>
                 </details>
             )}
         </Cartao>

@@ -50,6 +50,10 @@ A tela mais crítica do onboarding: se ela falhar, o sistema não tem dado.
 - Gráfico de evolução da nota (14/30 dias)
 - Lista de conversas do dia com tipo, nota e status
 - *Estado vazio:* "sem movimento hoje" — nunca mostrar nota zero por ausência
+- **Retomar contato** — negociações em aberto (pela última análise) sem conversa
+  há 30 a 90 dias, com a próxima ação sugerida e o botão que abre o WhatsApp.
+  Potencial alto primeiro. Sai da lista sozinha quando o vendedor escreve.
+  Regra em `lib/retomar.ts`.
 
 ### 5. Conversa + análise — `/conversas/[id]`
 Duas colunas: transcript à esquerda (bolhas, mídia marcada, áudio com
