@@ -50,18 +50,23 @@ async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
     const m = normalizarMensagem({ message: mensagem });
     if ('descartar' in m) return;
 
-    // Contato bloqueado é escolha do vendedor: "isto não é atendimento".
-    // Barrar aqui e não na análise evita guardar o que ele pediu para não ser
-    // guardado.
-    // Compara com e sem o nono dígito: o JID e o que o vendedor digitou nem
-    // sempre concordam.
-    const { data: bloqueado } = await supabase
-        .from('contatos_bloqueados')
-        .select('id')
-        .eq('user_id', conexao.user_id)
-        .in('telefone', variantesTelefone(m.clienteTelefone))
-        .limit(1);
-    if (bloqueado?.length) return;
+    // Contato fora da análise não é guardado: barrar aqui e não na análise
+    // evita guardar o que pediram para não ser guardado. Três listas, a mesma
+    // regra de lib/exclusao.ts:
+    // - a pessoal do vendedor ("isto não é atendimento");
+    // - a interna da loja (Depósito, caixa), cadastrada pelo gestor;
+    // - o número de outro vendedor conectado: conversa de trabalho.
+    // Compara com e sem o nono dígito: o JID e o que foi digitado nem sempre concordam.
+    const variantes = variantesTelefone(m.clienteTelefone);
+    const [pessoal, interno, colega] = await Promise.all([
+        supabase.from('contatos_bloqueados').select('id').eq('user_id', conexao.user_id).in('telefone', variantes).limit(1),
+        supabase.from('contatos_internos').select('id').eq('unidade_id', conexao.unidade_id).in('telefone', variantes).limit(1),
+        supabase.from('conexoes_whatsapp').select('id').neq('id', conexao.id).in('numero', variantes).limit(1),
+    ]);
+    // Falha de leitura não é "pode guardar": lançar mantém a entrada em
+    // webhook_entrada para o worker tentar de novo.
+    for (const r of [pessoal, interno, colega]) if (r.error) throw r.error;
+    if (pessoal.data?.length || interno.data?.length || colega.data?.length) return;
 
     // A conversa pertence à unidade VIGENTE do vendedor, a da conexão: se ele
     // é transferido, a próxima mensagem de um cliente antigo leva a conversa
