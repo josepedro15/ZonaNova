@@ -459,7 +459,10 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
     // social ou testes técnicos. Esses itens continuam nas métricas de resposta,
     // mas o treino usa negociações quando houver ao menos uma.
     const baseCoaching = negociacoes.length ? negociacoes : analises;
-    // O detalhe do MEC não entra no coaching: o prompt da consolidação fica o de antes.
+    // O detalhe do MEC não entra no coaching: é o único campo retirado. As
+    // instruções da consolidação são as de antes, mas a entrada não: o resto do
+    // payload segue inteiro, e perfil_cliente/profissao_cliente chegam à
+    // consolidação como mais dois campos de cada análise.
     const semDetalhe = (payload: unknown) => {
         const copia = { ...(payload as Record<string, unknown>) };
         delete copia.mec_detalhe;

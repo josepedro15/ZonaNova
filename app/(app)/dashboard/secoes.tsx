@@ -163,7 +163,7 @@ function ItemRetomarContato({ item, acao, celular }: { item: ItemRetomar; acao?:
                     <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate text-sm font-semibold">{conversa.cliente_nome ?? telefoneBonito(conversa.cliente_telefone)}</span>
                         {analise.potencial_venda === 'alto' && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${SELO.azul}`}>Potencial alto</span>}
-                        {perfil && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${SELO.neutro}`}>{perfil}</span>}
+                        {perfil && <span className={`max-w-[10rem] shrink-0 truncate rounded-full px-2 py-0.5 text-[11px] font-semibold ${SELO.neutro}`}>{perfil}</span>}
                     </span>
                     <span className="truncate text-[13px] text-tinta-3">{acao?.proxima_acao || 'Sem próxima ação sugerida'}</span>
                 </span>

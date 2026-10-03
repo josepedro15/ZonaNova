@@ -57,7 +57,19 @@ Responsabilidades, nessa ordem:
    `conexoes_whatsapp.status` — é isso que alimenta o alerta de número caído.
 
 Descartar já na entrada: mensagens de grupo (`@g.us`), status/broadcast,
-e telefones em `contatos_bloqueados`.
+e telefones de contato fora da análise — três listas, com e sem o nono dígito
+(`lib/exclusao.ts`):
+
+- `contatos_bloqueados`: a lista pessoal do vendedor;
+- `contatos_internos`: a lista da loja (Depósito, caixa, financeiro),
+  cadastrada pelo gestor e válida para todos os vendedores da unidade;
+- o número de **outro vendedor conectado** (`conexoes_whatsapp.numero`):
+  conversa de trabalho, não atendimento.
+
+A mensagem barrada não é gravada. O que já estava gravado sai das telas por
+`conversas.bloqueada`, sem apagar nada — inclusive quando o colega
+conecta depois: um trigger em `conexoes_whatsapp` (0022) marca as conversas
+com o número que acabou de ser gravado.
 
 ## 3.3 Fechamento do dia
 
@@ -113,6 +125,8 @@ dado, e o dashboard mostra isso como "sem movimento".
 | `resumo`, `destaque`, `proxima_acao`, `script_sugerido` | texto | |
 | `objecoes`, `tecnicas_usadas`, `erros_vendedor`, `tags` | array | |
 | `evidencias` | array 1-5 | trechos do transcript que sustentam as conclusões |
+| `perfil_cliente` | `consumidor_final\|profissional_obra\|empresa_revenda\|nao_identificado` | só pelo que o cliente disse; sem indício, `nao_identificado` |
+| `profissao_cliente` | texto | profissão como o cliente disse ("carpinteiro"); `""` quando não disse |
 
 **Prompt:** porta o prompt do MetricsIA (`lib/prompts/individual-analysis.ts`),
 que já carrega a doutrina do §1.5. Ajustes necessários para o GPT:
