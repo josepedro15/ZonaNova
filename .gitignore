@@ -6,3 +6,7 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+
+# Worktrees do Claude Code
+.claude/worktrees/
+.superpowers/
