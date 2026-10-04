@@ -1084,6 +1084,18 @@ Mostrar a lista ao Silas: são esses os leads que ele quer no CRM? Se vierem lea
 
 Só depois do ok da Redemac sobre o uso dos contatos no CRM (LGPD: o aceite em `/conectar` fala em "armazenadas e analisadas para gestão") e com a linha conectada na Zona Nova2: `CRPRO_MODO=envio` na Vercel, começando por uma unidade em `CRPRO_UNIDADES`. No dia seguinte, conferir no CRPRO que os cards estão em Lead, com a etiqueta do vendedor e a nota, e que nenhum cliente tem dois cards.
 
+Nas primeiras semanas de envio real, conferir todo dia os envios que falharam. Um item `envio_crm` que termina `falhou` (CRPRO fora do ar por mais de ~70 min: o backoff é 5/20/45 min) não é tentado de novo, a menos que a análise da conversa mude, e a tela /admin só mostra os últimos 100 itens da fila:
+
+```sql
+select referencia_id as conversa_id, data_ref, tentativas, ultimo_erro, processado_em
+from fila_processamento
+where tipo = 'envio_crm' and status = 'falhou'
+order by processado_em desc;
+
+-- Reenfileirar um item depois que o CRPRO voltar:
+select zn_reabrir_item('envio_crm', '<conversa_id>', '<data_ref>');
+```
+
 ## Ordem e dependências
 
 - **1 → 2 → 3 → 4 → 5 → 6.** A 2 e a 3 não dependem da 1 e podem andar em paralelo com ela; a 4 precisa das três.

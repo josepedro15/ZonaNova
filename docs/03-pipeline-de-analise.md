@@ -238,7 +238,8 @@ Apaga as análises daquele `data_ref` e reenfileira. Fica registrado em
 
 ## 3.11 Envio ao CRM (lead quente → CRPRO)
 
-Depois de cada análise que mudou, o `encadear` olha a análise do dia. Se é
+A checagem roda quando a etapa de análise encadeia (`encadear`) — e o
+`decidirEnvio` filtra de novo de qualquer forma. Se a análise do dia é
 negociação em andamento, com potencial alto e nota de oportunidade ≥ 70, de
 unidade em `CRPRO_UNIDADES` e de conversa fora de qualquer lista de exclusão,
 entra na fila um item `envio_crm` (referência: a conversa).

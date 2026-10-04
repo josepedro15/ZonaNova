@@ -565,11 +565,11 @@ type CandidatoCrm = {
 /** A conversa, a análise DO DIA e o nome do vendedor — o que o envio ao CRM precisa. */
 async function candidatoCrm(supabase: Admin, conversaId: string, dataRef: string): Promise<CandidatoCrm | null> {
     const { data: conversa, error } = await supabase.from('conversas')
-        .select('user_id, unidade_id, cliente_telefone, cliente_nome, bloqueada, analises_conversa(tipo_conversa, status, potencial_venda, score_oportunidade, payload)')
+        .select('user_id, unidade_id, cliente_telefone, cliente_nome, bloqueada, analises_conversa(unidade_id, tipo_conversa, status, potencial_venda, score_oportunidade, payload)')
         .eq('id', conversaId).eq('analises_conversa.data_ref', dataRef)
         .maybeSingle<{
             user_id: string; unidade_id: string; cliente_telefone: string; cliente_nome: string | null; bloqueada: boolean;
-            analises_conversa: { tipo_conversa: string | null; status: string | null; potencial_venda: string | null; score_oportunidade: number | null; payload: Record<string, unknown> | null }[];
+            analises_conversa: { unidade_id: string; tipo_conversa: string | null; status: string | null; potencial_venda: string | null; score_oportunidade: number | null; payload: Record<string, unknown> | null }[];
         }>();
     if (error) throw error;
     if (!conversa) return null;
@@ -577,18 +577,22 @@ async function candidatoCrm(supabase: Admin, conversaId: string, dataRef: string
         .eq('id', conversa.user_id).maybeSingle<{ nome: string }>();
     if (erroPerfil) throw erroPerfil;
     const analise = conversa.analises_conversa[0] ?? null;
+    // A análise grava a unidade ATUAL do vendedor (`analisarItem`); a da
+    // conversa pode ser a antiga se ele foi transferido. Sem análise, o
+    // `decidirEnvio` ignora o item e a unidade da conversa não decide nada.
+    const unidadeId = analise?.unidade_id ?? conversa.unidade_id;
     // Análise anterior ao perfil do cliente não tem profissão no payload.
     const texto = (campo: string) => typeof analise?.payload?.[campo] === 'string' ? analise.payload[campo] as string : '';
     return {
         dados: {
-            unidadeId: conversa.unidade_id, bloqueada: conversa.bloqueada, telefone: conversa.cliente_telefone,
+            unidadeId, bloqueada: conversa.bloqueada, telefone: conversa.cliente_telefone,
             analise: analise && {
                 tipo_conversa: analise.tipo_conversa, status: analise.status,
                 potencial_venda: analise.potencial_venda, score_oportunidade: analise.score_oportunidade,
             },
         },
         userId: conversa.user_id,
-        unidadeId: conversa.unidade_id,
+        unidadeId,
         nomeCliente: conversa.cliente_nome,
         vendedor: perfil?.nome ?? 'Vendedor',
         score: analise?.score_oportunidade ?? 0,
@@ -632,7 +636,9 @@ async function enviarAoCrmItem(supabase: Admin, conversaId: string, dataRef: str
     }
 
     // Dois workers com o mesmo cliente ao mesmo tempo: o segundo bate na
-    // unique e não grava de novo; no CRPRO o external_ref já o segurou.
+    // unique e não grava de novo. No CRPRO o card continua um só (o
+    // external_ref o acha antes do POST /deals, ou no pior caso só o move para
+    // a mesma etapa), mas a etiqueta do vendedor e a nota podem sair em dobro.
     const { error } = await supabase.from('envios_crm').upsert({
         telefone: decisao.telefone, modo, conversa_id: conversaId, user_id: c.userId,
         unidade_id: c.unidadeId, data_ref: dataRef, ...ids,

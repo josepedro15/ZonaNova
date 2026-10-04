@@ -74,6 +74,20 @@ test('card que já existe não é recriado nem movido', async () => {
     assert.equal(chamadas.some((c) => c.chave === 'POST /contacts/c1/notes'), false);
 });
 
+// A nova tentativa que o desenho existe para suportar: a anterior criou o card
+// e falhou depois (na nota, por exemplo). Contato e etiqueta são idempotentes e
+// rodam de novo; o POST /deals nunca, porque moveria o card.
+test('nova tentativa depois de card criado: refaz contato e etiqueta, sem POST /deals', async () => {
+    const { f, chamadas } = falso({ ...comum, [BUSCA]: { corpo: { success: true, data: [{ id: 'd0' }] } } });
+    const r = await enviarLead(new Crpro('https://crm', 'chave', f), lead, destino);
+    assert.equal(r.jaExistia, true);
+    assert.equal(r.cardId, 'd0');
+    const chaves = chamadas.map((c) => c.chave);
+    assert.equal(chaves.includes('POST /deals'), false);
+    assert.equal(chaves.includes('POST /contacts'), true);
+    assert.equal(chaves.includes('POST /contacts/c1/tags'), true);
+});
+
 test('erro da API vira ErroCrpro com o status e sem a query', async () => {
     const { f } = falso({
         ...comum,
