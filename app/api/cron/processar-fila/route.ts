@@ -10,6 +10,8 @@ import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } fro
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { drenarEntradas, expurgarEntradas } from '@/lib/uazapi/ingestao';
+import { decidirEnvio, etiquetaDoVendedor, faltandoParaEnviar, lerConfigCrm, nomeDoContato, notaDoCard, tituloDoCard, type Candidato } from '@/lib/crm';
+import { Crpro, enviarLead } from '@/lib/crpro/cliente';
 
 export const maxDuration = 300;
 
@@ -71,7 +73,7 @@ async function processarLote(supabase: Admin, agora: Date): Promise<Record<strin
         .from('fila_processamento')
         .select('id, tipo, referencia_id, data_ref, tentativas')
         .eq('status', 'pendente')
-        .in('tipo', ['transcricao', 'analise_conversa', 'relatorio_vendedor', 'rollup_unidade', 'rollup_rede'])
+        .in('tipo', ['transcricao', 'analise_conversa', 'relatorio_vendedor', 'rollup_unidade', 'rollup_rede', 'envio_crm'])
         .lte('proxima_tentativa_em', agora.toISOString())
         .order('proxima_tentativa_em')
         .limit(LOTE)
@@ -122,6 +124,7 @@ async function processarLote(supabase: Admin, agora: Date): Promise<Record<strin
             else if (item.tipo === 'relatorio_vendedor') await consolidarItem(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'rollup_unidade') await rollupUnidade(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'rollup_rede') await rollupRede(supabase, item.data_ref);
+            else if (item.tipo === 'envio_crm') await enviarAoCrmItem(supabase, item.referencia_id, item.data_ref);
             desfecho = { status: 'concluido', processado_em: new Date().toISOString() };
             encadeia = encadeiaSeMudou;
         } catch (e) {
@@ -226,7 +229,7 @@ async function resgatarPresos(supabase: Admin, agora: Date): Promise<number> {
     return presos?.length ?? 0;
 }
 
-type ItemTipo = 'transcricao' | 'analise_conversa' | 'relatorio_vendedor' | 'rollup_unidade' | 'rollup_rede';
+type ItemTipo = 'transcricao' | 'analise_conversa' | 'relatorio_vendedor' | 'rollup_unidade' | 'rollup_rede' | 'envio_crm';
 class IgnorarItem extends Error {}
 
 async function transcreverMensagem(supabase: Admin, mensagemId: string, apiKey: string) {
@@ -547,6 +550,105 @@ async function rollupRede(supabase: Admin, dataRef: string) {
     }, { onConflict: 'data_ref' });
 }
 
+type CandidatoCrm = {
+    dados: Candidato;
+    userId: string;
+    unidadeId: string;
+    nomeCliente: string | null;
+    vendedor: string;
+    score: number;
+    resumo: string;
+    proximaAcao: string;
+    profissao: string;
+};
+
+/** A conversa, a análise DO DIA e o nome do vendedor — o que o envio ao CRM precisa. */
+async function candidatoCrm(supabase: Admin, conversaId: string, dataRef: string): Promise<CandidatoCrm | null> {
+    const { data: conversa, error } = await supabase.from('conversas')
+        .select('user_id, unidade_id, cliente_telefone, cliente_nome, bloqueada, analises_conversa(tipo_conversa, status, potencial_venda, score_oportunidade, payload)')
+        .eq('id', conversaId).eq('analises_conversa.data_ref', dataRef)
+        .maybeSingle<{
+            user_id: string; unidade_id: string; cliente_telefone: string; cliente_nome: string | null; bloqueada: boolean;
+            analises_conversa: { tipo_conversa: string | null; status: string | null; potencial_venda: string | null; score_oportunidade: number | null; payload: Record<string, unknown> | null }[];
+        }>();
+    if (error) throw error;
+    if (!conversa) return null;
+    const { data: perfil, error: erroPerfil } = await supabase.from('profiles').select('nome')
+        .eq('id', conversa.user_id).maybeSingle<{ nome: string }>();
+    if (erroPerfil) throw erroPerfil;
+    const analise = conversa.analises_conversa[0] ?? null;
+    // Análise anterior ao perfil do cliente não tem profissão no payload.
+    const texto = (campo: string) => typeof analise?.payload?.[campo] === 'string' ? analise.payload[campo] as string : '';
+    return {
+        dados: {
+            unidadeId: conversa.unidade_id, bloqueada: conversa.bloqueada, telefone: conversa.cliente_telefone,
+            analise: analise && {
+                tipo_conversa: analise.tipo_conversa, status: analise.status,
+                potencial_venda: analise.potencial_venda, score_oportunidade: analise.score_oportunidade,
+            },
+        },
+        userId: conversa.user_id,
+        unidadeId: conversa.unidade_id,
+        nomeCliente: conversa.cliente_nome,
+        vendedor: perfil?.nome ?? 'Vendedor',
+        score: analise?.score_oportunidade ?? 0,
+        resumo: texto('resumo'),
+        proximaAcao: texto('proxima_acao'),
+        profissao: texto('profissao_cliente'),
+    };
+}
+
+/**
+ * Leva o lead quente ao CRPRO — ou, em simulação, só registra que levaria.
+ * `envios_crm` garante um card por telefone: o mesmo cliente volta em todo
+ * dia que conversa, e pode falar com dois vendedores.
+ */
+async function enviarAoCrmItem(supabase: Admin, conversaId: string, dataRef: string) {
+    const config = lerConfigCrm(process.env);
+    const c = await candidatoCrm(supabase, conversaId, dataRef);
+    if (!c) throw new IgnorarItem('conversa não encontrada');
+    const decisao = decidirEnvio(c.dados, config);
+    if (decisao.acao === 'ignorar') throw new IgnorarItem(decisao.motivo);
+    const modo = decisao.acao === 'enviar' ? 'envio' : 'simulacao';
+
+    const { data: ja, error: erroJa } = await supabase.from('envios_crm').select('id')
+        .eq('telefone', decisao.telefone).eq('modo', modo).maybeSingle();
+    if (erroJa) throw erroJa;
+    if (ja) throw new IgnorarItem('cliente já está no CRM');
+
+    let ids: { crpro_contato_id: string | null; crpro_card_id: string | null } = { crpro_contato_id: null, crpro_card_id: null };
+    if (decisao.acao === 'enviar') {
+        const faltam = faltandoParaEnviar(config);
+        // Erro, não ignorado: configuração faltando tem de aparecer como falha.
+        if (faltam.length) throw new Error(`envio ao CRM sem configuração: ${faltam.join(', ')}`);
+        const r = await enviarLead(new Crpro(config.baseUrl, config.apiKey), {
+            telefone: decisao.telefone,
+            nome: nomeDoContato(c.nomeCliente, decisao.telefone),
+            titulo: tituloDoCard(c.nomeCliente, c.profissao, decisao.telefone),
+            etiqueta: etiquetaDoVendedor(c.vendedor),
+            nota: notaDoCard({ vendedor: c.vendedor, dataRef, score: c.score, resumo: c.resumo, proximaAcao: c.proximaAcao }),
+        }, { pipelineId: config.pipelineId, stageId: config.stageId, linha: config.linha });
+        ids = { crpro_contato_id: r.contatoId, crpro_card_id: r.cardId };
+    }
+
+    // Dois workers com o mesmo cliente ao mesmo tempo: o segundo bate na
+    // unique e não grava de novo; no CRPRO o external_ref já o segurou.
+    const { error } = await supabase.from('envios_crm').upsert({
+        telefone: decisao.telefone, modo, conversa_id: conversaId, user_id: c.userId,
+        unidade_id: c.unidadeId, data_ref: dataRef, ...ids,
+    }, { onConflict: 'telefone,modo', ignoreDuplicates: true });
+    if (error) throw error;
+}
+
+/** Lead quente da análise do dia entra na fila do CRM; o resto nem vira item. */
+async function talvezEnfileirarCrm(supabase: Admin, conversaId: string, dataRef: string) {
+    const config = lerConfigCrm(process.env);
+    // Desligado: nem consulta o banco.
+    if (!config.unidades.trim()) return;
+    const c = await candidatoCrm(supabase, conversaId, dataRef);
+    if (c && decidirEnvio(c.dados, config).acao !== 'ignorar') await reabrir(supabase, 'envio_crm', conversaId, dataRef);
+}
+
 /**
  * Coloca o passo seguinte na fila — ou o recoloca, se já rodou.
  *
@@ -594,6 +696,11 @@ async function encadear(supabase: Admin, tipo: ItemTipo, referenciaId: string, d
         if (!await vendedorTemAnalisePendente(supabase, conversa.user_id, dataRef)) {
             await reabrir(supabase, 'relatorio_vendedor', conversa.user_id, dataRef);
         }
+        // Depois do relatório, e com o próprio catch: o CRM falhar não pode
+        // impedir o dia de fechar.
+        await talvezEnfileirarCrm(supabase, referenciaId, dataRef).catch((e) => {
+            console.error(`processar-fila: falha ao enfileirar envio ao CRM ${referenciaId} ${dataRef}`, e);
+        });
     } else if (tipo === 'relatorio_vendedor') {
         // A unidade do relatório, não a do perfil: o dia pertence a onde as
         // conversas aconteceram, mesmo que o vendedor já tenha mudado.
