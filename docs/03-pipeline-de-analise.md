@@ -235,3 +235,20 @@ e a doutrina já instrui a LLM a não concluir nada a partir de mídia que não 
 Ação de admin: reprocessar um dia de um vendedor, de uma unidade, ou da rede.
 Apaga as análises daquele `data_ref` e reenfileira. Fica registrado em
 `eventos_admin` — reprocessamento muda nota de gente, então tem que ter dono.
+
+## 3.11 Envio ao CRM (lead quente → CRPRO)
+
+Depois de cada análise que mudou, o `encadear` olha a análise do dia. Se é
+negociação em andamento, com potencial alto e nota de oportunidade ≥ 70, de
+unidade em `CRPRO_UNIDADES` e de conversa fora de qualquer lista de exclusão,
+entra na fila um item `envio_crm` (referência: a conversa).
+
+O item cria ou atualiza o contato no CRPRO (org Zona Nova2), soma a etiqueta
+com o nome do vendedor, e cria o card na etapa Lead com
+`external_ref = zonanova:<telefone>` e uma nota com o resumo e a próxima
+ação. Um telefone, um card: `envios_crm` trava no ZonaNova e o `external_ref`
+trava no CRPRO. O card não é movido de novo — o vendedor é dono dele.
+
+`CRPRO_MODO` diferente de `envio` só grava em `envios_crm` com
+`modo = 'simulacao'`, sem chamar o CRPRO. O item não conta para o fechamento
+da rede.

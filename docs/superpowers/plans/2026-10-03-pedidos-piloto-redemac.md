@@ -1341,6 +1341,8 @@ git commit -m "feat: IA identifica o perfil e a profissão do cliente pela conve
 
 ## Fora deste plano: lista quente → CRPRO
 
+> Resolvido em 04/10/2026 pelo plano `2026-10-04-leads-quentes-crpro.md`: opção de card para o vendedor trabalhar (sem disparo), org Zona Nova2, etapa Lead. A validação LGPD (item 2) continua sendo o portão do envio real.
+
 Fica para um plano próprio, que só faz sentido depois de quatro respostas:
 
 1. **O que é "quente".** Proposta: negociação em aberto com potencial alto e nota de oportunidade ≥ 70 pela última análise.
