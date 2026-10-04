@@ -545,3 +545,28 @@ begin
     then raise notice 'FALHOU  authenticated executa conversas_bloqueia_numero_de_colega';
     else raise notice 'PASSOU  conversas_bloqueia_numero_de_colega fora do cliente'; end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 0023: envio ao CRM — a fila aceita o tipo novo; envios_crm é do service role
+-- ---------------------------------------------------------------------------
+do $$
+begin
+    insert into public.fila_processamento (tipo, referencia_id, data_ref)
+    values ('envio_crm', gen_random_uuid(), current_date);
+    raise notice 'PASSOU  fila aceita envio_crm';
+exception when check_violation then
+    raise notice 'FALHOU  fila recusa envio_crm';
+end $$;
+
+do $$
+begin
+    if to_regclass('public.envios_crm') is null
+    then raise notice 'FALHOU  envios_crm não existe';
+    elsif has_table_privilege('authenticated', 'public.envios_crm', 'select')
+       or has_table_privilege('authenticated', 'public.envios_crm', 'insert')
+       or has_table_privilege('authenticated', 'public.envios_crm', 'update')
+       or has_table_privilege('authenticated', 'public.envios_crm', 'delete')
+       or has_table_privilege('anon', 'public.envios_crm', 'select')
+    then raise notice 'FALHOU  envios_crm aberto ao cliente';
+    else raise notice 'PASSOU  envios_crm só pelo service role'; end if;
+end $$;
