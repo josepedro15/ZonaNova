@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { precisaConectar } from '../../lib/conexao.ts';
+import { conexaoObrigatoria, precisaConectar } from '../../lib/conexao.ts';
 
 // Vendedor ativo que ainda não tem linha em conexoes_whatsapp: nunca abriu a
 // tela de conectar.
@@ -33,4 +33,13 @@ test('conectada é o único estado que dispensa a tela', () => {
 // custa um clique; errar deixando passar custa um dia de conversa não lida.
 test('estado desconhecido precisa conectar', () => {
     assert.equal(precisaConectar('estado_que_ainda_nao_existe'), true);
+});
+
+// Só a conversa do vendedor é analisada. Gestor, supervisor e admin podem
+// conectar se quiserem, mas nada os manda para a tela de conectar.
+test('só o vendedor é obrigado a conectar o WhatsApp', () => {
+    assert.equal(conexaoObrigatoria('vendedor'), true);
+    assert.equal(conexaoObrigatoria('gestor'), false);
+    assert.equal(conexaoObrigatoria('supervisor'), false);
+    assert.equal(conexaoObrigatoria('admin'), false);
 });

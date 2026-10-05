@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/env';
-import { precisaConectar } from '@/lib/conexao';
+import { conexaoObrigatoria, inicioPorPapel, precisaConectar } from '@/lib/conexao';
 
 // /auth/callback tem de ser pública: quem chega do link do e-mail ainda NÃO
 // tem sessão — é essa rota que a cria. Protegida, o proxy mandava para o login
@@ -16,13 +16,6 @@ const ROTA_NOVA_SENHA = '/nova-senha';
 const ROTAS_DE_GESTAO = ['/equipe', '/aprovacoes'];
 const ROTAS_DE_REDE = ['/unidades', '/mec', '/descobertas'];
 const ROTAS_DE_ADMIN = ['/admin'];
-
-function inicioPorPapel(papel: string): string {
-    if (papel === 'gestor') return '/equipe';
-    if (papel === 'supervisor') return '/unidades';
-    if (papel === 'admin') return '/admin';
-    return '/dashboard';
-}
 
 function comecaCom(caminho: string, prefixos: string[]) {
     return prefixos.some((p) => caminho === p || caminho.startsWith(`${p}/`));
@@ -121,7 +114,7 @@ export async function proxy(request: NextRequest) {
     // Só o dashboard: desviar TODA rota trancava quem teve o número caído
     // fora das conversas, da evolução, do Meu MEC e do Perfil (onde ficam os
     // contatos bloqueados), sem nem um botão de sair.
-    if (papel === 'vendedor' && caminho === '/dashboard') {
+    if (conexaoObrigatoria(papel) && caminho === '/dashboard') {
         const { data: conexao } = await supabase
             .from('vw_conexoes_status').select('status')
             .eq('user_id', user.id).maybeSingle<{ status: string }>();

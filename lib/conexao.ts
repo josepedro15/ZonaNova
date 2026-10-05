@@ -16,6 +16,24 @@ export function precisaConectar(status: string | null): boolean {
     return status !== 'conectada';
 }
 
+/**
+ * Quem é obrigado a ter o WhatsApp no ar. Só a conversa do vendedor vira
+ * análise (o fechamento do dia só lê vendedor), então só ele é mandado para o
+ * /conectar. Gestor, supervisor e admin podem conectar pelo Perfil se
+ * quiserem, mas nenhuma tela os cobra por isso.
+ */
+export function conexaoObrigatoria(papel: string): boolean {
+    return papel === 'vendedor';
+}
+
+/** O painel em que cada papel começa. */
+export function inicioPorPapel(papel: string): '/equipe' | '/unidades' | '/admin' | '/dashboard' {
+    if (papel === 'gestor') return '/equipe';
+    if (papel === 'supervisor') return '/unidades';
+    if (papel === 'admin') return '/admin';
+    return '/dashboard';
+}
+
 export type ConexaoGravada = { status: string; numero: string | null };
 /** O que a UAZAPI respondeu. `owner` é o número, que só ela sabe. */
 export type ConexaoReal = { status: string; owner?: string | null };

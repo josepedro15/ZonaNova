@@ -4,6 +4,7 @@ import AppShell from '@/components/app-shell';
 import DesconectarWhatsapp from '@/components/desconectar-whatsapp';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { telefoneBonito } from '@/lib/painel';
+import { conexaoObrigatoria } from '@/lib/conexao';
 import { bloquearContato, desbloquearContato } from '@/app/actions/conexao';
 import { ContatosInternos } from './contatos-internos';
 
@@ -24,6 +25,8 @@ export default async function PerfilPage() {
 
     if (!perfil) redirect('/login');
     const conectado = conexao?.status === 'conectada';
+    // Fora do ar só é problema para quem tem a conversa analisada.
+    const opcional = !conexaoObrigatoria(perfil.role);
 
     return (
         <AppShell papel={perfil.role} nome={perfil.nome} unidade={perfil.unidades?.nome} atual="/perfil">
@@ -36,9 +39,9 @@ export default async function PerfilPage() {
                         <div>
                             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-tinta-3">Seu WhatsApp</p>
                             <p className="display mt-2 text-xl font-semibold">{conexao?.numero ? telefoneBonito(conexao.numero) : 'Nenhum número'}</p>
-                            <p className={`mt-1 text-[12.5px] font-semibold ${conectado ? 'text-verde' : 'text-vermelho'}`}>{conectado ? 'Conectado' : 'Desconectado'}</p>
+                            <p className={`mt-1 text-[12.5px] font-semibold ${conectado ? 'text-verde' : opcional ? 'text-tinta-3' : 'text-vermelho'}`}>{conectado ? 'Conectado' : opcional ? 'Opcional para o seu perfil' : 'Desconectado'}</p>
                         </div>
-                        <span className={`mt-1 size-3 rounded-full ${conectado ? 'bg-verde' : 'bg-vermelho'}`} />
+                        <span className={`mt-1 size-3 rounded-full ${conectado ? 'bg-verde' : opcional ? 'bg-tinta-3' : 'bg-vermelho'}`} />
                     </div>
                     <div className="mt-5 border-t border-linha pt-4">
                         {conectado ? <DesconectarWhatsapp /> : <Link href="/conectar" className="text-[13px] font-semibold text-petroleo">Conectar WhatsApp</Link>}
