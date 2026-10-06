@@ -16,12 +16,8 @@ export async function alterarPessoa(form:FormData){
     // mudança que não aconteceu.
     const{error}=await ctx.admin.from('profiles').update({role,status,unidade_id:unidadeId}).eq('id',profileId);
     if(error){console.error('alterarPessoa',error);return;}
-    // gestor_unidades é o que a RLS usa para o gestor enxergar. Sem ajustar,
-    // o gestor movido seguia lendo a unidade antiga, e o ex-gestor seguia
-    // lendo a equipe que não é mais dele. Só sai a unidade que o perfil
-    // deixou: as outras que ele gerencia continuam.
-    if(role!=='gestor')await ctx.admin.from('gestor_unidades').delete().eq('gestor_id',profileId);
-    else{if(antes.unidade_id&&antes.unidade_id!==unidadeId)await ctx.admin.from('gestor_unidades').delete().eq('gestor_id',profileId).eq('unidade_id',antes.unidade_id);if(unidadeId)await ctx.admin.from('gestor_unidades').upsert({gestor_id:profileId,unidade_id:unidadeId});}
+    // gestor_unidades acompanha o perfil sozinha (trigger da 0024): gestor
+    // cobre só a unidade do perfil, e ex-gestor perde o vínculo.
     // A conexão carimba a unidade das conversas novas. Conversas antigas não
     // mudam: o histórico pertence a onde aconteceu.
     if(unidadeId&&antes.unidade_id!==unidadeId)await ctx.admin.from('conexoes_whatsapp').update({unidade_id:unidadeId,updated_at:new Date().toISOString()}).eq('user_id',profileId);

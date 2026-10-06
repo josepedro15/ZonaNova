@@ -261,10 +261,8 @@ export async function aprovarCadastro(_estado: Resultado, form: FormData): Promi
     if (error) return { erro: 'Não foi possível aprovar agora. Tente de novo.' };
     if (!atualizados?.length) return { erro: 'Esse cadastro já foi resolvido por outra pessoa.' };
 
-    if (papel === 'gestor') {
-        await admin.from('gestor_unidades')
-            .upsert({ gestor_id: profileId, unidade_id: candidato!.unidade_id });
-    }
+    // Aprovado como gestor, o vínculo com a unidade nasce do perfil (trigger
+    // da 0024), sem gravação aqui.
 
     await admin.from('eventos_admin').insert({
         actor_id: user.id,

@@ -570,3 +570,70 @@ begin
     then raise notice 'FALHOU  envios_crm aberto ao cliente';
     else raise notice 'PASSOU  envios_crm só pelo service role'; end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 0024: gestor enxerga só a unidade do próprio perfil
+-- ---------------------------------------------------------------------------
+reset role;
+do $$
+begin
+    insert into public.gestor_unidades (gestor_id, unidade_id)
+    values ('22222222-2222-2222-2222-222222222222', 'aaaaaaaa-0000-0000-0000-000000000002');
+    raise notice 'FALHOU  gestor ganhou uma segunda unidade';
+exception when others then
+    raise notice 'PASSOU  gestor não ganha unidade além da do perfil';
+end $$;
+
+do $$
+begin
+    insert into public.gestor_unidades (gestor_id, unidade_id)
+    values ('44444444-4444-4444-4444-444444444444', 'aaaaaaaa-0000-0000-0000-000000000001');
+    raise notice 'FALHOU  vendedor ganhou vínculo de gestor';
+exception when others then
+    raise notice 'PASSOU  vendedor não ganha vínculo de gestor';
+end $$;
+
+-- Vínculo que entrou por fora (como em produção, 06/10/2026): mesmo que a
+-- linha exista, a RLS do gestor não passa da unidade do perfil.
+set session_replication_role = replica;
+insert into public.gestor_unidades (gestor_id, unidade_id)
+values ('22222222-2222-2222-2222-222222222222', 'aaaaaaaa-0000-0000-0000-000000000002')
+on conflict do nothing;
+set session_replication_role = origin;
+set role authenticated;
+select pg_temp.como('22222222-2222-2222-2222-222222222222');
+select pg_temp.ok('vínculo a mais não abre a outra unidade',
+       (select count(*) from conversas where unidade_id = 'aaaaaaaa-0000-0000-0000-000000000002'), 0);
+select pg_temp.ok('gestor segue vendo a própria unidade',
+       (select count(*) from conversas), 2);
+reset role;
+delete from public.gestor_unidades
+ where gestor_id = '22222222-2222-2222-2222-222222222222'
+   and unidade_id = 'aaaaaaaa-0000-0000-0000-000000000002';
+
+-- Trocar a unidade do gestor troca o vínculo; deixar de ser gestor apaga.
+do $$
+declare v text;
+begin
+    update public.profiles set unidade_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+     where id = '33333333-3333-3333-3333-333333333333';
+    select string_agg(unidade_id::text, ',') into v from public.gestor_unidades
+     where gestor_id = '33333333-3333-3333-3333-333333333333';
+    if v = 'aaaaaaaa-0000-0000-0000-000000000001'
+    then raise notice 'PASSOU  gestor movido leva só a unidade nova';
+    else raise notice 'FALHOU  gestor movido ficou com %', v; end if;
+
+    update public.profiles set role = 'vendedor'
+     where id = '33333333-3333-3333-3333-333333333333';
+    if exists (select 1 from public.gestor_unidades where gestor_id = '33333333-3333-3333-3333-333333333333')
+    then raise notice 'FALHOU  ex-gestor manteve vínculo';
+    else raise notice 'PASSOU  ex-gestor perde o vínculo'; end if;
+
+    update public.profiles set role = 'gestor', unidade_id = 'aaaaaaaa-0000-0000-0000-000000000002'
+     where id = '33333333-3333-3333-3333-333333333333';
+    select string_agg(unidade_id::text, ',') into v from public.gestor_unidades
+     where gestor_id = '33333333-3333-3333-3333-333333333333';
+    if v = 'aaaaaaaa-0000-0000-0000-000000000002'
+    then raise notice 'PASSOU  virar gestor cria o vínculo da unidade do perfil';
+    else raise notice 'FALHOU  virar gestor deixou %', v; end if;
+end $$;

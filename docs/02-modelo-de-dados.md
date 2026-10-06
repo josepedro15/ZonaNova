@@ -45,8 +45,10 @@ Espelha `auth.users`. Campos que importam:
 - `aprovado_por` / `aprovado_em` — trilha de quem liberou o acesso.
 
 ### `gestor_unidades`
-Ligação N:N entre gestor e unidade. Um gestor cobre uma ou várias; o vendedor
-continua tendo uma só (em `profiles.unidade_id`).
+Reflexo de `profiles.unidade_id` para quem é gestor: uma linha por gestor, a
+unidade do perfil (0024). Triggers mantêm a tabela ao trocar papel ou unidade
+e recusam qualquer outra linha, inclusive vinda do service role. Gestor cobre
+uma unidade só; quem enxerga a rede é supervisor.
 
 ### Funções de escopo (usadas pela RLS)
 
@@ -56,7 +58,7 @@ RLS (a política de `profiles` não pode consultar `profiles` diretamente):
 - `zn_role()` → o papel do usuário logado
 - `zn_unidades_visiveis()` → conjunto de `unidade_id` que ele pode ler
   - vendedor: a própria unidade
-  - gestor: as de `gestor_unidades`
+  - gestor: a unidade do próprio perfil (`profiles.unidade_id`)
   - supervisor/admin: todas
 
 Com isso, toda política de leitura vira `unidade_id IN (SELECT zn_unidades_visiveis())`,

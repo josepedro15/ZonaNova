@@ -19,8 +19,8 @@ const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const minutos = (s: number | string | null | undefined) => (s == null ? null : Math.round(Number(s) / 60));
 
 /**
- * A equipe de uma loja (ou várias): serve o gestor (`/equipe`, uma ou mais
- * lojas via `gestor_unidades`) e o supervisor (`/unidades/[id]`, uma loja
+ * A equipe de uma loja (ou várias): serve o gestor (`/equipe`, a loja dele
+ * via `gestor_unidades`) e o supervisor (`/unidades/[id]`, uma loja
  * só). `unidadeIds` null é o escopo inteiro que a RLS deixa ver — o
  * comportamento de antes para supervisor e admin em /equipe.
  */
