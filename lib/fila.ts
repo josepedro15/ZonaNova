@@ -31,3 +31,19 @@ export function aposFalha(tentativasAnteriores: number, agora = new Date()): Des
     if (tentativas >= MAX_TENTATIVAS + 1) return { status: 'falhou', tentativas };
     return { status: 'pendente', proximaTentativaEm: proximaTentativa(tentativas, agora), tentativas };
 }
+
+/**
+ * `aposFalha` para o worker, que sabe se a falha foi resposta incompleta da
+ * OpenAI (`max_output_tokens` estourado).
+ *
+ * Na análise de conversa, incompleta desiste na hora: o que estoura é a
+ * conversa grande demais, e repetir dá o mesmo corte e paga de novo. No
+ * relatório do vendedor, não: a entrada é pequena e o estouro é o modelo
+ * desandando de vez em quando (06/10: a consolidação de 03/10 bateu nos 2000
+ * tokens e, repetida dez vezes, saiu normal em todas). Ali vale o backoff
+ * comum.
+ */
+export function aposFalhaDoItem(tipo: string, incompleta: boolean, tentativasAnteriores: number, agora = new Date()): DesfechoFalha {
+    if (incompleta && tipo !== 'relatorio_vendedor') return { status: 'falhou', tentativas: tentativasAnteriores + 1 };
+    return aposFalha(tentativasAnteriores, agora);
+}

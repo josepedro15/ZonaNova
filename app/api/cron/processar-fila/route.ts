@@ -1,6 +1,6 @@
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { cronAutorizado } from '@/lib/cron';
-import { aposFalha } from '@/lib/fila';
+import { aposFalha, aposFalhaDoItem } from '@/lib/fila';
 import { transcrever } from '@/lib/transcricao';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
 import { aderenciaPercentual, custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
@@ -131,11 +131,9 @@ async function processarLote(supabase: Admin, agora: Date): Promise<Record<strin
             if (e instanceof IgnorarItem) {
                 desfecho = { status: 'ignorado', ultimo_erro: e.message, processado_em: new Date().toISOString() };
             } else {
-                // Resposta cortada da OpenAI se repete igual (temperatura 0):
-                // falha definitiva já, em vez de pagar mais três vezes.
-                const falha = e instanceof RespostaIncompleta
-                    ? { status: 'falhou' as const, tentativas: item.tentativas + 1 }
-                    : aposFalha(item.tentativas);
+                // Resposta cortada da OpenAI: na análise se repete igual e
+                // desiste já; no relatório, tenta de novo (ver `aposFalhaDoItem`).
+                const falha = aposFalhaDoItem(item.tipo, e instanceof RespostaIncompleta, item.tentativas);
                 desfecho = {
                     status: falha.status,
                     tentativas: falha.tentativas,
