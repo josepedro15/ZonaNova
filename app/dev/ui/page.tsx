@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import {
     Alerta, Avatar, Barra, Botao, BotaoLink, BotaoCopiar, CabecalhoPagina, Cartao, Comparacao, EstadoVazio, GraficoLinhas, Icone, Kpi, Numero, Pagina, RotuloSecao, Segmentado, Selo, SerieDias, Sparkline, Tabela, TempoEspera,
 } from '@/components/ui';
+import { ObjecoesDaSemana } from '@/app/(app)/equipe/objecoes-da-semana';
 
 // Vitrine dos componentes para conferir no browser. Não existe em produção.
 export default function VitrineUi() {
@@ -21,6 +22,12 @@ export default function VitrineUi() {
                 </Cartao>
                 <Cartao variante="heroi" className="flex flex-col gap-3"><span>Cartão herói</span><Numero valor={71} tamanho="xl" /></Cartao>
                 <Cartao variante="suave">Cartão suave (treino)</Cartao>
+                <ObjecoesDaSemana objecoes={[
+                    { objecao: 'Cliente já comprou em outro lugar', total: 3 },
+                    { objecao: 'Cliente não tem interesse no momento', total: 2 },
+                    { objecao: 'Dificuldade em entender a especificação técnica do produto', total: 1 },
+                    { objecao: 'Necessidade de consultar o responsável pela obra antes de fechar', total: 1 },
+                ]} />
                 <Cartao className="flex flex-col gap-3">
                     <Barra pct={100} rotulo="Acolhida" /><Barra pct={29} tom="risco" rotulo="Sondagem" />
                     <Barra pct={40} tom="atencao" rotulo="Solução" /><Barra pct={null} rotulo="Acompanhamento" />

@@ -10,6 +10,7 @@ import { comQuemFalar, contarObjecoes, diaMenos, variacaoSemanal, type NotaDia }
 import { setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
 import { contarObjecoesPorCodigo, juntarObjecoes } from '@/lib/mec';
 import { carregarPlaybook } from '@/lib/mec-dados';
+import { ObjecoesDaSemana } from './objecoes-da-semana';
 
 type Supabase = Awaited<ReturnType<typeof contextoApp>>['supabase'];
 type Diario = NotaDia & { user_id: string; leads_atendidos: number; conversoes_confirmadas: number; tempo_medio_resposta_s: number | null };
@@ -115,7 +116,6 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         contarObjecoesPorCodigo(objecoesCodigo, pb?.rotulos ?? new Map(), Infinity),
         contarObjecoes((analises ?? []).filter((a) => !comCodigo.has(a.conversa_id)).map((a) => a.payload), Infinity),
     );
-    const maiorObjecao = objecoes[0]?.total ?? 1;
 
     const linhas = equipe
         .map((p) => {
@@ -259,18 +259,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                         ))}
                     </Cartao>
 
-                    <Cartao className="flex flex-col gap-3">
-                        <h2 className="display text-lg font-bold">Objeções da semana</h2>
-                        {objecoes.length === 0 ? (
-                            <p className="text-[13px] text-tinta-3">Nenhuma objeção registrada nos últimos 7 dias.</p>
-                        ) : objecoes.map((o) => (
-                            <div key={o.objecao} className="grid grid-cols-[120px_minmax(0,1fr)_28px] items-center gap-2.5 text-[13px]">
-                                <span className="truncate">{o.objecao}</span>
-                                <Barra pct={(o.total / maiorObjecao) * 100} rotulo={o.objecao} />
-                                <span className="display num text-right text-sm font-bold">{o.total}</span>
-                            </div>
-                        ))}
-                    </Cartao>
+                    <ObjecoesDaSemana objecoes={objecoes} />
                 </aside>
             </div>
         </Pagina>
