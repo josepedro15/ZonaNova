@@ -52,7 +52,7 @@ Responsabilidades, nessa ordem:
 3. **Resolver a conversa** (`user_id` + `cliente_telefone`), criando se for nova
    e carimbando a `unidade_id` vigente do vendedor.
 4. **Gravar a mensagem** com `ON CONFLICT (wa_message_id) DO NOTHING`.
-5. Se for **áudio**, enfileirar `transcricao`.
+5. Se for **áudio** de hoje ou de ontem (em São Paulo), enfileirar `transcricao`.
 6. Eventos de conexão (`connected` / `disconnected`) atualizam
    `conexoes_whatsapp.status` — é isso que alimenta o alerta de número caído.
 
@@ -229,6 +229,13 @@ Controles previstos no desenho:
 encaminhado não é transcrito duas vezes). A análise do dia espera as transcrições
 pendentes daquela conversa; se uma falhar, segue com `[Media: audio]` sem texto —
 e a doutrina já instrui a LLM a não concluir nada a partir de mídia que não leu.
+
+Só entra na fila áudio de hoje ou de ontem, os dias que o fechamento ainda
+analisa. Ao conectar, a UAZAPI manda meses de histórico: em 05–06/10, cinco
+conexões novas enfileiraram 14 mil áudios antigos, que a 4 itens por rodada
+seguraram por dias as transcrições do dia e a análise de ontem. Quase todos
+falhavam de todo jeito (`Message not found`: a mídia antiga não existe mais).
+O áudio antigo continua guardado, só sem transcrição.
 
 ## 3.10 Reprocessamento
 

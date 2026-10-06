@@ -7,6 +7,17 @@
  * é raro, e transcrição é paga por minuto.
  */
 import { createHash } from 'node:crypto';
+import { dataEmSaoPaulo } from './analise.ts';
+
+/**
+ * Áudio de hoje ou de ontem (em São Paulo): os únicos dias que o fechamento
+ * ainda analisa. Ao conectar, a UAZAPI manda meses de histórico; enfileirar
+ * cada áudio antigo punha milhares de itens na frente dos do dia — e a
+ * transcrição deles quase sempre falha, a mídia já não existe mais.
+ */
+export function valeTranscrever(enviadaEm: Date, agora = new Date()): boolean {
+    return dataEmSaoPaulo(enviadaEm) >= dataEmSaoPaulo(new Date(agora.getTime() - 24 * 60 * 60 * 1000));
+}
 
 export function hashDoAudio(bytes: ArrayBuffer | Uint8Array): string {
     return createHash('sha256').update(Buffer.from(bytes as ArrayBuffer)).digest('hex');

@@ -140,3 +140,22 @@ test('IP interno reconhecido em todas as formas', async () => {
     }
     for (const ip of ['93.184.216.34', '172.32.0.1', '2606:4700::1111']) assert.equal(ipInterno(ip), false, ip);
 });
+
+// Ao conectar, a UAZAPI manda meses de histórico. Cada áudio antigo enfileirado
+// entrava na frente dos do dia: 14 mil itens a 4 por rodada seguraram as
+// transcrições e a análise de ontem por dias.
+test('só áudio de hoje ou de ontem (em São Paulo) vale transcrever', async () => {
+    const { valeTranscrever } = await import('../../lib/transcricao.ts');
+    const agora = new Date('2026-10-06T13:00:00Z'); // 10h em São Paulo
+    assert.equal(valeTranscrever(new Date('2026-10-06T12:48:00Z'), agora), true, 'hoje');
+    assert.equal(valeTranscrever(new Date('2026-10-05T03:00:00Z'), agora), true, 'ontem, 0h em SP');
+    assert.equal(valeTranscrever(new Date('2026-10-05T02:59:00Z'), agora), false, 'anteontem, 23h59 em SP');
+    assert.equal(valeTranscrever(new Date('2026-08-21T15:00:00Z'), agora), false, 'histórico de agosto');
+});
+
+test('logo depois da meia-noite, ontem ainda vale', async () => {
+    const { valeTranscrever } = await import('../../lib/transcricao.ts');
+    const agora = new Date('2026-10-06T03:10:00Z'); // 0h10 em São Paulo
+    assert.equal(valeTranscrever(new Date('2026-10-05T23:50:00Z'), agora), true);
+    assert.equal(valeTranscrever(new Date('2026-10-04T23:50:00Z'), agora), false);
+});

@@ -1,6 +1,7 @@
 import 'server-only';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { variantesTelefone } from '@/lib/painel';
+import { valeTranscrever } from '@/lib/transcricao';
 import { mensagensDoEvento, normalizarMensagem, statusDeConexao, type EventoUazapi, type MensagemUazapi } from '@/lib/uazapi/normalizar';
 
 /**
@@ -108,7 +109,8 @@ async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
 
     if (erroMensagem) throw erroMensagem;
 
-    if (m.tipo === 'audio') {
+    // Áudio antigo do histórico fica guardado, mas sem transcrição: ver `valeTranscrever`.
+    if (m.tipo === 'audio' && valeTranscrever(m.enviadaEm)) {
         const { data: linha } = await supabase
             .from('mensagens').select('id').eq('wa_message_id', m.waMessageId)
             .maybeSingle<{ id: string }>();
