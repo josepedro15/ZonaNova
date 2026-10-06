@@ -3,6 +3,7 @@ import {
     Alerta, Avatar, Barra, Botao, BotaoLink, BotaoCopiar, CabecalhoPagina, Cartao, Comparacao, EstadoVazio, GraficoLinhas, Icone, Kpi, Numero, Pagina, RotuloSecao, Segmentado, Selo, SerieDias, Sparkline, Tabela, TempoEspera,
 } from '@/components/ui';
 import { ObjecoesDaSemana } from '@/app/(app)/equipe/objecoes-da-semana';
+import { TrocarSenha } from '@/app/(app)/perfil/trocar-senha';
 
 // Vitrine dos componentes para conferir no browser. Não existe em produção.
 export default function VitrineUi() {
@@ -72,6 +73,7 @@ export default function VitrineUi() {
                     ]} />
             <Cartao><BotaoCopiar texto="Márcia, consigo te entregar hoje." /></Cartao>
             <EstadoVazio titulo="Ontem não teve nota">Só houve suporte e conversa social. Isso não conta contra você.</EstadoVazio>
+            <TrocarSenha email="vendedor@exemplo.com" />
         </Pagina>
     );
 }

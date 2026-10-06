@@ -2,17 +2,12 @@
 
 import { useActionState, useState } from 'react';
 import { definirNovaSenha, type Resultado } from '@/app/actions/auth';
-import { forcaDaSenha } from '@/lib/forca-senha';
+import { MedidorForcaSenha } from '@/components/medidor-forca-senha';
 import LinkVencido from './link-vencido';
 
 const inicial: Resultado = {};
 
 const campo = 'min-h-[46px] w-full rounded-[10px] border bg-superficie px-3.5 text-[15px]';
-
-// Cor por nível do medidor: vermelho só para o que o servidor recusa ou que cai
-// fácil; âmbar para o mínimo aceito; verde daí para cima.
-const corDoNivel = ['', 'bg-vermelho', 'bg-ambar', 'bg-verde', 'bg-verde'];
-const textoDoNivel = ['', 'text-vermelho', 'text-ambar-texto', 'text-verde', 'text-verde'];
 
 export default function Formulario({ email }: { email: string }) {
     const [estado, acao, pendente] = useActionState(definirNovaSenha, inicial);
@@ -24,7 +19,6 @@ export default function Formulario({ email }: { email: string }) {
     // grava nada e mostrar erro genérico só faria a pessoa tentar de novo.
     if (estado.vencido) return <LinkVencido />;
 
-    const forca = forcaDaSenha(senha);
     const iguais = confirmacao.length > 0 && confirmacao === senha;
 
     return (
@@ -61,16 +55,7 @@ export default function Formulario({ email }: { email: string }) {
                             </svg>
                         </button>
                     </div>
-                    {forca.nivel > 0 && (
-                        <>
-                            <div className="mt-0.5 flex gap-1" aria-hidden>
-                                {[1, 2, 3, 4].map((n) => (
-                                    <div key={n} className={`h-1 flex-1 rounded-full ${n <= forca.nivel ? corDoNivel[forca.nivel] : 'bg-linha'}`} />
-                                ))}
-                            </div>
-                            <span className={`text-xs font-medium ${textoDoNivel[forca.nivel]}`}>{forca.rotulo}</span>
-                        </>
-                    )}
+                    <MedidorForcaSenha senha={senha} />
                 </label>
 
                 <label className="flex flex-col gap-1.5">

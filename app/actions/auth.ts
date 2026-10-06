@@ -1,17 +1,18 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
-import { APP_URL } from '@/lib/env';
-import { schemaAprovacao, schemaCadastro, schemaLogin, schemaNovaSenha } from '@/lib/validators/auth';
+import { APP_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/env';
+import { schemaAprovacao, schemaCadastro, schemaLogin, schemaNovaSenha, schemaTrocaSenha } from '@/lib/validators/auth';
 import { podeResolver, type Papel } from '@/lib/aprovacao';
 import { dentroDoLimite, ipDoCliente, limiteEstourado } from '@/lib/limite';
 
 const MUITAS_TENTATIVAS = 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.';
 
-export type Resultado = { erro?: string; campo?: string; enviado?: boolean; vencido?: boolean };
+export type Resultado = { erro?: string; campo?: string; enviado?: boolean; vencido?: boolean; salvo?: boolean };
 
 export async function entrar(_estado: Resultado, form: FormData): Promise<Resultado> {
     const parse = schemaLogin.safeParse({
@@ -188,6 +189,56 @@ export async function definirNovaSenha(_estado: Resultado, form: FormData): Prom
     // continua valendo. Quem ainda está pendente, o proxy leva para a tela de
     // espera — o /dashboard aqui é só o destino de quem já está ativo.
     redirect('/');
+}
+
+/**
+ * Troca a senha de quem já está logado, pelo Perfil.
+ *
+ * A senha atual é conferida num cliente à parte, sem cookie: conferir com o
+ * cliente da sessão gravaria uma sessão nova no navegador no meio da troca. Só
+ * a senha atual ERRADA conta no limite — é o que segura alguém com a conta
+ * genérica aberta tentando adivinhar a senha para trancar os colegas fora.
+ */
+export async function trocarSenha(_estado: Resultado, form: FormData): Promise<Resultado> {
+    const parse = schemaTrocaSenha.safeParse({
+        senhaAtual: form.get('senhaAtual'), senha: form.get('senha'), confirmacao: form.get('confirmacao'),
+    });
+    if (!parse.success) {
+        const p = parse.error.issues[0];
+        return { erro: p.message, campo: String(p.path[0]) };
+    }
+
+    const supabase = await criarClienteServidor();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) redirect('/login');
+
+    const regras = [{ chave: `troca-senha:user:${user.id}`, max: 5, janelaSegundos: 900 }];
+    if (await limiteEstourado(regras)) return { erro: MUITAS_TENTATIVAS };
+
+    const conferencia = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { error: erroAtual } = await conferencia.auth.signInWithPassword({ email: user.email, password: parse.data.senhaAtual });
+    if (erroAtual) {
+        if (erroAtual.code !== 'invalid_credentials') return { erro: 'Não foi possível conferir sua senha agora. Tente de novo.' };
+        await dentroDoLimite(regras);
+        return { erro: 'Senha atual incorreta.', campo: 'senhaAtual' };
+    }
+    // A conferência abriu uma sessão só para isso: `local` encerra só ela.
+    await conferencia.auth.signOut({ scope: 'local' });
+
+    const { error } = await supabase.auth.updateUser({ password: parse.data.senha });
+    if (error) {
+        if (error.code === 'weak_password') {
+            return { erro: 'Senha fraca demais. Use letras e números, com pelo menos 8 caracteres.', campo: 'senha' };
+        }
+        // "Secure password change" do Supabase recusando uma sessão velha.
+        if (error.code === 'reauthentication_needed') {
+            return { erro: 'Por segurança, saia e entre de novo antes de trocar a senha.' };
+        }
+        return { erro: 'Não foi possível salvar a senha agora. Tente de novo.' };
+    }
+    return { salvo: true };
 }
 
 export async function sair() {

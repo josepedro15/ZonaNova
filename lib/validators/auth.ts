@@ -25,6 +25,22 @@ export const schemaNovaSenha = z.object({
     path: ['confirmacao'],
 });
 
+// Troca pelo Perfil, de quem já está logado. Pede a atual porque, ao
+// contrário do link de recuperação, a sessão aberta não prova quem está na
+// frente da tela: as contas genéricas do piloto são abertas por várias
+// pessoas. Igual à atual é recusada para "trocar" não deixar tudo como estava.
+export const schemaTrocaSenha = z.object({
+    senhaAtual: z.string().min(1, 'Digite sua senha atual.'),
+    senha: schemaCadastro.shape.senha,
+    confirmacao: z.string(),
+}).refine((d) => d.senha === d.confirmacao, {
+    message: 'As duas senhas não são iguais.',
+    path: ['confirmacao'],
+}).refine((d) => d.senha !== d.senhaAtual, {
+    message: 'A senha nova precisa ser diferente da atual.',
+    path: ['senha'],
+});
+
 export const schemaAprovacao = z.object({
     profileId: z.string().uuid(),
     papel: z.enum(['vendedor', 'gestor']),

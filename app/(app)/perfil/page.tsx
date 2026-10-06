@@ -7,6 +7,7 @@ import { telefoneBonito } from '@/lib/painel';
 import { conexaoObrigatoria } from '@/lib/conexao';
 import { bloquearContato, desbloquearContato } from '@/app/actions/conexao';
 import { ContatosInternos } from './contatos-internos';
+import { TrocarSenha } from './trocar-senha';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +66,8 @@ export default async function PerfilPage() {
                 </section>
 
                 {perfil.role !== 'vendedor' && <ContatosInternos supabase={supabase} userId={user.id} role={perfil.role} />}
+
+                <TrocarSenha email={user.email ?? perfil.email} />
 
                 <section className="mt-5 rounded-card border border-linha bg-papel-2 p-5">
                     <h2 className="display text-lg font-semibold">Como os dados são usados</h2>
