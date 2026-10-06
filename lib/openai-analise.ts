@@ -2,6 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import { montarSchemaAnalise, type ResultadoComDetalhe } from '@/lib/analise';
 import { REGRAS_DETALHE_MEC, type ItemPlaybook } from '@/lib/mec';
+import { INSTRUCOES_CONSOLIDACAO, schemaConsolidado, schemaJsonConsolidado, type ConsolidadoIa } from '@/lib/consolidacao';
 
 type Uso = { input_tokens?: number; output_tokens?: number };
 
@@ -54,30 +55,6 @@ export async function analisarConversa({ transcript, doutrina, itens }: { transc
     };
 }
 
-const schemaConsolidado = z.object({
-    resumo: z.string().max(320),
-    melhorias: z.array(z.string().max(180)).length(3),
-    elogio: z.string().max(220),
-    desafio: z.string().max(220),
-    padroes_sucesso: z.array(z.string()),
-    padroes_falha: z.array(z.string()),
-    objecoes_frequentes: z.array(z.string()),
-    alertas: z.array(z.string()),
-});
-
-const schemaJsonConsolidado = {
-    type: 'object', additionalProperties: false,
-    required: ['resumo','melhorias','elogio','desafio','padroes_sucesso','padroes_falha','objecoes_frequentes','alertas'],
-    properties: {
-        resumo: { type: 'string', maxLength: 320 }, melhorias: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'string', maxLength: 180 } },
-        elogio: { type: 'string', maxLength: 220 }, desafio: { type: 'string', maxLength: 220 },
-        padroes_sucesso: { type: 'array', items: { type: 'string' } }, padroes_falha: { type: 'array', items: { type: 'string' } },
-        objecoes_frequentes: { type: 'array', items: { type: 'string' } }, alertas: { type: 'array', items: { type: 'string' } },
-    },
-} as const;
-
-export type ConsolidadoIa = z.infer<typeof schemaConsolidado>;
-
 export async function consolidarVendedor(analises: unknown[], metricas: Record<string, number | null>): Promise<{ resultado: ConsolidadoIa; modelo: string; entrada: number; saida: number }> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY não configurada');
@@ -86,9 +63,13 @@ export async function consolidarVendedor(analises: unknown[], metricas: Record<s
         method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
         body: JSON.stringify({
             model: modelo, temperature: 0, store: false,
-            instructions: 'Você é um treinador comercial. Os números já foram calculados: não recalcule nem invente. Escreva em português do Brasil, tom direto, específico e construtivo. Use somente os fatos e evidências das análises recebidas. Cada melhoria deve conter uma única ação, sem listas internas. Priorize negociações; suporte e conversa social não viram crítica de técnica comercial. Resumo em até 2 frases; elogio e desafio em 1 frase cada.',
+            instructions: INSTRUCOES_CONSOLIDACAO,
             input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ metricas, analises }) }] }],
             text: { format: { type: 'json_schema', name: 'consolidado_vendedor', strict: true, schema: schemaJsonConsolidado } },
+            // Uma consolidação real tem ~350 tokens (no máximo 431 até 06/10). Os
+            // textos não têm mais `maxLength`: o teto é o que segura uma resposta
+            // degenerada.
+            max_output_tokens: 2000,
         }),
     });
     const corpo = await response.json();
