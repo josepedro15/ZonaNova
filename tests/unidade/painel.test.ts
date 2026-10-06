@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, juntarPorDia, primeiroNome, esperaDoCliente, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -40,6 +40,41 @@ test('conversa só com mensagens do vendedor: ninguém espera', () => {
 
 test('conversa vazia: ninguém espera', () => {
     assert.equal(esperaDoCliente([], AGORA), null);
+});
+
+// --- a lista "Esperando você" ------------------------------------------------
+
+// O piloto pediu em 06/10 para a lista começar limpa: o que ficou parado no
+// histórico importado da conexão não é fila de hoje.
+test('a lista começa em 06/10 à meia-noite de Brasília', () => {
+    assert.equal(INICIO_DA_LISTA_DE_ESPERA.toISOString(), '2026-10-06T03:00:00.000Z');
+});
+
+test('cliente que parou de escrever antes do corte sai da lista', () => {
+    const corte = new Date(em('12:00'));
+    assert.equal(esperaNaLista([vendedor('09:00'), cliente('11:00')], AGORA, corte), null);
+});
+
+test('cliente que escreveu depois do corte fica na lista', () => {
+    const corte = new Date(em('12:00'));
+    assert.equal(esperaNaLista([vendedor('09:00'), cliente('17:00')], AGORA, corte), 60 * 60 * 1000);
+});
+
+// Escreveu ontem, voltou a cobrar hoje e ninguém respondeu: está na fila de
+// hoje, e a espera conta desde ontem.
+test('cliente que voltou a escrever depois do corte entra com a espera inteira', () => {
+    const corte = new Date(em('12:00'));
+    assert.equal(esperaNaLista([cliente('10:00'), cliente('13:00')], AGORA, corte), 8 * 60 * 60 * 1000);
+});
+
+test('mensagem exatamente no corte entra na lista', () => {
+    const corte = new Date(em('12:00'));
+    assert.equal(esperaNaLista([cliente('12:00')], AGORA, corte), 6 * 60 * 60 * 1000);
+});
+
+test('conversa respondida não entra na lista', () => {
+    const corte = new Date(em('12:00'));
+    assert.equal(esperaNaLista([cliente('13:00'), vendedor('13:10')], AGORA, corte), null);
 });
 
 // --- tempo de resposta -------------------------------------------------------

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { CabecalhoPagina, EstadoVazio, Icone, Pagina, RotuloSecao, Selo, Shell, type DiaSerie } from '@/components/ui';
-import { desde, diasAte, ehCelular, esperaDoCliente, foiRespondido, primeiroNome, respostaMediaEmMinutos, temposDeResposta } from '@/lib/painel';
+import { desde, diasAte, ehCelular, esperaNaLista, foiRespondido, primeiroNome, respostaMediaEmMinutos, temposDeResposta } from '@/lib/painel';
 import { dataEmSaoPaulo } from '@/lib/analise';
 import { media } from '@/lib/visual';
 import { variacaoSemanal } from '@/lib/derivacoes';
@@ -59,7 +59,7 @@ export default async function Dashboard() {
     const todas = conversas ?? [];
     const deHoje = todas.filter((c) => new Date(c.ultima_mensagem_em) >= comeco);
     const esperando = todas
-        .map((c) => ({ conversa: c, espera: esperaDoCliente(c.mensagens, agora) }))
+        .map((c) => ({ conversa: c, espera: esperaNaLista(c.mensagens, agora) }))
         .filter((e): e is { conversa: ConversaComMensagens; espera: number } => e.espera !== null)
         .sort((a, b) => b.espera - a.espera);
 

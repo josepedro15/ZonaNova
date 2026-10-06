@@ -5,7 +5,7 @@ import {
 } from '@/components/ui';
 import { dataHoje, type contextoApp } from '@/lib/contexto-app';
 import { paginar } from '@/lib/paginar';
-import { esperaDoCliente, juntarPorDia, type LinhaDia, type Msg } from '@/lib/painel';
+import { esperaNaLista, juntarPorDia, type LinhaDia, type Msg } from '@/lib/painel';
 import { comQuemFalar, contarObjecoes, diaMenos, variacaoSemanal, type NotaDia } from '@/lib/derivacoes';
 import { setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
 import { contarObjecoesPorCodigo, juntarObjecoes } from '@/lib/mec';
@@ -105,7 +105,9 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     for (const a of aderencias ?? []) if (!etapas.has(a.user_id)) etapas.set(a.user_id, a.por_etapa);
     const conexao = new Map((conexoes ?? []).map((c) => [c.user_id, c]));
 
-    const esperas = (conversas ?? []).map((c) => esperaDoCliente(c.mensagens, agora)).filter((e): e is number => e !== null);
+    // A mesma regra da lista "Esperando você": o alerta conta as conversas que
+    // os vendedores veem lá, nem uma a mais.
+    const esperas = (conversas ?? []).map((c) => esperaNaLista(c.mensagens, agora)).filter((e): e is number => e !== null);
     const foraDoAr = equipe.filter((p) => conexao.get(p.id)?.status !== 'conectada');
     const sugestoes = comQuemFalar(equipe, notas, etapas);
     // Pelo código do catálogo nas conversas que já o têm; nas outras (outras

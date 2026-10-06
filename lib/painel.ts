@@ -48,6 +48,28 @@ export function esperaDoCliente(msgs: Msg[], agora: Date): number | null {
 }
 
 /**
+ * Onde começa a lista "Esperando você". O piloto pediu, em 06/10/2026, para
+ * ela começar limpa: a conexão importa meses de histórico, e o cliente que
+ * ficou sem resposta lá atrás não é fila de hoje.
+ */
+export const INICIO_DA_LISTA_DE_ESPERA = new Date('2026-10-06T00:00:00-03:00');
+
+/**
+ * A espera de quem entra na lista "Esperando você", ou null se não entra.
+ *
+ * Entra quem está esperando e falou pela última vez a partir do `corte`. O
+ * corte olha a ÚLTIMA fala do cliente, não a primeira do bloco: quem escreveu
+ * ontem e voltou a cobrar hoje está na fila de hoje — e a espera continua
+ * contando desde ontem, como em `esperaDoCliente`.
+ */
+export function esperaNaLista(msgs: Msg[], agora: Date, corte: Date = INICIO_DA_LISTA_DE_ESPERA): number | null {
+    const espera = esperaDoCliente(msgs, agora);
+    if (espera === null) return null;
+    const ultimaDoCliente = emOrdem(msgs).filter(ehCliente).at(-1)!;
+    return new Date(ultimaDoCliente.enviada_em).getTime() >= corte.getTime() ? espera : null;
+}
+
+/**
  * Um tempo de resposta (ms) por bloco do cliente que foi respondido.
  *
  * Medido da primeira mensagem do bloco até a resposta, pelo mesmo motivo
