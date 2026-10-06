@@ -11,12 +11,13 @@
         └─► áudio? enfileira transcricao
                               │
   ┌───────────────────────────┘
+  │  12:00 e 18:00 BRT — cron "atualizar-conversas" (o dia de hoje, só as conversas)
   │  00:30 BRT — cron "fechar-dia" (fecha o dia que acabou)
   ▼
   monta a lista de conversas com atividade no dia, por vendedor ativo
         │  filtros: contatos bloqueados, grupos, disparo em massa, aniversário
         ▼
-  enfileira analise_conversa (uma por conversa)
+  enfileira analise_conversa (uma por conversa; reabre a que já rodou no dia)
         │
         ▼
   worker /api/cron/processar-fila  (a cada 5 min, lotes)
@@ -24,7 +25,7 @@
         ├─ LLM  GPT-4.1 mini · structured output · 1 chamada por conversa
         │       └─► analises_conversa
         │
-        ├─ quando todas as conversas do vendedor no dia terminam:
+        ├─ quando todas as conversas do vendedor no dia terminam, e só de dia fechado:
         │   relatorio_vendedor → 1 chamada LLM (agregador) ─► relatorios_diarios
         │
         ├─ rollup_unidade  → SQL puro + 1 chamada curta p/ o texto ─► relatorios_unidade
@@ -32,6 +33,12 @@
 
   (semanal) descoberta → 4 buscas sobre os resumos da semana ─► descobertas
 ```
+
+**Três rodadas, um relatório.** Às 12h e às 18h a análise do dia de hoje só
+atualiza a conversa — status, potencial e o lead quente que vai para o CRM chegam
+no mesmo dia. O relatório do vendedor sai uma vez, do dia fechado, às 00h30. A
+conversa que não mudou desde a rodada anterior não paga a LLM de novo: o worker
+compara o hash do transcript e pula.
 
 **Regra de ouro do custo:** LLM só onde há julgamento a fazer. Número é somado em
 SQL. A unidade e a rede não re-leem conversa nenhuma — elas somam o que os níveis

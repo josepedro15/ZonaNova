@@ -1,12 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aderenciaPercentual, custoEstimado, dataEmSaoPaulo, dataValida, hashTranscript, janelaDoDia, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
+import { aderenciaPercentual, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
 
 test('o dia comercial usa São Paulo na virada do UTC', () => {
     assert.equal(dataEmSaoPaulo(new Date('2026-09-22T01:30:00Z')), '2026-09-21');
     const { inicio, fim } = janelaDoDia('2026-09-21');
     assert.equal(inicio.toISOString(), '2026-09-21T03:00:00.000Z');
     assert.equal(fim.toISOString(), '2026-09-22T03:00:00.000Z');
+});
+
+// Às 12h e às 18h a análise do dia ainda aberto só atualiza a conversa; o
+// relatório do vendedor sai do dia fechado, no fechar-dia das 00h30.
+test('o dia de hoje ainda está aberto', () => {
+    assert.equal(diaFechado('2026-10-06', new Date('2026-10-06T15:00:00Z')), false);
+    assert.equal(diaFechado('2026-10-06', new Date('2026-10-06T21:00:00Z')), false);
+});
+
+test('às 00h30 o dia anterior já fechou', () => {
+    assert.equal(diaFechado('2026-10-06', new Date('2026-10-07T03:30:00Z')), true);
+});
+
+// 23h50 em Brasília já é dia seguinte em UTC: quem decide é o relógio de São Paulo.
+test('às 23h50 de Brasília o dia ainda não fechou', () => {
+    assert.equal(diaFechado('2026-10-06', new Date('2026-10-07T02:50:00Z')), false);
+});
+
+test('dia antigo está fechado', () => {
+    assert.equal(diaFechado('2026-10-03', new Date('2026-10-06T15:00:00Z')), true);
 });
 
 test('transcript distingue ator, automática, áudio e mídia não lida', () => {

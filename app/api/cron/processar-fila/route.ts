@@ -3,7 +3,7 @@ import { cronAutorizado } from '@/lib/cron';
 import { aposFalha, aposFalhaDoItem } from '@/lib/fila';
 import { transcrever } from '@/lib/transcricao';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
-import { aderenciaPercentual, custoEstimado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
+import { aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type ItemPlaybook, type LinhaObservacao, type TipoItem } from '@/lib/mec';
 import { paginar } from '@/lib/paginar';
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
@@ -697,7 +697,9 @@ async function encadear(supabase: Admin, tipo: ItemTipo, referenciaId: string, d
     if (tipo === 'analise_conversa') {
         const { data: conversa } = await supabase.from('conversas').select('user_id').eq('id', referenciaId).maybeSingle<{ user_id: string }>();
         if (!conversa) return;
-        if (!await vendedorTemAnalisePendente(supabase, conversa.user_id, dataRef)) {
+        // Análise das 12h e das 18h (dia ainda aberto) só atualiza a conversa:
+        // o relatório do dia sai quando ele fecha, no fechar-dia das 00h30.
+        if (diaFechado(dataRef, new Date()) && !await vendedorTemAnalisePendente(supabase, conversa.user_id, dataRef)) {
             await reabrir(supabase, 'relatorio_vendedor', conversa.user_id, dataRef);
         }
         // Depois do relatório, e com o próprio catch: o CRM falhar não pode

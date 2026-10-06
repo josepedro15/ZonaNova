@@ -68,3 +68,34 @@ export async function conversasDoFechamento(supabase: Admin, inicio: Date, fim: 
     for (const v of vendedores ?? []) todas.push(...await conversasComMensagemNoDia(supabase, inicio, fim, v.id));
     return todas;
 }
+
+/**
+ * Coloca na fila uma análise por conversa com mensagem no dia, de cada
+ * vendedor ativo. Dois chamadores: o `fechar-dia` (00h30, o dia que acabou) e
+ * o `atualizar-conversas` (12h e 18h, o dia de hoje).
+ *
+ * Reabre em vez de ignorar o que já está na fila: com três rodadas no mesmo
+ * dia, a das 18h e o fechamento encontram a conversa já analisada e, ignorando,
+ * perderiam o que ela recebeu depois. Reanalisar o que não mudou não paga a
+ * OpenAI: o worker compara o hash do transcript e pula.
+ */
+export async function enfileirarAnalisesDoDia(supabase: Admin, dataRef: string, inicio: Date, fim: Date): Promise<{ vendedores: number; conversas: number }> {
+    const { data: vendedores, error } = await supabase.from('profiles')
+        .select('id').eq('role', 'vendedor').eq('status', 'ativo')
+        .returns<{ id: string }[]>();
+    if (error) throw new Error(error.message);
+
+    let conversas = 0;
+    for (const vendedor of vendedores ?? []) {
+        const lista = await conversasComMensagemNoDia(supabase, inicio, fim, vendedor.id);
+        // Dez de cada vez: uma chamada por item, sem afogar o PostgREST.
+        for (let i = 0; i < lista.length; i += 10) {
+            const erros = (await Promise.all(lista.slice(i, i + 10).map((id) =>
+                supabase.rpc('zn_reabrir_item', { p_tipo: 'analise_conversa', p_referencia: id, p_data: dataRef }))))
+                .map((r) => r.error).filter((e) => e !== null);
+            if (erros.length) throw new Error(erros[0].message);
+        }
+        conversas += lista.length;
+    }
+    return { vendedores: vendedores?.length ?? 0, conversas };
+}

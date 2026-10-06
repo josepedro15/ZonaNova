@@ -1,22 +1,20 @@
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { cronAutorizado } from '@/lib/cron';
-import { dataEmSaoPaulo, dataValida, janelaDoDia } from '@/lib/analise';
+import { dataEmSaoPaulo, janelaDoDia } from '@/lib/analise';
 import { enfileirarAnalisesDoDia } from '@/lib/fechamento';
 
 export const maxDuration = 300;
 
 /**
- * Fecha o dia comercial e enfileira uma análise por conversa com movimento.
- * Por padrão fecha ontem; `?data=AAAA-MM-DD` permite operação/reprocessamento.
+ * Atualiza as análises das conversas de HOJE, às 12h e às 18h (migration
+ * 0025). Só a conversa: status, potencial e lead quente chegam no mesmo dia.
+ * O relatório do vendedor não sai daqui — o worker só o encadeia de dia
+ * fechado (`diaFechado`), e quem fecha o dia é o `fechar-dia` das 00h30.
  */
 export async function GET(req: Request) {
     if (!cronAutorizado(req)) return Response.json({ erro: 'não autorizado' }, { status: 401 });
 
-    const url = new URL(req.url);
-    const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const dataRef = url.searchParams.get('data') || dataEmSaoPaulo(ontem);
-    if (!dataValida(dataRef)) return Response.json({ erro: 'data inválida' }, { status: 400 });
-
+    const dataRef = dataEmSaoPaulo(new Date());
     const { inicio, fim } = janelaDoDia(dataRef);
     try {
         const { vendedores, conversas } = await enfileirarAnalisesDoDia(criarClienteAdmin(), dataRef, inicio, fim);
