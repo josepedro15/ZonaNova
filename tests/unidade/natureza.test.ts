@@ -43,3 +43,11 @@ test('o pedido da análise leva a regra e o campo da natureza', () => {
     assert.ok(schemaJsonAnalise.required.includes('natureza_contato'));
     assert.equal(schema.json, schemaJsonAnalise);
 });
+
+// O gestor disse "É cliente": a conversa volta para as contas e não é mais sugerida.
+test('sugestão descartada pelo gestor deixa de ser suspeita', () => {
+    const p = { natureza_contato: 'colega_ou_loja', confianca_natureza: 95 };
+    assert.equal(naturezaSuspeita(p), 'colega_ou_loja');
+    assert.equal(naturezaSuspeita({ ...p, natureza_descartada: true }), null);
+    assert.equal(naturezaSuspeita({ ...p, natureza_descartada: 'true' }), null);
+});

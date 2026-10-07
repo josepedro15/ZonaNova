@@ -28,12 +28,19 @@ export const REGRA_NATUREZA = '- natureza_contato: decida PRIMEIRO quem é o con
     + 'pessoal = família, amigo ou assunto particular do vendedor, sem compra. '
     + 'confianca_natureza (0–100) é o quanto a conversa PROVA a escolha. Conversa curta ou só mídia, sem sinal de quem é o contato, fica cliente com confiança baixa. evidencia_natureza é o trecho literal curto que mostra a natureza ("" se não houver).';
 
-type ComNatureza = { natureza_contato?: unknown; confianca_natureza?: unknown };
+type ComNatureza = { natureza_contato?: unknown; confianca_natureza?: unknown; natureza_descartada?: unknown };
+
+/**
+ * Marca gravada no payload quando o gestor diz "É cliente" a uma sugestão.
+ * A análise seguinte da mesma conversa herda a marca: a sugestão não volta.
+ */
+export const DESCARTADA = 'natureza_descartada';
 
 /** A natureza que a análise deu, se for confiável e não for cliente. Payload antigo, sem o campo, é cliente. */
 export function naturezaSuspeita(payload: unknown): Exclude<Natureza, 'cliente'> | null {
     if (!payload || typeof payload !== 'object') return null;
-    const { natureza_contato: natureza, confianca_natureza: confianca } = payload as ComNatureza;
+    const { natureza_contato: natureza, confianca_natureza: confianca, natureza_descartada: descartada } = payload as ComNatureza;
+    if (descartada === true || descartada === 'true') return null;
     if (natureza === 'cliente' || !NATUREZAS.includes(natureza as Natureza)) return null;
     const n = Number(confianca);
     return Number.isFinite(n) && n >= LIMIAR_NATUREZA ? natureza as Exclude<Natureza, 'cliente'> : null;

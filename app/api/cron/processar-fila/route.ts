@@ -7,7 +7,7 @@ import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/
 import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, saudacaoInvisivel, type MensagemAnalise } from '@/lib/analise';
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao } from '@/lib/mec';
 import { doutrinaMec } from '@/lib/pedido-analise';
-import { naturezaSuspeita } from '@/lib/natureza';
+import { DESCARTADA, naturezaSuspeita } from '@/lib/natureza';
 import { paginar } from '@/lib/paginar';
 import { foiRespondido, numerosDoFechamento, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
@@ -443,13 +443,19 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
         { conversaId, userId: conversa.user_id, unidadeId, dataRef, playbookId: doutrina.playbookId },
         resultado.tipo_conversa === 'negociacao' ? resultado.mec_detalhe ?? null : null,
     );
+    // O gestor já disse "É cliente" a esta conversa: a marca passa adiante e a
+    // sugestão de contato interno não volta (lib/natureza.ts).
+    const { data: descartada, error: erroDescartada } = await supabase.from('analises_conversa').select('id')
+        .eq('conversa_id', conversaId).eq(`payload->>${DESCARTADA}`, 'true').limit(1);
+    if (erroDescartada) throw erroDescartada;
+    const payload = descartada?.length ? { ...resultado, [DESCARTADA]: true } : resultado;
     const { error: erroAnalise } = await supabase.from('analises_conversa').upsert({
         conversa_id: conversaId, user_id: conversa.user_id, unidade_id: unidadeId, data_ref: dataRef,
         tipo_conversa: resultado.tipo_conversa, status: resultado.status, sentiment: resultado.sentiment,
         score_atendimento: resultado.score_atendimento, score_oportunidade: resultado.score_oportunidade,
         score_risco: resultado.score_risco, estagio_funil: resultado.estagio_funil,
         potencial_venda: resultado.potencial_venda, urgencia: resultado.urgencia,
-        payload: resultado, modelo, tokens_entrada: entrada, tokens_saida: saida,
+        payload, modelo, tokens_entrada: entrada, tokens_saida: saida,
         custo_estimado: custoEstimado(modelo, entrada, saida), transcript_hash: hash, updated_at: new Date().toISOString(),
     }, { onConflict: 'conversa_id,data_ref' });
     if (erroAnalise) throw erroAnalise;
@@ -614,6 +620,7 @@ async function candidatoCrm(supabase: Admin, conversaId: string, dataRef: string
     return {
         dados: {
             unidadeId, bloqueada: conversa.bloqueada, telefone: conversa.cliente_telefone,
+            suspeitaInterno: naturezaSuspeita(analise?.payload) !== null,
             analise: analise && {
                 tipo_conversa: analise.tipo_conversa, status: analise.status,
                 potencial_venda: analise.potencial_venda, score_oportunidade: analise.score_oportunidade,

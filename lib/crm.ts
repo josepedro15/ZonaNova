@@ -106,7 +106,8 @@ export function faltandoParaEnviar(c: ConfigCrm): string[] {
     ] as const).filter(([, valor]) => !valor).map(([nome]) => nome);
 }
 
-export type Candidato = { unidadeId: string; bloqueada: boolean; telefone: string; analise: AnaliseCrm | null };
+/** `suspeitaInterno`: a análise viu colega, fornecedor ou pessoal (lib/natureza.ts) e o gestor ainda não decidiu. */
+export type Candidato = { unidadeId: string; bloqueada: boolean; telefone: string; analise: AnaliseCrm | null; suspeitaInterno?: boolean };
 
 export type Decisao = { acao: 'ignorar'; motivo: string } | { acao: 'simular' | 'enviar'; telefone: string };
 
@@ -120,6 +121,8 @@ export function decidirEnvio(c: Candidato, config: ConfigCrm): Decisao {
     // Mesma lista do piloto do MEC: vazio desliga, * liga todas, ou ids por vírgula.
     if (!detalheLigado(c.unidadeId, config.unidades)) return ignorar('unidade fora do envio ao CRM');
     if (c.bloqueada) return ignorar('conversa fora da análise');
+    // Colega pedindo para separar pedido parecia lead quente e virava card no CRM.
+    if (c.suspeitaInterno) return ignorar('suspeita de contato interno');
     if (!c.analise || !leadQuente(c.analise)) return ignorar('não é lead quente');
     const telefone = telefoneDoCrm(c.telefone);
     if (!telefone) return ignorar('contato sem telefone brasileiro');

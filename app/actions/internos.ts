@@ -4,6 +4,7 @@ import { criarClienteServidor } from '@/lib/supabase/server';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { telefoneE164, variantesTelefone } from '@/lib/painel';
 import { liberarConversas } from '@/lib/exclusao-dados';
+import { DESCARTADA } from '@/lib/natureza';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -61,6 +62,39 @@ export async function removerContatoInterno(form: FormData) {
     await liberarConversas(ctx.admin, { unidadeId: alvo.unidade_id }, variantesTelefone(alvo.telefone));
     await ctx.admin.from('eventos_admin').insert({
         actor_id: ctx.userId, acao: 'removeu_contato_interno', alvo_id: alvo.unidade_id, detalhes: { telefone: alvo.telefone, descricao: alvo.descricao },
+    });
+    revalidar();
+}
+
+/**
+ * "É cliente": a sugestão da IA estava errada. Marca as análises da conversa
+ * (a próxima análise herda a marca), e ela volta às objeções e ao relatório
+ * do vendedor — que é refeito nos dias em que ficou de fora.
+ */
+export async function descartarSugestaoInterno(form: FormData) {
+    const unidadeId = String(form.get('unidadeId') ?? '');
+    const telefone = String(form.get('telefone') ?? '').trim().slice(0, 40);
+    if (telefone.length < 8) return;
+    const ctx = await quemCuida(unidadeId);
+    if (!ctx) return;
+    const { data: conversas, error } = await ctx.admin.from('conversas').select('id')
+        .eq('unidade_id', unidadeId).in('cliente_telefone', variantesTelefone(telefone));
+    if (error) throw error;
+    if (!conversas?.length) return;
+    const { data: analises, error: erroAnalises } = await ctx.admin.from('analises_conversa').select('id,user_id,data_ref,payload')
+        .in('conversa_id', conversas.map((c) => c.id)).returns<{ id: string; user_id: string; data_ref: string; payload: Record<string, unknown> }[]>();
+    if (erroAnalises) throw erroAnalises;
+    for (const a of analises ?? []) {
+        const { error: erroMarca } = await ctx.admin.from('analises_conversa').update({ payload: { ...a.payload, [DESCARTADA]: true } }).eq('id', a.id);
+        if (erroMarca) throw erroMarca;
+    }
+    const dias = new Map((analises ?? []).map((a) => [`${a.user_id}|${a.data_ref}`, a]));
+    for (const a of dias.values()) {
+        const { error: erroFila } = await ctx.admin.rpc('zn_reabrir_item', { p_tipo: 'relatorio_vendedor', p_referencia: a.user_id, p_data: a.data_ref });
+        if (erroFila) throw erroFila;
+    }
+    await ctx.admin.from('eventos_admin').insert({
+        actor_id: ctx.userId, acao: 'descartou_sugestao_interno', alvo_id: unidadeId, detalhes: { telefone, analises: analises?.length ?? 0 },
     });
     revalidar();
 }

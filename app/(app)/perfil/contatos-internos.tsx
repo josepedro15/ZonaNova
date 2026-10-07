@@ -3,7 +3,7 @@ import { semTelefone, telefoneBonito } from '@/lib/painel';
 import { dataEmSaoPaulo } from '@/lib/analise';
 import { diaMenos } from '@/lib/derivacoes';
 import { agruparSugestoes, ROTULO_NATUREZA, type LinhaSugestao, type SugestaoInterno } from '@/lib/natureza';
-import { adicionarContatoInterno, removerContatoInterno } from '@/app/actions/internos';
+import { adicionarContatoInterno, descartarSugestaoInterno, removerContatoInterno } from '@/app/actions/internos';
 
 type Supabase = Awaited<ReturnType<typeof criarClienteServidor>>;
 type Unidade = { id: string; nome: string };
@@ -32,6 +32,7 @@ type LinhaBanco = {
     natureza_contato: string | null;
     confianca_natureza: number | null;
     evidencia_natureza: string | null;
+    natureza_descartada: boolean | null;
     conversas: { unidade_id: string; cliente_telefone: string; cliente_nome: string | null } | null;
 };
 
@@ -42,7 +43,7 @@ type LinhaBanco = {
  */
 async function sugestoesDaIa(supabase: Supabase, unidades: Unidade[]): Promise<SugestaoInterno[]> {
     const { data } = await supabase.from('analises_conversa')
-        .select('data_ref,natureza_contato:payload->>natureza_contato,confianca_natureza:payload->confianca_natureza,evidencia_natureza:payload->>evidencia_natureza,conversas!inner(unidade_id,cliente_telefone,cliente_nome)')
+        .select('data_ref,natureza_contato:payload->>natureza_contato,confianca_natureza:payload->confianca_natureza,evidencia_natureza:payload->>evidencia_natureza,natureza_descartada:payload->natureza_descartada,conversas!inner(unidade_id,cliente_telefone,cliente_nome)')
         .in('conversas.unidade_id', unidades.map((u) => u.id)).eq('conversas.bloqueada', false)
         .gte('data_ref', diaMenos(dataEmSaoPaulo(new Date()), DIAS_SUGESTAO))
         .in('payload->>natureza_contato', Object.keys(ROTULO_NATUREZA))
@@ -50,7 +51,7 @@ async function sugestoesDaIa(supabase: Supabase, unidades: Unidade[]): Promise<S
         .returns<LinhaBanco[]>();
     const linhas: LinhaSugestao[] = (data ?? []).flatMap((l) => (l.conversas && !semTelefone(l.conversas.cliente_telefone) ? [{
         unidade_id: l.conversas.unidade_id, telefone: l.conversas.cliente_telefone, nome: l.conversas.cliente_nome, data_ref: l.data_ref,
-        payload: { natureza_contato: l.natureza_contato, confianca_natureza: l.confianca_natureza, evidencia_natureza: l.evidencia_natureza },
+        payload: { natureza_contato: l.natureza_contato, confianca_natureza: l.confianca_natureza, evidencia_natureza: l.evidencia_natureza, natureza_descartada: l.natureza_descartada },
     }] : []));
     return agruparSugestoes(linhas);
 }
@@ -108,7 +109,7 @@ export async function ContatosInternos({ supabase, userId, role }: { supabase: S
                         <span className="rounded-full bg-ocre-sof px-2.5 py-1 text-xs font-semibold text-ocre-texto">{sugestoes.length}</span>
                     </div>
                     <p className="mt-1 text-[12px] text-tinta-2">
-                        Nos últimos {DIAS_SUGESTAO} dias a análise achou que estas conversas não são com cliente. Nada foi bloqueado: enquanto você não decide, elas só ficam fora das objeções e do relatório do vendedor.
+                        Nos últimos {DIAS_SUGESTAO} dias a análise achou que estas conversas não são com cliente. Nada foi bloqueado: enquanto você não decide, elas só ficam fora das objeções, do relatório do vendedor e do envio ao CRM.
                     </p>
                     <div className="mt-2 divide-y divide-linha">
                         {sugestoes.map((s) => (
@@ -124,6 +125,11 @@ export async function ContatosInternos({ supabase, userId, role }: { supabase: S
                                     <input name="descricao" required maxLength={120} defaultValue={[s.nome, ROTULO_NATUREZA[s.natureza]].filter(Boolean).join(' — ').slice(0, 120)}
                                         aria-label="Quem é" className="min-w-0 flex-1 rounded-[9px] border border-linha-campo bg-superficie px-3 py-1.5 text-sm" />
                                     <button className="rounded-[9px] bg-petroleo px-3 py-1.5 text-xs font-semibold text-papel">Marcar como interno</button>
+                                </form>
+                                <form action={descartarSugestaoInterno} className="mt-1.5">
+                                    <input type="hidden" name="unidadeId" value={s.unidade_id} />
+                                    <input type="hidden" name="telefone" value={s.telefone} />
+                                    <button className="text-xs font-semibold text-tinta-2 underline underline-offset-2 hover:text-tinta">É cliente — não sugerir mais</button>
                                 </form>
                             </div>
                         ))}

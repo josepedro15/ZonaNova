@@ -126,3 +126,7 @@ test('conversa fora da análise, sem análise ou fria não envia', () => {
 test('contato sem telefone não envia', () => {
     assert.equal(decidirEnvio(candidato({ telefone: 'lid:123456789012345' }), config()).acao, 'ignorar');
 });
+
+test('conversa que a análise viu como contato interno não vai ao CRM', () => {
+    assert.deepEqual(decidirEnvio(candidato({ suspeitaInterno: true }), config()), { acao: 'ignorar', motivo: 'suspeita de contato interno' });
+});
