@@ -9,6 +9,9 @@ export type MensagemAnalise = {
     transcricao: string | null;
     automatica: boolean;
     enviada_em: string;
+    /** Só lidos quando a unidade tem `MIDIA_UNIDADES` ligada (lib/midia.ts). */
+    midia_nome?: string | null;
+    midia_descricao?: string | null;
 };
 
 export const schemaAnalise = z.object({
@@ -192,6 +195,22 @@ export const MAX_CHARS_FALA = 1500;
 /** Teto da conversa: ~15 mil tokens, folgado para o contexto e para o custo. */
 export const MAX_CHARS_TRANSCRIPT = 60_000;
 
+/** Teto da descrição automática de imagem/documento (lib/midia.ts). */
+export const MAX_CHARS_DESCRICAO = 300;
+
+/**
+ * Texto de fora (nome de arquivo, descrição gerada) para dentro de uma marca
+ * `[...]` do transcript. Sem colchete, aspa ou quebra de linha: nada ali
+ * consegue fechar a marca, abrir uma fala nova ou virar o JSON da fala — é a
+ * mesma defesa do `montarTranscript`, e o `conferirDetalhe` do MEC continua
+ * lendo a linha.
+ */
+export function textoDeMarca(texto: string, max: number): string {
+    const limpo = texto.replace(/[\[\]{}]/g, (c) => (c === '[' || c === '{' ? '(' : ')'))
+        .replace(/"/g, "'").replace(/\s+/g, ' ').trim();
+    return limpo.length > max ? `${limpo.slice(0, max)}…` : limpo;
+}
+
 const cortar = (texto: string, max: number) => texto.length > max ? `${texto.slice(0, max)}…[cortado]` : texto;
 
 /**
@@ -218,7 +237,17 @@ export function montarTranscript(mensagens: MensagemAnalise[]): string {
             fala = m.transcricao?.trim() ?? '';
         // "outro" com conteúdo já traz a marca legível do webhook ("[figurinha]").
         } else if (m.tipo === 'outro' && fala) marcas.push('[Mídia]');
-        else if (m.tipo !== 'texto') marcas.push(`[Mídia: ${m.tipo}]`);
+        else if (m.tipo !== 'texto') {
+            // Nome e descrição vêm de fora (o arquivo, a IA que o leu): ficam
+            // DENTRO da marca, limpos, e nunca viram fala de ninguém.
+            const partes = [`Mídia: ${m.tipo}`];
+            const nome = m.midia_nome?.trim();
+            if (nome) partes.push(`arquivo: ${textoDeMarca(nome, 120)}`);
+            if (m.midia_descricao?.trim()) partes.push(`descrição automática: ${textoDeMarca(m.midia_descricao, MAX_CHARS_DESCRICAO)}`);
+            marcas.push(`[${partes.join(' — ')}]`);
+            // A UAZAPI às vezes manda o nome do arquivo também como texto.
+            if (nome && fala === nome) fala = '';
+        }
         if (!fala && !marcas.length) marcas.push('[sem conteúdo textual]');
         return [`${ator}:`, ...marcas, ...(fala ? [JSON.stringify(cortar(fala, MAX_CHARS_FALA))] : [])].join(' ');
     });

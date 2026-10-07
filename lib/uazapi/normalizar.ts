@@ -28,8 +28,15 @@ export type MensagemUazapi = {
         messageType?: string;
         type?: string;
         text?: string;
-        content?: string;
+        /**
+         * Texto, nas mensagens de texto. Na mídia, a UAZAPI manda o objeto da
+         * própria mensagem do WhatsApp (o DocumentMessage/ImageMessage):
+         * `URL`, `mimetype`, `fileName`, `caption`…
+         */
+        content?: string | ConteudoMidia | null;
         caption?: string;
+        fileName?: string;
+        filename?: string;
         mediaUrl?: string;
         file?: string;
         messageTimestamp?: number;
@@ -40,6 +47,14 @@ export type MensagemUazapi = {
         wasSentByApi?: boolean;
 };
 
+/** Os campos da mídia que usamos, como o WhatsApp os nomeia. */
+export type ConteudoMidia = {
+    fileName?: string;
+    title?: string;
+    caption?: string;
+    mimetype?: string;
+};
+
 export type MensagemNormalizada = {
     waMessageId: string;
     clienteTelefone: string;
@@ -48,6 +63,8 @@ export type MensagemNormalizada = {
     tipo: 'texto' | 'audio' | 'imagem' | 'documento' | 'video' | 'outro';
     conteudo: string | null;
     midiaUrl: string | null;
+    /** Nome do arquivo do documento ("orçamento dos cromados.pdf"). Imagem não tem. */
+    midiaNome: string | null;
     automatica: boolean;
     enviadaEm: Date;
 };
@@ -135,7 +152,10 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
     const bruto = (m.messageType ?? m.type ?? 'text').toLowerCase().replace(/[_\s-]/g, '');
     const tipo = TIPOS[bruto] ?? 'outro';
 
-    const textoOriginal = m.text ?? m.content ?? m.caption ?? null;
+    // `content` objeto é a mídia, não o texto: sem esta checagem o objeto ia
+    // parar inteiro na coluna `conteudo`.
+    const midia = m.content && typeof m.content === 'object' ? m.content : null;
+    const textoOriginal = m.text || (typeof m.content === 'string' ? m.content : null) || m.caption || midia?.caption || null;
     const texto = tipo === 'outro' ? marcaDeMidia(bruto, textoOriginal) ?? textoOriginal : textoOriginal;
 
     return {
@@ -148,12 +168,23 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
         tipo,
         conteudo: texto && texto.length > 0 ? texto : null,
         midiaUrl: m.mediaUrl ?? m.file ?? null,
+        midiaNome: tipo === 'documento' ? nomeDoArquivo(m.fileName ?? m.filename ?? midia?.fileName ?? midia?.title) : null,
         // Mensagem disparada pela API é template/bot, não o vendedor digitando.
         // O doc 3 exige distinguir: disparo em massa não pode contar como
         // atendimento.
         automatica: m.fromApi === true || m.wasSentByApi === true,
         enviadaEm: paraData(m.messageTimestamp ?? m.timestamp),
     };
+}
+
+/** Teto do nome guardado: o resto de um nome de 300 caracteres não ajuda a análise. */
+export const MAX_CHARS_NOME_ARQUIVO = 120;
+
+/** Nome de arquivo limpo: sem quebra de linha nem espaço sobrando, e curto. */
+export function nomeDoArquivo(bruto: string | null | undefined): string | null {
+    const nome = (bruto ?? '').replace(/\s+/g, ' ').trim();
+    if (!nome) return null;
+    return nome.length > MAX_CHARS_NOME_ARQUIVO ? `${nome.slice(0, MAX_CHARS_NOME_ARQUIVO)}…` : nome;
 }
 
 /** Eventos ao vivo trazem `message`; histórico traz lotes em `messages`. */

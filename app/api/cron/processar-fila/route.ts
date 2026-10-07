@@ -1,7 +1,8 @@
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { cronAutorizado } from '@/lib/cron';
 import { aposFalha, aposFalhaDoItem } from '@/lib/fila';
-import { transcrever } from '@/lib/transcricao';
+import { baixarMidiaSegura, hashDoAudio, transcrever } from '@/lib/transcricao';
+import { descreverMidia, formatoLegivel, MAX_BYTES_MIDIA, midiaLigada } from '@/lib/midia';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
 import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, saudacaoInvisivel, type MensagemAnalise } from '@/lib/analise';
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type ItemPlaybook, type LinhaObservacao, type TipoItem } from '@/lib/mec';
@@ -30,7 +31,7 @@ const PRAZO_DRENO_MS = 120_000;
 /**
  * Worker da fila (doc 3 §3.4). Roda a cada 5 minutos.
  *
- * Trata a cadeia inteira: transcrição → análise → relatório → unidade → rede.
+ * Trata a cadeia inteira: transcrição e descrição de mídia → análise → relatório → unidade → rede.
  * Depois, com o tempo que sobrar, reprocessa o que o webhook não terminou —
  * nessa ordem para que uma entrada pesada nunca impeça a fila de andar.
  */
@@ -73,7 +74,7 @@ async function processarLote(supabase: Admin, agora: Date): Promise<Record<strin
         .from('fila_processamento')
         .select('id, tipo, referencia_id, data_ref, tentativas')
         .eq('status', 'pendente')
-        .in('tipo', ['transcricao', 'analise_conversa', 'relatorio_vendedor', 'rollup_unidade', 'rollup_rede', 'envio_crm'])
+        .in('tipo', ['transcricao', 'descricao_midia', 'analise_conversa', 'relatorio_vendedor', 'rollup_unidade', 'rollup_rede', 'envio_crm'])
         .lte('proxima_tentativa_em', agora.toISOString())
         .order('proxima_tentativa_em')
         .limit(LOTE)
@@ -82,7 +83,7 @@ async function processarLote(supabase: Admin, agora: Date): Promise<Record<strin
     if (error) throw new Error(error.message);
     if (!candidatos?.length) return { pegos: 0, concluidos: 0, falhados: 0 };
 
-    if (!apiKey && candidatos.some((c) => ['transcricao', 'analise_conversa', 'relatorio_vendedor'].includes(c.tipo))) {
+    if (!apiKey && candidatos.some((c) => ['transcricao', 'descricao_midia', 'analise_conversa', 'relatorio_vendedor'].includes(c.tipo))) {
         // Sem chave não há como transcrever. Deixar na fila é melhor que
         // gastar tentativa: quando a chave chegar, o áudio ainda está lá.
         return { pegos: 0, concluidos: 0, falhados: 0, aguardando: 'OPENAI_API_KEY' };
@@ -120,6 +121,7 @@ async function processarLote(supabase: Admin, agora: Date): Promise<Record<strin
         let encadeiaSeMudou = true;
         try {
             if (item.tipo === 'transcricao') await transcreverMensagem(supabase, item.referencia_id, apiKey!);
+            else if (item.tipo === 'descricao_midia') await descreverMensagem(supabase, item.referencia_id, apiKey!);
             else if (item.tipo === 'analise_conversa') encadeiaSeMudou = await analisarItem(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'relatorio_vendedor') await consolidarItem(supabase, item.referencia_id, item.data_ref);
             else if (item.tipo === 'rollup_unidade') await rollupUnidade(supabase, item.referencia_id, item.data_ref);
@@ -227,7 +229,7 @@ async function resgatarPresos(supabase: Admin, agora: Date): Promise<number> {
     return presos?.length ?? 0;
 }
 
-type ItemTipo = 'transcricao' | 'analise_conversa' | 'relatorio_vendedor' | 'rollup_unidade' | 'rollup_rede' | 'envio_crm';
+type ItemTipo = 'transcricao' | 'descricao_midia' | 'analise_conversa' | 'relatorio_vendedor' | 'rollup_unidade' | 'rollup_rede' | 'envio_crm';
 class IgnorarItem extends Error {}
 
 async function transcreverMensagem(supabase: Admin, mensagemId: string, apiKey: string) {
@@ -241,16 +243,7 @@ async function transcreverMensagem(supabase: Admin, mensagemId: string, apiKey: 
     if (msg.transcricao) return;          // já transcrita: nada a fazer
     let midiaUrl = msg.midia_url;
     if (!midiaUrl) {
-        const { data: conversa } = await supabase.from('conversas').select('user_id').eq('id', msg.conversa_id)
-            .maybeSingle<{ user_id: string }>();
-        const { data: conexao } = conversa ? await supabase.from('conexoes_whatsapp').select('instance_token')
-            .eq('user_id', conversa.user_id).maybeSingle<{ instance_token: string | null }>() : { data: null };
-        const apiUrl = process.env.UAZAPI_API_URL;
-        const adminToken = process.env.UAZAPI_ADMIN_TOKEN;
-        if (!conexao?.instance_token || !apiUrl || !adminToken) throw new Error('não foi possível recuperar a mídia do áudio');
-        const token = decifrar(Buffer.from(conexao.instance_token.replace(/^\\x/, ''), 'hex'));
-        const midia = await new Uazapi(apiUrl, adminToken).baixarMidia(token, msg.wa_message_id);
-        midiaUrl = midia.fileURL;
+        midiaUrl = (await pedirMidiaAUazapi(supabase, msg)).fileURL;
         await supabase.from('mensagens').update({ midia_url: midiaUrl }).eq('id', msg.id);
     }
 
@@ -269,6 +262,54 @@ async function transcreverMensagem(supabase: Admin, mensagemId: string, apiKey: 
     await supabase.from('mensagens')
         .update({ transcricao: texto, midia_hash: hash })
         .eq('id', msg.id);
+}
+
+/** URL temporária (2 dias) da mídia de uma mensagem, pedida à instância do vendedor. */
+async function pedirMidiaAUazapi(supabase: Admin, msg: { conversa_id: string; wa_message_id: string }): Promise<{ fileURL: string; mimetype?: string }> {
+    const { data: conversa } = await supabase.from('conversas').select('user_id').eq('id', msg.conversa_id)
+        .maybeSingle<{ user_id: string }>();
+    const { data: conexao } = conversa ? await supabase.from('conexoes_whatsapp').select('instance_token')
+        .eq('user_id', conversa.user_id).maybeSingle<{ instance_token: string | null }>() : { data: null };
+    const apiUrl = process.env.UAZAPI_API_URL;
+    const adminToken = process.env.UAZAPI_ADMIN_TOKEN;
+    if (!conexao?.instance_token || !apiUrl || !adminToken) throw new Error('não foi possível recuperar a mídia');
+    const token = decifrar(Buffer.from(conexao.instance_token.replace(/^\\x/, ''), 'hex'));
+    return new Uazapi(apiUrl, adminToken).baixarMidia(token, msg.wa_message_id);
+}
+
+/**
+ * Uma linha sobre a imagem ou o documento (lib/midia.ts). A mesma foto de
+ * catálogo encaminhada por vários vendedores é descrita uma vez só: o hash do
+ * arquivo é procurado antes da chamada paga, como no áudio.
+ */
+async function descreverMensagem(supabase: Admin, mensagemId: string, apiKey: string) {
+    const { data: msg } = await supabase.from('mensagens')
+        .select('id, conversa_id, wa_message_id, midia_nome, midia_descricao')
+        .eq('id', mensagemId)
+        .maybeSingle<{ id: string; conversa_id: string; wa_message_id: string; midia_nome: string | null; midia_descricao: string | null }>();
+    if (!msg) throw new IgnorarItem('mensagem não existe mais');
+    if (msg.midia_descricao) return;
+
+    // Sempre uma URL nova: a mídia de imagem e documento não vem no webhook, e
+    // a UAZAPI informa o mimetype antes de qualquer byte baixado.
+    const midia = await pedirMidiaAUazapi(supabase, msg);
+    const formato = formatoLegivel(midia.mimetype, msg.midia_nome);
+    // Planilha, Word, áudio como documento: fica só o nome do arquivo.
+    if (!formato) throw new IgnorarItem(`formato sem leitura: ${midia.mimetype ?? 'desconhecido'}`);
+
+    const bytes = await baixarMidiaSegura(midia.fileURL, MAX_BYTES_MIDIA);
+    const hash = hashDoAudio(bytes);
+    const { data: igual } = await supabase.from('mensagens').select('midia_descricao')
+        .eq('midia_hash', hash).not('midia_descricao', 'is', null)
+        .limit(1).maybeSingle<{ midia_descricao: string }>();
+    const descricao = igual?.midia_descricao ?? (await descreverMidia(bytes, formato, {
+        // Modelo próprio para comparar mini e nano na leitura de orçamento sem
+        // mexer no da análise; vazio, usa o mesmo.
+        apiKey, nome: msg.midia_nome, mimetype: midia.mimetype, modelo: process.env.OPENAI_MODELO_MIDIA || process.env.OPENAI_MODEL,
+    })).descricao;
+
+    const { error } = await supabase.from('mensagens').update({ midia_descricao: descricao, midia_hash: hash }).eq('id', msg.id);
+    if (error) throw error;
 }
 
 /**
@@ -359,8 +400,11 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     const { data: perfil } = await supabase.from('profiles').select('unidade_id')
         .eq('id', conversa.user_id).maybeSingle<{ unidade_id: string | null }>();
     const unidadeId = perfil?.unidade_id ?? conversa.unidade_id;
+    // Imagem e documento por unidade (lib/midia.ts): desligada, a consulta e
+    // o transcript são os de antes, e as colunas novas nem são lidas.
+    const comMidia = midiaLigada(unidadeId, process.env.MIDIA_UNIDADES);
     const { data: mensagens, error } = await supabase.from('mensagens')
-        .select('direcao,tipo,conteudo,transcricao,automatica,enviada_em')
+        .select(`direcao,tipo,conteudo,transcricao,automatica,enviada_em${comMidia ? ',midia_nome,midia_descricao' : ''}`)
         .eq('conversa_id', conversaId).gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString())
         .order('enviada_em').returns<MensagemAnalise[]>();
     if (error) throw error;
@@ -391,7 +435,7 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     const comDetalhe = detalheLigado(unidadeId, process.env.MEC_DETALHE_UNIDADES);
     const doutrina = await doutrinaMec(supabase, comDetalhe);
     const itensDetalhe = doutrina.playbookId && comDetalhe ? doutrina.itens : null;
-    const analise = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe });
+    const analise = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe, midia: comMidia });
     const { modelo, entrada, saida } = analise;
     const resultado = ajustarAcolhida(analise.resultado, { retomada, invisivel: saudacaoInvisivel(recorte) });
     // As provas do detalhe são conferidas contra a conversa antes de gravar
