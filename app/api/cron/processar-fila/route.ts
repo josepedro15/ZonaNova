@@ -18,9 +18,15 @@ import { Crpro, enviarLead } from '@/lib/crpro/cliente';
 
 export const maxDuration = 300;
 
-// Quatro análises reais levaram ~40s. O pg_net espera no máximo 60s; lote
-// maior fazia o banco registrar timeout apesar de a Vercel continuar rodando.
+// Itens pegos de uma vez, processados em paralelo. Quatro análises em série
+// levavam ~40s; em paralelo, ~10s.
 const LOTE = 4;
+
+// O pg_net espera no máximo 60s pela resposta; passando disso o banco registra
+// timeout apesar de a Vercel continuar rodando. O worker pega lotes novos
+// enquanto couber neste orçamento — com 4 itens por execução (48/h) a fila
+// perdia para as transcrições do pico e a análise do meio-dia saía 2h depois.
+const ORCAMENTO_LOTES_MS = 40_000;
 
 // Acima de maxDuration com folga: item `processando` há mais que isso não tem
 // mais nenhuma função trabalhando nele.
@@ -51,11 +57,17 @@ export async function GET(req: Request) {
         return 0;
     });
 
-    let fila: Record<string, unknown>;
+    const fila: Record<string, number> = { lotes: 0, pegos: 0, concluidos: 0, falhados: 0, reagendados: 0, reenfileirados: 0 };
     try {
-        fila = await processarLote(supabase, agora);
+        while (Date.now() - agora.getTime() < ORCAMENTO_LOTES_MS) {
+            const lote = await processarLote(supabase, new Date());
+            if ('aguardando' in lote) return Response.json({ ...lote, resgatados });
+            fila.lotes++;
+            for (const [k, v] of Object.entries(lote)) if (typeof v === 'number') fila[k] = (fila[k] ?? 0) + v;
+            if (!lote.pegos) break;
+        }
     } catch (e) {
-        return Response.json({ erro: String(e) }, { status: 500 });
+        return Response.json({ erro: String(e), ...fila }, { status: 500 });
     }
 
     const entradas = await drenarEntradas(new Date(agora.getTime() + PRAZO_DRENO_MS)).catch((e) => {
@@ -107,61 +119,62 @@ async function processarLote(supabase: Admin, agora: Date): Promise<Record<strin
         : claim;
 
     const meus = new Set((pegos ?? []).map((p) => p.id));
-    let concluidos = 0, falhados = 0, reagendados = 0, reenfileirados = 0;
+    // Cada item do lote é independente (uma linha da fila): rodam juntos.
+    const desfechos = await Promise.all(candidatos.filter((c) => meus.has(c.id)).map((item) => processarItem(supabase, item, apiKey)));
+    const contar = (d: string) => desfechos.filter((x) => x === d).length;
+    return { pegos: meus.size, concluidos: contar('concluido'), falhados: contar('falhou'), reagendados: contar('pendente'), reenfileirados: contar('reenfileirado') };
+}
 
-    for (const item of candidatos.filter((c) => meus.has(c.id))) {
-        // Começa limpando a marca de reabertura: o que for reaberto a partir
-        // daqui mudou DEPOIS do início desta execução, e só isso justifica
-        // rodar o item de novo (ver 0017). Se a linha não está mais em
-        // `processando`, alguém a resgatou — não é mais nossa.
-        const { data: ainda } = await supabase.from('fila_processamento').update({ reaberto: false })
-            .eq('id', item.id).eq('status', 'processando').select('id');
-        if (!ainda?.length) continue;
+type ItemFila = { id: string; tipo: ItemTipo; referencia_id: string; data_ref: string; tentativas: number };
 
-        let desfecho: Record<string, unknown>;
-        let encadeia = true;
-        let encadeiaSeMudou = true;
-        try {
-            if (item.tipo === 'transcricao') await transcreverMensagem(supabase, item.referencia_id, apiKey!);
-            else if (item.tipo === 'descricao_midia') await descreverMensagem(supabase, item.referencia_id, apiKey!);
-            else if (item.tipo === 'analise_conversa') encadeiaSeMudou = await analisarItem(supabase, item.referencia_id, item.data_ref);
-            else if (item.tipo === 'relatorio_vendedor') await consolidarItem(supabase, item.referencia_id, item.data_ref);
-            else if (item.tipo === 'rollup_unidade') await rollupUnidade(supabase, item.referencia_id, item.data_ref);
-            else if (item.tipo === 'rollup_rede') await rollupRede(supabase, item.data_ref);
-            else if (item.tipo === 'envio_crm') await enviarAoCrmItem(supabase, item.referencia_id, item.data_ref);
-            desfecho = { status: 'concluido', processado_em: new Date().toISOString() };
-            encadeia = encadeiaSeMudou;
-        } catch (e) {
-            if (e instanceof IgnorarItem) {
-                desfecho = { status: 'ignorado', ultimo_erro: e.message, processado_em: new Date().toISOString() };
-            } else {
-                // Resposta cortada da OpenAI: na análise se repete igual e
-                // desiste já; no relatório, tenta de novo (ver `aposFalhaDoItem`).
-                const falha = aposFalhaDoItem(item.tipo, e instanceof RespostaIncompleta, item.tentativas);
-                desfecho = {
-                    status: falha.status,
-                    tentativas: falha.tentativas,
-                    ultimo_erro: String(e).slice(0, 500),
-                    ...('proximaTentativaEm' in falha
-                        ? { proxima_tentativa_em: falha.proximaTentativaEm.toISOString() }
-                        : { processado_em: new Date().toISOString() }),
-                };
-                // Retry não encadeia: o próximo passo espera. Falha definitiva
-                // encadeia — o relatório sai sem esta conversa em vez de nunca.
-                encadeia = falha.status === 'falhou';
-            }
+async function processarItem(supabase: Admin, item: ItemFila, apiKey: string | undefined): Promise<string | null> {
+    // Começa limpando a marca de reabertura: o que for reaberto a partir
+    // daqui mudou DEPOIS do início desta execução, e só isso justifica
+    // rodar o item de novo (ver 0017). Se a linha não está mais em
+    // `processando`, alguém a resgatou — não é mais nossa.
+    const { data: ainda } = await supabase.from('fila_processamento').update({ reaberto: false })
+        .eq('id', item.id).eq('status', 'processando').select('id');
+    if (!ainda?.length) return null;
+
+    let desfecho: Record<string, unknown>;
+    let encadeia = true;
+    let encadeiaSeMudou = true;
+    try {
+        if (item.tipo === 'transcricao') await transcreverMensagem(supabase, item.referencia_id, apiKey!);
+        else if (item.tipo === 'descricao_midia') await descreverMensagem(supabase, item.referencia_id, apiKey!);
+        else if (item.tipo === 'analise_conversa') encadeiaSeMudou = await analisarItem(supabase, item.referencia_id, item.data_ref);
+        else if (item.tipo === 'relatorio_vendedor') await consolidarItem(supabase, item.referencia_id, item.data_ref);
+        else if (item.tipo === 'rollup_unidade') await rollupUnidade(supabase, item.referencia_id, item.data_ref);
+        else if (item.tipo === 'rollup_rede') await rollupRede(supabase, item.data_ref);
+        else if (item.tipo === 'envio_crm') await enviarAoCrmItem(supabase, item.referencia_id, item.data_ref);
+        desfecho = { status: 'concluido', processado_em: new Date().toISOString() };
+        encadeia = encadeiaSeMudou;
+    } catch (e) {
+        if (e instanceof IgnorarItem) {
+            desfecho = { status: 'ignorado', ultimo_erro: e.message, processado_em: new Date().toISOString() };
+        } else {
+            // Resposta cortada da OpenAI: na análise se repete igual e
+            // desiste já; no relatório, tenta de novo (ver `aposFalhaDoItem`).
+            const falha = aposFalhaDoItem(item.tipo, e instanceof RespostaIncompleta, item.tentativas);
+            desfecho = {
+                status: falha.status,
+                tentativas: falha.tentativas,
+                ultimo_erro: String(e).slice(0, 500),
+                ...('proximaTentativaEm' in falha
+                    ? { proxima_tentativa_em: falha.proximaTentativaEm.toISOString() }
+                    : { processado_em: new Date().toISOString() }),
+            };
+            // Retry não encadeia: o próximo passo espera. Falha definitiva
+            // encadeia — o relatório sai sem esta conversa em vez de nunca.
+            encadeia = falha.status === 'falhou';
         }
-
-        const fechado = await fechar(supabase, item.id, desfecho);
-        if (fechado === 'reenfileirado') { reenfileirados++; continue; }
-        if (fechado === 'perdido') continue;
-        if (encadeia) await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
-        if (desfecho.status === 'concluido') concluidos++;
-        else if (desfecho.status === 'falhou') falhados++;
-        else if (desfecho.status === 'pendente') reagendados++;
     }
 
-    return { pegos: meus.size, concluidos, falhados, reagendados, reenfileirados };
+    const fechado = await fechar(supabase, item.id, desfecho);
+    if (fechado === 'reenfileirado') return 'reenfileirado';
+    if (fechado === 'perdido') return null;
+    if (encadeia) await encadearSemFalhar(supabase, item.tipo, item.referencia_id, item.data_ref);
+    return String(desfecho.status);
 }
 
 type Admin = ReturnType<typeof criarClienteAdmin>;
