@@ -18,9 +18,10 @@ import { Crpro, enviarLead } from '@/lib/crpro/cliente';
 
 export const maxDuration = 300;
 
-// Itens pegos de uma vez, processados em paralelo. Quatro análises em série
-// levavam ~40s; em paralelo, ~10s.
-const LOTE = 4;
+// Itens pegos de uma vez, processados em paralelo. Uma análise leva ~12s; o
+// lote demora o que demora o item mais lento, então 8 juntos cabem ~3 vezes
+// no orçamento abaixo.
+const LOTE = 8;
 
 // O pg_net espera no máximo 60s pela resposta; passando disso o banco registra
 // timeout apesar de a Vercel continuar rodando. O worker pega lotes novos
