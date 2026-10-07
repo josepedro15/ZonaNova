@@ -22,14 +22,19 @@ export const schemaConsolidado = z.object({
     alertas: z.array(z.string()),
 });
 
+/** Itens por lista do relatório do vendedor: o gestor lê os principais, não o inventário. */
+export const MAX_ITENS_LISTA = 5;
+
 export const schemaJsonConsolidado = {
     type: 'object', additionalProperties: false,
     required: ['resumo','melhorias','elogio','desafio','padroes_sucesso','padroes_falha','objecoes_frequentes','alertas'],
     properties: {
         resumo: { type: 'string' }, melhorias: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'string' } },
         elogio: { type: 'string' }, desafio: { type: 'string' },
-        padroes_sucesso: { type: 'array', items: { type: 'string' } }, padroes_falha: { type: 'array', items: { type: 'string' } },
-        objecoes_frequentes: { type: 'array', items: { type: 'string' } }, alertas: { type: 'array', items: { type: 'string' } },
+        // Listas com teto: sem ele, num dia com muitas conversas o modelo
+        // repetia itens até estourar o max_output_tokens (Vendas Xangri-Lá, 06/10).
+        padroes_sucesso: { type: 'array', maxItems: MAX_ITENS_LISTA, items: { type: 'string' } }, padroes_falha: { type: 'array', maxItems: MAX_ITENS_LISTA, items: { type: 'string' } },
+        objecoes_frequentes: { type: 'array', maxItems: MAX_ITENS_LISTA, items: { type: 'string' } }, alertas: { type: 'array', maxItems: MAX_ITENS_LISTA, items: { type: 'string' } },
     },
 } as const;
 

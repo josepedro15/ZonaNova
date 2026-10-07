@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { schemaConsolidado, schemaJsonConsolidado } from '../../lib/consolidacao.ts';
+import { MAX_ITENS_LISTA, schemaConsolidado, schemaJsonConsolidado } from '../../lib/consolidacao.ts';
 
 /** Todas as chaves `maxLength` do schema, com o caminho de cada uma. */
 function limitesDeTexto(no: unknown, caminho = '$'): string[] {
@@ -31,4 +31,11 @@ test('resumo de duas frases acima de 320 caracteres é aceito inteiro', () => {
 test('a consolidação continua exigindo exatamente três melhorias', () => {
     const base = { resumo: 'r', elogio: 'e', desafio: 'd', padroes_sucesso: [], padroes_falha: [], objecoes_frequentes: [], alertas: [] };
     assert.throws(() => schemaConsolidado.parse({ ...base, melhorias: ['a', 'b'] }));
+});
+
+// Sem teto nas listas, o modelo repetia itens até cortar a resposta.
+test('toda lista do relatório tem teto de itens', () => {
+    for (const [campo, def] of Object.entries(schemaJsonConsolidado.properties)) {
+        if ((def as { type: string }).type === 'array') assert.ok((def as { maxItems?: number }).maxItems && (def as { maxItems: number }).maxItems <= MAX_ITENS_LISTA, campo);
+    }
 });
