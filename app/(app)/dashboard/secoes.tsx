@@ -6,7 +6,7 @@ import {
 } from '@/components/ui';
 import { comparaTempo, listaDeTextos, rotuloPerfilCliente, setaDoTom, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
 import { ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
-import { esperaDoCliente, esperaEmTexto, linkWhatsapp, telefoneBonito, type Msg } from '@/lib/painel';
+import { esperaDoCliente, esperaEmTexto, linkResponder, type Aparelho, telefoneBonito, type Msg } from '@/lib/painel';
 import { DIAS_PARA_RETOMAR, type ItemRetomar } from '@/lib/retomar';
 import { dataCurtaBrasilia, horaBrasilia } from './formato';
 
@@ -50,9 +50,11 @@ export function temConteudoDeTreino(c: Coaching): boolean {
  * Web. Contato `@lid` não tem telefone, e um link com aqueles dígitos abriria
  * uma pessoa qualquer; aí vai para a conversa no painel.
  */
-function destinoResponder(c: { id: string; cliente_telefone: string }, celular: boolean): { href: string; target?: string; rel?: string } {
-    const href = linkWhatsapp(c.cliente_telefone, celular);
-    return href ? { href, target: '_blank', rel: 'noopener noreferrer' } : { href: `/conversas/${c.id}` };
+function destinoResponder(c: { id: string; cliente_telefone: string }, aparelho: Aparelho): { href: string; target?: string; rel?: string } {
+    const href = linkResponder(c.cliente_telefone, aparelho);
+    if (!href) return { href: `/conversas/${c.id}` };
+    // O app do computador abre pelo esquema `whatsapp:`; aba nova ficaria em branco.
+    return aparelho === 'app' ? { href } : { href, target: '_blank', rel: 'noopener noreferrer' };
 }
 
 /** A última coisa que o cliente disse, para o item da fila ter contexto. */
@@ -95,8 +97,8 @@ export function AvisoAprovacoes({ pendentes }: { pendentes: number }) {
 
 const VISIVEIS = 5;
 
-function ItemEspera({ conversa, espera, celular }: { conversa: ConversaComMensagens; espera: number; celular: boolean }) {
-    const destino = destinoResponder(conversa, celular);
+function ItemEspera({ conversa, espera, aparelho }: { conversa: ConversaComMensagens; espera: number; aparelho: Aparelho }) {
+    const destino = destinoResponder(conversa, aparelho);
     const analise = [...(conversa.analises_conversa ?? [])].sort((a, b) => b.data_ref.localeCompare(a.data_ref))[0];
     const urgente = urgenciaAlta(analise?.urgencia);
     const potencialAlto = analise?.potencial_venda === 'alto';
@@ -121,8 +123,8 @@ function ItemEspera({ conversa, espera, celular }: { conversa: ConversaComMensag
     );
 }
 
-export function EsperandoVoce({ className = '', titulo, esperando, celular }: {
-    className?: string; titulo: string; esperando: { conversa: ConversaComMensagens; espera: number }[]; celular: boolean;
+export function EsperandoVoce({ className = '', titulo, esperando, aparelho }: {
+    className?: string; titulo: string; esperando: { conversa: ConversaComMensagens; espera: number }[]; aparelho: Aparelho;
 }) {
     return (
         <Cartao className={`flex flex-col gap-2 ${className}`}>
@@ -132,14 +134,14 @@ export function EsperandoVoce({ className = '', titulo, esperando, celular }: {
                     {esperando.length ? 'O cliente falou por último e ninguém respondeu. Quem espera há mais tempo vem primeiro.' : 'Ninguém esperando resposta agora.'}
                 </p>
             </div>
-            {esperando.length > 0 && <ul className="flex flex-col">{esperando.slice(0, VISIVEIS).map((e) => <ItemEspera key={e.conversa.id} {...e} celular={celular} />)}</ul>}
+            {esperando.length > 0 && <ul className="flex flex-col">{esperando.slice(0, VISIVEIS).map((e) => <ItemEspera key={e.conversa.id} {...e} aparelho={aparelho} />)}</ul>}
             {esperando.length > VISIVEIS && (
                 // O selo conta todos; sem isto, "20" ao lado de cinco itens parecia erro de conta.
                 <details className="group">
                     <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-azul group-open:hidden">
                         Ver os outros {esperando.length - VISIVEIS}<Icone nome="seta_direita" tamanho={14} />
                     </summary>
-                    <ul className="flex flex-col">{esperando.slice(VISIVEIS).map((e) => <ItemEspera key={e.conversa.id} {...e} celular={celular} />)}</ul>
+                    <ul className="flex flex-col">{esperando.slice(VISIVEIS).map((e) => <ItemEspera key={e.conversa.id} {...e} aparelho={aparelho} />)}</ul>
                 </details>
             )}
         </Cartao>
@@ -151,9 +153,9 @@ export type AcaoRetomar = { proxima_acao?: string; perfil_cliente?: string; prof
 
 export const chaveRetomar = (i: ItemRetomar) => `${i.conversa.id}|${i.analise.data_ref}`;
 
-function ItemRetomarContato({ item, acao, celular }: { item: ItemRetomar; acao?: AcaoRetomar; celular: boolean }) {
+function ItemRetomarContato({ item, acao, aparelho }: { item: ItemRetomar; acao?: AcaoRetomar; aparelho: Aparelho }) {
     const { conversa, dias, analise } = item;
-    const destino = destinoResponder(conversa, celular);
+    const destino = destinoResponder(conversa, aparelho);
     const perfil = rotuloPerfilCliente(acao?.perfil_cliente, acao?.profissao_cliente);
     return (
         <li className="border-t border-linha-2">
@@ -176,10 +178,10 @@ function ItemRetomarContato({ item, acao, celular }: { item: ItemRetomar; acao?:
     );
 }
 
-export function RetomarContato({ className = '', itens, acoes, celular }: {
-    className?: string; itens: ItemRetomar[]; acoes: Map<string, AcaoRetomar>; celular: boolean;
+export function RetomarContato({ className = '', itens, acoes, aparelho }: {
+    className?: string; itens: ItemRetomar[]; acoes: Map<string, AcaoRetomar>; aparelho: Aparelho;
 }) {
-    const item = (i: ItemRetomar) => <ItemRetomarContato key={i.conversa.id} item={i} acao={acoes.get(chaveRetomar(i))} celular={celular} />;
+    const item = (i: ItemRetomar) => <ItemRetomarContato key={i.conversa.id} item={i} acao={acoes.get(chaveRetomar(i))} aparelho={aparelho} />;
     return (
         <Cartao className={`flex flex-col gap-2 ${className}`}>
             <div>

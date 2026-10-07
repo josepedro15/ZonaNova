@@ -6,7 +6,8 @@ import { cifrar, decifrar } from '@/lib/crypto';
 import { tokenDeRota } from '@/lib/uazapi/rota';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { APP_URL } from '@/lib/env';
-import { telefoneE164, variantesTelefone } from '@/lib/painel';
+import { COOKIE_WHATSAPP_APP, telefoneE164, variantesTelefone } from '@/lib/painel';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { desligarWhatsappDe } from '@/lib/desligar';
 import { liberarConversas } from '@/lib/exclusao-dados';
@@ -224,4 +225,16 @@ export async function desbloquearContato(form: FormData) {
     revalidatePath('/perfil');
     revalidatePath('/dashboard');
     revalidatePath('/conversas');
+}
+
+/**
+ * No computador, "Responder" abre o WhatsApp Web ou o app instalado. Escolha
+ * do aparelho, não da conta: fica num cookie, e cada computador guarda a sua.
+ */
+export async function escolherWhatsappComputador(form: FormData) {
+    const app = form.get('destino') === 'app';
+    const jar = await cookies();
+    if (app) jar.set(COOKIE_WHATSAPP_APP, 'app', { path: '/', maxAge: 60 * 60 * 24 * 365, sameSite: 'lax', httpOnly: true, secure: true });
+    else jar.delete(COOKIE_WHATSAPP_APP);
+    revalidatePath('/perfil');
 }

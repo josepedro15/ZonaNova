@@ -161,15 +161,31 @@ export function ehCelular(userAgent: string | null | undefined): boolean {
     return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent ?? '');
 }
 
+/** Cookie da escolha, no computador, entre WhatsApp Web e o app instalado. */
+export const COOKIE_WHATSAPP_APP = 'zn_whatsapp_app';
+
+/** Onde a pessoa responde: celular (wa.me), WhatsApp Web ou o app do computador. */
+export type Aparelho = 'celular' | 'web' | 'app';
+
+export function aparelhoDe(userAgent: string | null | undefined, escolha: string | undefined): Aparelho {
+    if (ehCelular(userAgent)) return 'celular';
+    return escolha === 'app' ? 'app' : 'web';
+}
+
+export const linkResponder = (telefone: string, aparelho: Aparelho) => linkWhatsapp(telefone, aparelho === 'celular', aparelho === 'app');
+
 /**
  * Para onde "Responder" leva. No celular, `wa.me` abre o app na conversa; no
  * computador ele para numa página intermediária, então vai direto ao WhatsApp
- * Web. Contato `@lid` não tem número: null, e quem chama decide o destino.
+ * Web — ou, para quem escolheu no Perfil, ao app instalado (`whatsapp://`):
+ * o app da Microsoft Store abria pelo link do Web, mas sem ir à conversa.
+ * Contato `@lid` não tem número: null, e quem chama decide o destino.
  */
-export function linkWhatsapp(telefone: string, celular: boolean): string | null {
+export function linkWhatsapp(telefone: string, celular: boolean, appNoComputador = false): string | null {
     if (semTelefone(telefone)) return null;
     const d = telefone.replace(/\D/g, '');
-    return celular ? `https://wa.me/${d}` : `https://web.whatsapp.com/send?phone=${d}`;
+    if (celular) return `https://wa.me/${d}`;
+    return appNoComputador ? `whatsapp://send?phone=${d}` : `https://web.whatsapp.com/send?phone=${d}`;
 }
 
 /**

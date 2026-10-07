@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { CabecalhoPagina, EstadoVazio, Icone, Pagina, RotuloSecao, Selo, Shell, type DiaSerie } from '@/components/ui';
-import { desde, diasAte, ehCelular, esperaNaLista, foiRespondido, primeiroNome, respostaMediaEmMinutos, temposDeResposta } from '@/lib/painel';
+import { aparelhoDe, COOKIE_WHATSAPP_APP, desde, diasAte, esperaNaLista, foiRespondido, primeiroNome, respostaMediaEmMinutos, temposDeResposta } from '@/lib/painel';
 import { dataEmSaoPaulo } from '@/lib/analise';
 import { media } from '@/lib/visual';
 import { variacaoSemanal } from '@/lib/derivacoes';
@@ -26,7 +26,7 @@ export default async function Dashboard() {
     // Sete dias para trás: a fila precisa alcançar quem ficou de ontem.
     const janela = new Date(comeco.getTime() - 7 * 24 * 60 * 60 * 1000);
     const dataRef = dataEmSaoPaulo(agora);
-    const celular = ehCelular((await headers()).get('user-agent'));
+    const aparelho = aparelhoDe((await headers()).get('user-agent'), (await cookies()).get(COOKIE_WHATSAPP_APP)?.value);
     const frias = janelaRetomar(agora);
 
     // Tudo já passou pela RLS. Ver tests/rls.sql.
@@ -120,8 +120,8 @@ export default async function Dashboard() {
                 <div className="grid gap-5 xl:grid-cols-12 xl:items-start">
                     <div className="flex flex-col gap-4 xl:col-span-5">
                         <RotuloSecao complemento="ao vivo">Agora</RotuloSecao>
-                        <EsperandoVoce esperando={esperando} celular={celular} titulo={deHoje.length === 0 ? 'Ficou de ontem' : 'Esperando você'} />
-                        <RetomarContato itens={retomar} acoes={acoes} celular={celular} />
+                        <EsperandoVoce esperando={esperando} aparelho={aparelho} titulo={deHoje.length === 0 ? 'Ficou de ontem' : 'Esperando você'} />
+                        <RetomarContato itens={retomar} acoes={acoes} aparelho={aparelho} />
                         <HojeAteAgora conversas={deHoje.length} respostaMedia={respostaMedia}
                                       respostaOntemMin={respostaOntem == null ? null : Math.round(Number(respostaOntem) / 60)}
                                       taxa={taxa} respondidos={respondidos} escreveram={comFala.length}

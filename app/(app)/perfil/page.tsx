@@ -3,9 +3,10 @@ import { redirect } from 'next/navigation';
 import AppShell from '@/components/app-shell';
 import DesconectarWhatsapp from '@/components/desconectar-whatsapp';
 import { criarClienteServidor } from '@/lib/supabase/server';
-import { telefoneBonito } from '@/lib/painel';
+import { COOKIE_WHATSAPP_APP, telefoneBonito } from '@/lib/painel';
 import { conexaoObrigatoria } from '@/lib/conexao';
-import { bloquearContato, desbloquearContato } from '@/app/actions/conexao';
+import { bloquearContato, desbloquearContato, escolherWhatsappComputador } from '@/app/actions/conexao';
+import { cookies } from 'next/headers';
 import { ContatosInternos } from './contatos-internos';
 import { TrocarSenha } from './trocar-senha';
 
@@ -16,6 +17,7 @@ export default async function PerfilPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect('/login');
 
+    const appNoComputador = (await cookies()).get(COOKIE_WHATSAPP_APP)?.value === 'app';
     const [{ data: perfil }, { data: conexao }, { data: bloqueados }] = await Promise.all([
         supabase.from('profiles').select('nome,email,telefone,role,unidades!profiles_unidade_id_fkey(nome)').eq('id', user.id)
             .single<{ nome: string; email: string; telefone: string | null; role: 'vendedor'|'gestor'|'supervisor'|'admin'; unidades: { nome: string } | null }>(),
@@ -66,6 +68,17 @@ export default async function PerfilPage() {
                 </section>
 
                 {perfil.role !== 'vendedor' && <ContatosInternos supabase={supabase} userId={user.id} role={perfil.role} />}
+
+                <section className="mt-5 rounded-card border border-linha bg-superficie p-5">
+                    <h2 className="display text-lg font-semibold">Responder pelo computador</h2>
+                    <p className="mt-1 text-[12px] text-tinta-2">Para onde o botão Responder leva neste computador. Use o app se você tem o WhatsApp instalado no Windows ou no Mac; no celular, abre sempre o app.</p>
+                    <form action={escolherWhatsappComputador} className="mt-4 flex flex-wrap gap-2">
+                        {([['web', 'WhatsApp Web (navegador)'], ['app', 'App do computador']] as const).map(([valor, rotulo]) => {
+                            const ativo = (appNoComputador ? 'app' : 'web') === valor;
+                            return <button key={valor} name="destino" value={valor} aria-pressed={ativo} className={`rounded-[9px] border px-4 py-2 text-xs font-semibold ${ativo ? 'border-petroleo bg-petroleo text-papel' : 'border-linha-campo text-tinta'}`}>{rotulo}</button>;
+                        })}
+                    </form>
+                </section>
 
                 <TrocarSenha email={user.email ?? perfil.email} />
 

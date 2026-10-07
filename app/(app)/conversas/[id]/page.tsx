@@ -1,10 +1,10 @@
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import {
     Avatar, Barra, Botao, BotaoCopiar, BotaoLink, CabecalhoPagina, Cartao, Numero, Pagina, SELO, Selo, Shell,
 } from '@/components/ui';
 import { contextoApp, dataCurta } from '@/lib/contexto-app';
-import { ehCelular, esperaDoCliente, esperaEmTexto, linkWhatsapp, telefoneBonito } from '@/lib/painel';
+import { aparelhoDe, COOKIE_WHATSAPP_APP, esperaDoCliente, esperaEmTexto, linkResponder, telefoneBonito } from '@/lib/painel';
 import { aderenciaPercentual } from '@/lib/analise';
 import { grifarConversa, listaDeTextos, rotuloPerfilCliente, rotuloPotencial, STATUS_CONVERSA, TIPO_CONVERSA, tomEspera, urgenciaAlta, type Tom } from '@/lib/visual';
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
@@ -56,7 +56,8 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
         .eq('id', id).eq('bloqueada', false).maybeSingle();
     // Bloqueada some para todo mundo, inclusive por link direto.
     if (!conversa) notFound();
-    const responder = linkWhatsapp(conversa.cliente_telefone, ehCelular((await headers()).get('user-agent')));
+    const aparelho = aparelhoDe((await headers()).get('user-agent'), (await cookies()).get(COOKIE_WHATSAPP_APP)?.value);
+    const responder = linkResponder(conversa.cliente_telefone, aparelho);
     const { data: analise } = await supabase.from('analises_conversa').select('*').eq('conversa_id', id)
         .order('data_ref', { ascending: false }).limit(1).maybeSingle();
     // O MEC do MESMO dia da análise exibida.

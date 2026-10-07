@@ -19,6 +19,10 @@ export function BotaoLink({ href, externo = false, variante = 'primario', classN
     href: string; externo?: boolean; variante?: keyof typeof VARIANTE; className?: string; children: ReactNode;
 }) {
     const classe = `${BASE} ${VARIANTE[variante]} ${className}`;
+    // Esquema de app (whatsapp://): abre o programa; aba nova ficaria em branco.
+    if (!/^https?:/i.test(href) && !href.startsWith('/')) {
+        return <a href={href} className={classe}>{children}<Icone nome="externo" tamanho={14} /></a>;
+    }
     if (externo) {
         return <a href={href} target="_blank" rel="noopener noreferrer" className={classe}>{children}<Icone nome="externo" tamanho={14} /></a>;
     }

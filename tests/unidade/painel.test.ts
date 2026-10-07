@@ -266,3 +266,10 @@ test('fechamento sem nenhum valor deixa a média vazia, não zero', () => {
     assert.equal(r.score_geral, null);
     assert.equal(r.tempo_medio_resposta_s, null);
 });
+
+// O app do WhatsApp para Windows abria pelo link do Web, mas sem ir à conversa.
+test('no computador, quem escolheu o app recebe whatsapp://; no celular nada muda', () => {
+    assert.equal(linkWhatsapp('5554998124471', false, true), 'whatsapp://send?phone=5554998124471');
+    assert.equal(linkWhatsapp('5554998124471', true, true), 'https://wa.me/5554998124471');
+    assert.equal(linkWhatsapp('lid:123456789', false, true), null);
+});

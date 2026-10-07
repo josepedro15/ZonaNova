@@ -25,8 +25,11 @@ export const REGRA_ESCALAS = '- ESCALAS: score_atendimento, score_oportunidade, 
  * O status também nunca foi definido: preço informado com um "obrigada" do
  * cliente saía venda_feita, e a próxima ação mandava "registrar a venda".
  */
-export const REGRA_STATUS = '- STATUS: venda_feita só com compra confirmada na conversa — pedido fechado ou liberado, pagamento combinado ou feito, "pode separar/faturar/mandar", retirada ou entrega de algo comprado. '
-    + 'Preço ou orçamento enviado, cliente que agradece ou diz que vai ver = em_andamento. perdida = cliente desistiu ou comprou em outro lugar. lead_frio = sumiu sem decidir depois de receber o que pediu. encerrada = assunto resolvido sem venda em jogo (dúvida, pós-venda, troca).';
+export const REGRA_STATUS = '- STATUS: venda_feita só quando a compra é FECHADA nesta conversa do dia: pedido fechado ou liberado, pagamento combinado ou feito agora. '
+    + 'Cliente que pede para separar, reservar, faturar ou mandar ("separa pra mim esse pedido", "pode mandar", "vou buscar") e vendedor que confirma ("certo", "deixo no pacote", "já separei", "liberado") = venda_feita, mesmo sem falar de pagamento. '
+    + 'Preço ou orçamento enviado, cliente que agradece ou diz que vai ver = em_andamento. '
+    + 'Pós-venda de compra feita antes (combinar entrega ou retirada do que já foi comprado, troca, devolução, defeito, nota) = encerrada quando resolvido, em_andamento se ficou pendente — nunca venda_feita: a venda já contou no dia em que foi fechada. '
+    + 'perdida = cliente desistiu ou comprou em outro lugar. lead_frio = sumiu sem decidir depois de receber o que pediu.';
 
 export function pedidoAnalise({ transcript, doutrina, itens, midia = false, modelo }: { transcript: string; doutrina: string; itens: readonly ItemPlaybook[] | null; midia?: boolean; modelo: string }) {
     const schema = montarSchemaAnalise(itens);
