@@ -116,3 +116,29 @@ test('canal do WhatsApp é descartado', () => {
 test('contato @lid vira lid:<dígitos>', () => {
     assert.equal(ok(normalizarMensagem(base({ chatid: '123456789012345@lid' }))).clienteTelefone, 'lid:123456789012345');
 });
+
+// Na mídia, a UAZAPI manda em `content` o objeto da mensagem do WhatsApp. O
+// nome do documento ("orçamento.pdf") é o que a análise consegue usar de graça.
+test('documento traz o nome do arquivo; o objeto da mídia não vira texto', () => {
+    const m = ok(normalizarMensagem(base({
+        messageType: 'documentMessage', text: '',
+        content: { fileName: 'orçamento dos cromados.pdf', mimetype: 'application/pdf' },
+    })));
+    assert.equal(m.tipo, 'documento');
+    assert.equal(m.midiaNome, 'orçamento dos cromados.pdf');
+    assert.equal(m.conteudo, null);
+});
+
+test('nome do arquivo também pelos apelidos, limpo e curto', () => {
+    assert.equal(ok(normalizarMensagem(base({ messageType: 'document', fileName: ' a\nb.pdf ' }))).midiaNome, 'a b.pdf');
+    assert.equal(ok(normalizarMensagem(base({ messageType: 'document', content: { title: 'Pedido 77' } }))).midiaNome, 'Pedido 77');
+    const longo = ok(normalizarMensagem(base({ messageType: 'document', fileName: `${'x'.repeat(200)}.pdf` }))).midiaNome!;
+    assert.equal(longo.length, 121);
+});
+
+test('legenda da mídia ainda é o texto; imagem não tem nome de arquivo', () => {
+    const m = ok(normalizarMensagem(base({ messageType: 'imageMessage', text: undefined, content: { caption: 'foto da laje', fileName: 'IMG-1.jpg' } })));
+    assert.equal(m.conteudo, 'foto da laje');
+    assert.equal(m.midiaNome, null);
+    assert.equal(ok(normalizarMensagem(base())).midiaNome, null);
+});

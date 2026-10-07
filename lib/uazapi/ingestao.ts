@@ -2,6 +2,7 @@ import 'server-only';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { variantesTelefone } from '@/lib/painel';
 import { valeTranscrever } from '@/lib/transcricao';
+import { valeDescrever } from '@/lib/midia';
 import { mensagensDoEvento, normalizarMensagem, statusDeConexao, type EventoUazapi, type MensagemUazapi } from '@/lib/uazapi/normalizar';
 
 /**
@@ -91,34 +92,39 @@ async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
     // em wa_message_id é quem garante; aqui só se pede para não reclamar.
     // `ultima_mensagem_em` e `total_mensagens` são mantidos por trigger (0005)
     // justamente para a reentrega não inflar contador.
-    const { error: erroMensagem } = await supabase
-        .from('mensagens')
-        .upsert(
-            {
-                conversa_id: conversa.id,
-                wa_message_id: m.waMessageId,
-                direcao: m.direcao,
-                tipo: m.tipo,
-                conteudo: m.conteudo,
-                midia_url: m.midiaUrl,
-                automatica: m.automatica,
-                enviada_em: m.enviadaEm.toISOString(),
-            },
-            { onConflict: 'wa_message_id', ignoreDuplicates: true },
-        );
+    const linha = {
+        conversa_id: conversa.id,
+        wa_message_id: m.waMessageId,
+        direcao: m.direcao,
+        tipo: m.tipo,
+        conteudo: m.conteudo,
+        midia_url: m.midiaUrl,
+        automatica: m.automatica,
+        enviada_em: m.enviadaEm.toISOString(),
+    };
+    const gravar = (campos: Record<string, unknown>) => supabase.from('mensagens')
+        .upsert(campos, { onConflict: 'wa_message_id', ignoreDuplicates: true });
+    let { error: erroMensagem } = await gravar(m.midiaNome ? { ...linha, midia_nome: m.midiaNome } : linha);
+    // Sem a coluna (migration 0026 ainda não aplicada), grava sem o nome: perder
+    // o nome do arquivo é melhor que perder a mensagem.
+    if (erroMensagem && m.midiaNome && COLUNA_AUSENTE.has(erroMensagem.code)) ({ error: erroMensagem } = await gravar(linha));
 
     if (erroMensagem) throw erroMensagem;
 
     // Áudio antigo do histórico fica guardado, mas sem transcrição: ver `valeTranscrever`.
-    if (m.tipo === 'audio' && valeTranscrever(m.enviadaEm)) {
-        const { data: linha } = await supabase
+    // Imagem e documento só ganham descrição na unidade ligada (lib/midia.ts).
+    const fila = m.tipo === 'audio' && valeTranscrever(m.enviadaEm) ? 'transcricao'
+        : valeDescrever({ tipo: m.tipo, enviadaEm: m.enviadaEm, unidadeId: conexao.unidade_id }, process.env.MIDIA_UNIDADES) ? 'descricao_midia'
+        : null;
+    if (fila) {
+        const { data: gravada } = await supabase
             .from('mensagens').select('id').eq('wa_message_id', m.waMessageId)
             .maybeSingle<{ id: string }>();
-        if (linha) {
+        if (gravada) {
             await supabase.from('fila_processamento').upsert(
                 {
-                    tipo: 'transcricao',
-                    referencia_id: linha.id,
+                    tipo: fila,
+                    referencia_id: gravada.id,
                     data_ref: m.enviadaEm.toISOString().slice(0, 10),
                 },
                 { onConflict: 'tipo,referencia_id,data_ref', ignoreDuplicates: true },
@@ -126,6 +132,9 @@ async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
         }
     }
 }
+
+/** 42703 vem do Postgres; PGRST204 é como o PostgREST diz o mesmo. */
+const COLUNA_AUSENTE = new Set(['42703', 'PGRST204']);
 
 /** Uma linha que ficou em `webhook_entrada`: falhou ou não chegou a ser processada. */
 type Entrada = { id: string; conexao_id: string; payload: EventoUazapi; tentativas: number };

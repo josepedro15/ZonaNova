@@ -46,10 +46,10 @@ export function ipInterno(ip: string): boolean {
 }
 
 /**
- * A URL do áudio vem do payload do webhook. Autenticado, mas ainda assim dado
+ * A URL da mídia vem do payload do webhook ou da UAZAPI. Autenticado, mas ainda assim dado
  * de fora: se o token de uma rota vazasse, quem o tivesse faria o servidor
  * buscar o que quisesse. Só https, e nunca nome ou IP da rede interna. É a
- * checagem do texto; o que o nome resolve é conferido em `baixarAudio`.
+ * checagem do texto; o que o nome resolve é conferido em `baixarComSaltos`.
  */
 export function urlDeMidiaPermitida(bruta: string): URL | null {
     let url: URL;
@@ -71,7 +71,7 @@ const resolverDns: Resolver = async (host) => {
 const REDIRECIONAMENTOS = [301, 302, 303, 307, 308];
 
 /**
- * Baixa o áudio conferindo cada salto: a URL, o que o nome resolve e, em
+ * Baixa a mídia conferindo cada salto: a URL, o que o nome resolve e, em
  * redirecionamento, o destino — um `https://cdn-publico/x` que responde 302
  * para `http://169.254.169.254/` passava pela checagem do texto e o fetch
  * seguia sozinho.
@@ -80,28 +80,28 @@ const REDIRECIONAMENTOS = [301, 302, 303, 307, 308];
  * hostil que mude a resposta entre as duas (rebinding) ainda passa; fechar isso
  * exigiria conectar direto no IP conferido.
  */
-async function baixarAudio(bruta: string, buscar: typeof globalThis.fetch, resolver: Resolver): Promise<Response> {
+async function baixarComSaltos(bruta: string, buscar: typeof globalThis.fetch, resolver: Resolver): Promise<Response> {
     let atual = bruta;
     for (let salto = 0; salto <= 3; salto++) {
         const url = urlDeMidiaPermitida(atual);
-        if (!url) throw new Error('URL de áudio recusada: só https fora da rede interna');
+        if (!url) throw new Error('URL de mídia recusada: só https fora da rede interna');
         const host = url.hostname.replace(/^\[|\]$/g, '');
         const ips = /^[\d.]+$|:/.test(host) ? [host] : await resolver(host);
-        if (!ips.length || ips.some(ipInterno)) throw new Error('URL de áudio recusada: o nome aponta para a rede interna');
+        if (!ips.length || ips.some(ipInterno)) throw new Error('URL de mídia recusada: o nome aponta para a rede interna');
 
         const r = await buscar(url, { signal: AbortSignal.timeout(60_000), redirect: 'manual' });
         if (!REDIRECIONAMENTOS.includes(r.status)) return r;
         const destino = r.headers.get('location');
-        if (!destino) throw new Error(`áudio inacessível: ${r.status} sem destino`);
+        if (!destino) throw new Error(`mídia inacessível: ${r.status} sem destino`);
         atual = new URL(destino, url).toString();
     }
-    throw new Error('áudio inacessível: redirecionamentos demais');
+    throw new Error('mídia inacessível: redirecionamentos demais');
 }
 
 /** Lê o corpo parando no teto, sem confiar no content-length. */
 async function lerComTeto(r: Response, max: number): Promise<Uint8Array> {
     const declarado = Number(r.headers.get('content-length') ?? 0);
-    if (declarado > max) throw new Error(`áudio grande demais: ${declarado} bytes`);
+    if (declarado > max) throw new Error(`mídia grande demais: ${declarado} bytes`);
     if (!r.body) return new Uint8Array(await r.arrayBuffer());
     const leitor = r.body.getReader();
     const partes: Uint8Array[] = [];
@@ -112,13 +112,30 @@ async function lerComTeto(r: Response, max: number): Promise<Uint8Array> {
         total += value.byteLength;
         if (total > max) {
             await leitor.cancel();
-            throw new Error(`áudio grande demais: mais de ${max} bytes`);
+            throw new Error(`mídia grande demais: mais de ${max} bytes`);
         }
         partes.push(value);
     }
     const bytes = new Uint8Array(total);
     let pos = 0;
     for (const p of partes) { bytes.set(p, pos); pos += p.byteLength; }
+    return bytes;
+}
+
+/**
+ * Baixa uma mídia pela URL de fora (áudio, imagem, documento) com as mesmas
+ * travas: só https fora da rede interna, cada redirecionamento conferido e o
+ * corpo cortado no teto.
+ */
+export async function baixarMidiaSegura(
+    url: string,
+    max: number,
+    { buscar = globalThis.fetch, resolver = resolverDns }: { buscar?: typeof globalThis.fetch; resolver?: Resolver } = {},
+): Promise<Uint8Array> {
+    const r = await baixarComSaltos(url, buscar, resolver);
+    if (!r.ok) throw new Error(`mídia inacessível: ${r.status}`);
+    const bytes = await lerComTeto(r, max);
+    if (bytes.byteLength === 0) throw new Error('arquivo de mídia vazio');
     return bytes;
 }
 
@@ -140,10 +157,7 @@ export async function transcrever(
 ): Promise<ResultadoTranscricao> {
     const buscar = opcoes.buscar ?? globalThis.fetch;
 
-    const r = await baixarAudio(midiaUrl, buscar, opcoes.resolver ?? resolverDns);
-    if (!r.ok) throw new Error(`áudio inacessível: ${r.status}`);
-    const bytes = await lerComTeto(r, MAX_BYTES_AUDIO);
-    if (bytes.byteLength === 0) throw new Error('áudio vazio');
+    const bytes = await baixarMidiaSegura(midiaUrl, MAX_BYTES_AUDIO, { buscar, resolver: opcoes.resolver });
 
     const hash = hashDoAudio(bytes);
 
