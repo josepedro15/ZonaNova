@@ -141,6 +141,52 @@ export function janelaDoDia(dataRef: string): { inicio: Date; fim: Date } {
     return { inicio, fim: new Date(inicio.getTime() + 24 * 60 * 60 * 1000) };
 }
 
+/** Até quantos dias parada uma conversa ainda conta como a mesma negociação. */
+export const DIAS_EM_ANDAMENTO = 7;
+
+/**
+ * A análise vê só o recorte do dia. Sem saber que a negociação vinha de antes,
+ * a IA cobrava um "bom dia" no meio dela e marcava a acolhida como não
+ * aplicada. `ultimaAnterior` é a mensagem mais recente antes de `inicioDoDia`;
+ * parada há mais de uma semana, a volta do cliente é um novo atendimento.
+ */
+export function marcaRetomada(ultimaAnterior: string | null, inicioDoDia: Date): string | null {
+    if (!ultimaAnterior) return null;
+    const instante = new Date(ultimaAnterior);
+    if (inicioDoDia.getTime() - instante.getTime() > DIAS_EM_ANDAMENTO * 24 * 60 * 60 * 1000) return null;
+    const dia = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' }).format(instante);
+    return `[Conversa em andamento: última mensagem anterior em ${dia}]`;
+}
+
+/**
+ * A primeira resposta humana do vendedor no recorte é mídia sem texto (áudio
+ * sem transcrição, imagem sem legenda)? Então o "bom dia" pode estar ali e
+ * ninguém consegue ver.
+ */
+export function saudacaoInvisivel(mensagens: MensagemAnalise[]): boolean {
+    const primeira = mensagens.find((m) => m.direcao === 'saida' && !m.automatica);
+    if (!primeira || primeira.tipo === 'texto') return false;
+    return !(primeira.tipo === 'audio' ? primeira.transcricao : primeira.conteudo)?.trim();
+}
+
+/**
+ * Regras da acolhida que o modelo não seguia mesmo com elas no prompt.
+ * Na conversa em andamento, a acolhida é do primeiro contato: quem cumprimentou
+ * hoje leva o "sim", quem não cumprimentou não é cobrado. Com a primeira
+ * resposta invisível, o "não" vira "não verificável" (doc 7 §7.3).
+ */
+export function ajustarAcolhida<T extends Pick<ResultadoAnalise, 'mec'>>(resultado: T, contexto: { retomada: string | null; invisivel: boolean }): T {
+    return {
+        ...resultado,
+        mec: resultado.mec.map((m) => {
+            if (m.etapa !== 'acolhida' || m.aplicado === 'sim') return m;
+            if (contexto.retomada) return { ...m, aplicavel: false, justificativa: 'Conversa em andamento: a acolhida é do primeiro contato e não se cobra de novo no meio da negociação.' };
+            if (contexto.invisivel) return { ...m, aplicado: 'nao_verificavel' as const, justificativa: 'A primeira resposta do vendedor foi mídia sem texto: a saudação pode estar nela e não dá para ver.' };
+            return m;
+        }),
+    };
+}
+
 /** Teto por fala: um "cole aqui o catálogo" não pode ocupar a conversa inteira. */
 export const MAX_CHARS_FALA = 1500;
 /** Teto da conversa: ~15 mil tokens, folgado para o contexto e para o custo. */
@@ -170,7 +216,9 @@ export function montarTranscript(mensagens: MensagemAnalise[]): string {
         if (m.tipo === 'audio') {
             marcas.push(m.transcricao ? '[Mídia: áudio, transcrição a seguir]' : '[Mídia: áudio] (sem transcrição)');
             fala = m.transcricao?.trim() ?? '';
-        } else if (m.tipo !== 'texto') marcas.push(`[Mídia: ${m.tipo}]`);
+        // "outro" com conteúdo já traz a marca legível do webhook ("[figurinha]").
+        } else if (m.tipo === 'outro' && fala) marcas.push('[Mídia]');
+        else if (m.tipo !== 'texto') marcas.push(`[Mídia: ${m.tipo}]`);
         if (!fala && !marcas.length) marcas.push('[sem conteúdo textual]');
         return [`${ator}:`, ...marcas, ...(fala ? [JSON.stringify(cortar(fala, MAX_CHARS_FALA))] : [])].join(' ');
     });

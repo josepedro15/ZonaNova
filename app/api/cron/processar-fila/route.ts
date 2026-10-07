@@ -3,7 +3,7 @@ import { cronAutorizado } from '@/lib/cron';
 import { aposFalha, aposFalhaDoItem } from '@/lib/fila';
 import { transcrever } from '@/lib/transcricao';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
-import { aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, montarTranscript, type MensagemAnalise } from '@/lib/analise';
+import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, saudacaoInvisivel, type MensagemAnalise } from '@/lib/analise';
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type ItemPlaybook, type LinhaObservacao, type TipoItem } from '@/lib/mec';
 import { paginar } from '@/lib/paginar';
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
@@ -372,7 +372,12 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     const primeiraEntrada = mensagens.findIndex((m) => m.direcao === 'entrada');
     const recorte = primeiraEntrada > 0 && mensagens.slice(0, primeiraEntrada).every((m) => m.automatica)
         ? mensagens.slice(primeiraEntrada) : mensagens;
-    const transcript = montarTranscript(recorte);
+    const { data: anterior, error: erroAnterior } = await supabase.from('mensagens').select('enviada_em')
+        .eq('conversa_id', conversaId).lt('enviada_em', inicio.toISOString())
+        .order('enviada_em', { ascending: false }).limit(1).maybeSingle<{ enviada_em: string }>();
+    if (erroAnterior) throw erroAnterior;
+    const retomada = marcaRetomada(anterior?.enviada_em ?? null, inicio);
+    const transcript = [retomada, montarTranscript(recorte)].filter(Boolean).join('\n');
     const hash = hashTranscript(transcript);
     const { data: existente } = await supabase.from('analises_conversa').select('id,transcript_hash,updated_at')
         .eq('conversa_id', conversaId).eq('data_ref', dataRef).maybeSingle<{ id: string; transcript_hash: string | null; updated_at: string }>();
@@ -386,7 +391,9 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     const comDetalhe = detalheLigado(unidadeId, process.env.MEC_DETALHE_UNIDADES);
     const doutrina = await doutrinaMec(supabase, comDetalhe);
     const itensDetalhe = doutrina.playbookId && comDetalhe ? doutrina.itens : null;
-    const { resultado, modelo, entrada, saida } = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe });
+    const analise = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe });
+    const { modelo, entrada, saida } = analise;
+    const resultado = ajustarAcolhida(analise.resultado, { retomada, invisivel: saudacaoInvisivel(recorte) });
     // As provas do detalhe são conferidas contra a conversa antes de gravar
     // (frase proibida fora da fala do vendedor, trecho que não existe).
     if (itensDetalhe && resultado.mec_detalhe) resultado.mec_detalhe = conferirDetalhe(resultado.mec_detalhe, transcript, itensDetalhe);

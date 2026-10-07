@@ -76,7 +76,30 @@ test('áudio é reconhecido em todas as grafias (vai para a fila de transcriçã
 });
 
 test('tipo desconhecido vira "outro", não quebra a ingestão', () => {
-    assert.equal(ok(normalizarMensagem(base({ messageType: 'stickerMessage' }))).tipo, 'outro');
+    const m = ok(normalizarMensagem(base({ messageType: 'pollCreationMessage', text: undefined })));
+    assert.equal(m.tipo, 'outro');
+    assert.equal(m.conteudo, null);
+});
+
+// Cliente que encerra com figurinha: sem a marca, a IA via só "[Mídia: outro]".
+test('figurinha, reação, contato, álbum e localização ganham marca legível', () => {
+    const conteudo = (m: Partial<NonNullable<EventoUazapi['message']>>) => ok(normalizarMensagem(base({ text: undefined, ...m }))).conteudo;
+    assert.equal(conteudo({ messageType: 'stickerMessage' }), '[figurinha]');
+    assert.equal(conteudo({ messageType: 'StickerMessage', caption: '' }), '[figurinha]');
+    assert.equal(conteudo({ messageType: 'reactionMessage', text: '👍' }), '[reagiu com 👍]');
+    assert.equal(conteudo({ messageType: 'reactionMessage' }), '[reação]');
+    assert.equal(conteudo({ messageType: 'contactMessage', content: 'BEGIN:VCARD\nVERSION:3.0\nFN:Lidiane Vendedora\nTEL:+55 51 9627-5340\nEND:VCARD' }), '[contato compartilhado: Lidiane Vendedora]');
+    assert.equal(conteudo({ messageType: 'contactMessage' }), '[contato compartilhado]');
+    assert.equal(conteudo({ messageType: 'locationMessage' }), '[localização]');
+    assert.equal(conteudo({ messageType: 'albumMessage', content: 'Album: 7 images' }), '[álbum com 7 fotos]');
+    // O nome do tipo pode não vir; o álbum e o cartão de contato se reconhecem pelo texto.
+    assert.equal(conteudo({ messageType: 'algoNovo', content: 'Album: 2 images' }), '[álbum com 2 fotos]');
+    assert.equal(conteudo({ messageType: 'algoNovo', content: 'Lidiane Vendedora Acabamento Capão\nPhone: +55 51 9627-5340\nX-Wa-Biz-Name: Lidiane' }), '[contato compartilhado: Lidiane Vendedora Acabamento Capão]');
+    assert.equal(ok(normalizarMensagem(base({ messageType: 'stickerMessage' }))).tipo, 'outro', 'sem migração: o tipo no banco continua outro');
+});
+
+test('texto comum não ganha marca', () => {
+    assert.equal(ok(normalizarMensagem(base({ messageType: 'conversation', text: 'Album: 2 images' }))).conteudo, 'Album: 2 images');
 });
 
 test('mensagem disparada pela API é marcada automatica', () => {

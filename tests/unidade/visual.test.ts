@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, listaDeTextos, media, rotuloPerfilCliente, rotuloPotencial, urgenciaAlta,
+    caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, listaDeTextos, media, NAO_ANALISADA, passaNoFiltro, rotuloPerfilCliente, rotuloPotencial, urgenciaAlta,
     setaDoTom, tomDelta, tomEspera, tomFaixa, tomResposta,
 } from '../../lib/visual.ts';
 
@@ -177,4 +177,22 @@ test('perfil sem profissão dita usa o nome do perfil', () => {
 test('sem perfil, sem rótulo', () => {
     assert.equal(rotuloPerfilCliente('nao_identificado', ''), null);
     assert.equal(rotuloPerfilCliente(undefined, undefined), null);
+});
+
+// --- filtro de /conversas ---------------------------------------------------
+
+test('filtro de conversas: tipo e status da análise, vazio é todos', () => {
+    const venda = { tipo_conversa: 'negociacao', status: 'venda_feita' };
+    assert.equal(passaNoFiltro(venda, {}), true);
+    assert.equal(passaNoFiltro(venda, { tipo: 'negociacao', status: 'venda_feita' }), true);
+    assert.equal(passaNoFiltro(venda, { status: 'perdida' }), false);
+    assert.equal(passaNoFiltro(venda, { tipo: 'suporte' }), false);
+    assert.equal(passaNoFiltro(undefined, {}), true);
+    assert.equal(passaNoFiltro(undefined, { status: 'em_andamento' }), false);
+});
+
+test('filtro "não analisada" pega só conversa sem análise', () => {
+    assert.equal(passaNoFiltro(undefined, { status: NAO_ANALISADA }), true);
+    assert.equal(passaNoFiltro({ tipo_conversa: 'social', status: 'encerrada' }, { status: NAO_ANALISADA }), false);
+    assert.equal(passaNoFiltro(undefined, { status: NAO_ANALISADA, tipo: 'negociacao' }), false);
 });

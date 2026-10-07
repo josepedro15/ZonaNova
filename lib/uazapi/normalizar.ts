@@ -62,6 +62,33 @@ const TIPOS: Record<string, MensagemNormalizada['tipo']> = {
     documentmessage: 'documento', document: 'documento',
 };
 
+const ALBUM = /^Album: (\d+) images?$/i;
+
+/** Nome de quem vem no cartão: `FN:` do vCard, ou a primeira linha do resumo da UAZAPI. */
+function nomeDoContato(texto: string | null): string | null {
+    if (!texto) return null;
+    const fn = texto.match(/^FN:(.+)$/m)?.[1];
+    const nome = (fn ?? (/^Phone:/m.test(texto) ? texto.split('\n')[0] : '')).trim();
+    return nome && !nome.startsWith('BEGIN:') ? nome.slice(0, 80) : null;
+}
+
+/**
+ * Figurinha, reação, contato, álbum e localização caíam em "outro" e a IA via
+ * só "[Mídia: outro]" — o cliente que fecha com uma figurinha de aperto de
+ * mão ficava invisível. O tipo no banco continua "outro" (sem migração); o
+ * conteúdo vira uma marca entre colchetes que a tela e o transcript mostram.
+ */
+export function marcaDeMidia(bruto: string, texto: string | null): string | null {
+    if (bruto.startsWith('sticker')) return '[figurinha]';
+    if (bruto.startsWith('reaction')) return texto?.trim() ? `[reagiu com ${texto.trim()}]` : '[reação]';
+    if (bruto.startsWith('location') || bruto.startsWith('livelocation')) return '[localização]';
+    const fotos = texto?.trim().match(ALBUM)?.[1];
+    if (bruto.startsWith('album') || fotos) return fotos ? `[álbum com ${fotos} fotos]` : '[álbum de fotos]';
+    const nome = nomeDoContato(texto);
+    if (bruto.startsWith('contact') || nome) return nome ? `[contato compartilhado: ${nome}]` : '[contato compartilhado]';
+    return null;
+}
+
 /**
  * `5511999998888@s.whatsapp.net` → `5511999998888`.
  * Grupo (`@g.us`), status e broadcast não têm telefone de cliente e são
@@ -108,7 +135,8 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
     const bruto = (m.messageType ?? m.type ?? 'text').toLowerCase().replace(/[_\s-]/g, '');
     const tipo = TIPOS[bruto] ?? 'outro';
 
-    const texto = m.text ?? m.content ?? m.caption ?? null;
+    const textoOriginal = m.text ?? m.content ?? m.caption ?? null;
+    const texto = tipo === 'outro' ? marcaDeMidia(bruto, textoOriginal) ?? textoOriginal : textoOriginal;
 
     return {
         waMessageId: id,

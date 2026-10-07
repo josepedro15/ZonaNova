@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    comQuemFalar, contarObjecoes, destaquesDaRede, diaMenos, etapaMaisFraca,
+    comQuemFalar, contarObjecoes, destaquesDaRede, diaMenos, diasDeVenda, etapaMaisFraca,
     serieSemanal, variacaoDoPeriodo, variacaoSemanal, type NotaDia,
 } from '../../lib/derivacoes.ts';
 
@@ -55,6 +55,19 @@ test('com quem falar: só quem caiu, da maior queda para a menor, no máximo 2',
 });
 
 // --- objeções -------------------------------------------------------------------
+
+// O card da matriz mostrava objeções da conversa do gestor com a agência.
+test('objeções só de negociação de vendedor da equipe', () => {
+    const a = (conversa_id: string, user_id: string, tipo_conversa: string | null, data_ref = '2026-10-05') => ({ conversa_id, data_ref, user_id, tipo_conversa });
+    const dias = diasDeVenda([
+        a('c1', 'vend', 'negociacao'),
+        a('c1', 'vend', 'social', '2026-10-04'),
+        a('c2', 'vend', 'suporte'),
+        a('c3', 'gestor', 'negociacao'),
+        a('c4', 'vend', null),
+    ], new Set(['vend']));
+    assert.deepEqual([...dias], ['c1|2026-10-05']);
+});
 
 test('objeções: conta por conversa, junta maiúsculas e ordena', () => {
     const r = contarObjecoes([

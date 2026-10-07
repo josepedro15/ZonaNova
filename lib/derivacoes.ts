@@ -80,6 +80,21 @@ export function comQuemFalar(
 
 export type ContagemObjecao = { objecao: string; total: number };
 
+/**
+ * Objeção da semana é do cliente numa venda. Análise de suporte ou social, ou
+ * de quem não é vendedor da equipe (gestor com WhatsApp conectado), enchia o
+ * card com "custo alto da campanha" e "dependência da Meta" — conversa com a
+ * agência, não com cliente. Devolve as chaves `conversa|dia` que contam.
+ */
+export function diasDeVenda(
+    analises: readonly { conversa_id: string; data_ref: string; user_id: string; tipo_conversa: string | null }[],
+    vendedores: ReadonlySet<string>,
+): Set<string> {
+    return new Set(analises
+        .filter((a) => a.tipo_conversa === 'negociacao' && vendedores.has(a.user_id))
+        .map((a) => `${a.conversa_id}|${a.data_ref}`));
+}
+
 /** Objeções mais frequentes em `analises_conversa.payload.objecoes`, uma vez por conversa. */
 export function contarObjecoes(payloads: readonly unknown[], quantas = 4): ContagemObjecao[] {
     const contagem = new Map<string, ContagemObjecao>();

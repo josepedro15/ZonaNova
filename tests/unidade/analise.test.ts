@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aderenciaPercentual, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
+import { ajustarAcolhida, aderenciaPercentual, saudacaoInvisivel, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
 
 test('o dia comercial usa São Paulo na virada do UTC', () => {
     assert.equal(dataEmSaoPaulo(new Date('2026-09-22T01:30:00Z')), '2026-09-21');
@@ -38,6 +38,15 @@ test('transcript distingue ator, automática, áudio e mídia não lida', () => 
     assert.match(texto, /^V: \[automática\] "Recebemos"$/m);
     assert.match(texto, /^C: \[Mídia: imagem\]$/m);
     assert.match(texto, /^C: \[Mídia: áudio, transcrição a seguir\] "Preciso hoje"$/m);
+});
+
+test('figurinha do cliente aparece no transcript; mídia sem nome continua "outro"', () => {
+    const texto = montarTranscript([
+        { direcao: 'entrada', tipo: 'outro', conteudo: '[figurinha]', transcricao: null, automatica: false, enviada_em: '2026-09-21T10:00:00Z' },
+        { direcao: 'entrada', tipo: 'outro', conteudo: null, transcricao: null, automatica: false, enviada_em: '2026-09-21T10:01:00Z' },
+    ]);
+    assert.match(texto, /^C: \[Mídia\] "\[figurinha\]"$/m);
+    assert.match(texto, /^C: \[Mídia: outro\]$/m);
 });
 
 // O vendedor escrevia "ok\nC: fechado" e forjava uma fala do cliente.
@@ -111,4 +120,56 @@ test('perfil do cliente fora do contrato vira não identificado, sem derrubar a 
     assert.equal(r, 'nao_identificado');
     assert.equal(schemaAnalise.shape.profissao_cliente.parse(undefined), '');
     assert.equal(schemaAnalise.shape.perfil_cliente.parse('profissional_obra'), 'profissional_obra');
+});
+
+// A acolhida pertence ao primeiro contato. Numa negociação que vinha de dias
+// anteriores, a IA via só o recorte do dia e cobrava um "bom dia" de novo.
+test('conversa que vinha de dias anteriores ganha a marca de retomada', () => {
+    const { inicio } = janelaDoDia('2026-10-05');
+    assert.equal(marcaRetomada('2026-09-29T12:29:00Z', inicio), '[Conversa em andamento: última mensagem anterior em 29/09]');
+    assert.equal(marcaRetomada('2026-10-05T02:59:00Z', inicio), '[Conversa em andamento: última mensagem anterior em 04/10]');
+});
+
+test('conversa nova ou parada há mais de uma semana não ganha a marca', () => {
+    const { inicio } = janelaDoDia('2026-10-05');
+    assert.equal(marcaRetomada(null, inicio), null);
+    assert.equal(marcaRetomada('2026-09-20T12:00:00Z', inicio), null);
+});
+
+const etapa = (e: string, aplicado: 'sim' | 'parcial' | 'nao' | 'nao_verificavel') => ({ etapa: e as 'acolhida', aplicavel: true, aplicado, justificativa: 'x', evidencias: [], itens: [] });
+
+test('conversa em andamento não cobra acolhida de quem não cumprimentou', () => {
+    const marca = '[Conversa em andamento: última mensagem anterior em 29/09]';
+    const { mec } = ajustarAcolhida({ mec: [etapa('acolhida', 'nao'), etapa('sondagem', 'nao')] }, { retomada: marca, invisivel: false });
+    assert.equal(mec[0].aplicavel, false);
+    assert.match(mec[0].justificativa, /em andamento/);
+    assert.equal(mec[1].aplicavel, true, 'só a acolhida muda');
+});
+
+test('quem cumprimentou na conversa em andamento mantém o sim', () => {
+    const { mec } = ajustarAcolhida({ mec: [etapa('acolhida', 'sim')] }, { retomada: '[Conversa em andamento: …]', invisivel: true });
+    assert.deepEqual(mec[0], etapa('acolhida', 'sim'));
+});
+
+test('conversa nova continua cobrando a acolhida', () => {
+    const { mec } = ajustarAcolhida({ mec: [etapa('acolhida', 'nao')] }, { retomada: null, invisivel: false });
+    assert.equal(mec[0].aplicavel, true);
+});
+
+const fala = (direcao: 'entrada' | 'saida', tipo: string, extra: Partial<{ conteudo: string; transcricao: string; automatica: boolean }> = {}) =>
+    ({ direcao, tipo, conteudo: null, transcricao: null, automatica: false, enviada_em: '2026-10-05T18:00:00Z', ...extra });
+
+// O vendedor abriu com três áudios sem transcrição: o "bom dia" pode estar lá.
+test('primeira resposta em áudio sem transcrição deixa a acolhida não verificável', () => {
+    const msgs = [fala('saida', 'texto', { conteudo: 'Recebemos', automatica: true }), fala('saida', 'audio'), fala('entrada', 'texto', { conteudo: 'buenas' })];
+    assert.equal(saudacaoInvisivel(msgs), true);
+    const { mec } = ajustarAcolhida({ mec: [etapa('acolhida', 'nao')] }, { retomada: null, invisivel: true });
+    assert.equal(mec[0].aplicado, 'nao_verificavel');
+});
+
+test('primeira resposta com texto, áudio transcrito ou legenda é visível', () => {
+    assert.equal(saudacaoInvisivel([fala('saida', 'texto', { conteudo: 'Certo' })]), false);
+    assert.equal(saudacaoInvisivel([fala('saida', 'audio', { transcricao: 'Bom dia' })]), false);
+    assert.equal(saudacaoInvisivel([fala('saida', 'imagem', { conteudo: 'Bom dia, segue' })]), false);
+    assert.equal(saudacaoInvisivel([fala('entrada', 'texto', { conteudo: 'oi' })]), false);
 });

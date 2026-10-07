@@ -188,3 +188,33 @@ export function rotuloPerfilCliente(perfil?: string | null, profissao?: string |
     if (dita) return dita.charAt(0).toLocaleUpperCase('pt-BR') + dita.slice(1);
     return NOMES_PERFIL[perfil ?? ''] ?? null;
 }
+
+export const TIPO_CONVERSA: Record<string, string> = { negociacao: 'Negociação', suporte: 'Suporte', social: 'Social' };
+
+/** O desfecho da análise, na ordem em que aparece no filtro de /conversas. */
+export const STATUS_CONVERSA: Record<string, { rotulo: string; tom: Tom }> = {
+    em_andamento: { rotulo: 'Em andamento', tom: 'neutro' },
+    venda_feita: { rotulo: 'Venda feita', tom: 'bom' },
+    sem_resposta: { rotulo: 'Sem resposta', tom: 'risco' },
+    perdida: { rotulo: 'Perdida', tom: 'risco' },
+    encerrada: { rotulo: 'Encerrada', tom: 'neutro' },
+    lead_frio: { rotulo: 'Lead frio', tom: 'neutro' },
+};
+
+/** Filtro de status para conversa que ainda não tem análise nenhuma. */
+export const NAO_ANALISADA = 'nao_analisada';
+
+/**
+ * A conversa entra na lista filtrada? Tipo e status vêm da análise mais
+ * recente; vazio é "todos". Sem análise, só passa no status "não analisada"
+ * (e em nenhum tipo).
+ */
+export function passaNoFiltro(
+    analise: { tipo_conversa?: unknown; status?: unknown } | undefined,
+    filtro: { tipo?: string; status?: string },
+): boolean {
+    if (filtro.status === NAO_ANALISADA) return !analise && !filtro.tipo;
+    if (filtro.tipo && analise?.tipo_conversa !== filtro.tipo) return false;
+    if (filtro.status && analise?.status !== filtro.status) return false;
+    return true;
+}

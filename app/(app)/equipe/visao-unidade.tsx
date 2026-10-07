@@ -6,7 +6,7 @@ import {
 import { dataHoje, type contextoApp } from '@/lib/contexto-app';
 import { paginar } from '@/lib/paginar';
 import { esperaNaLista, juntarPorDia, type LinhaDia, type Msg } from '@/lib/painel';
-import { comQuemFalar, contarObjecoes, diaMenos, variacaoSemanal, type NotaDia } from '@/lib/derivacoes';
+import { comQuemFalar, contarObjecoes, diaMenos, diasDeVenda, variacaoSemanal, type NotaDia } from '@/lib/derivacoes';
 import { setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
 import { contarObjecoesPorCodigo, juntarObjecoes } from '@/lib/mec';
 import { carregarPlaybook } from '@/lib/mec-dados';
@@ -41,7 +41,6 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         .select('unidade_id,data_ref,score_geral,leads_atendidos,conversoes_confirmadas,oportunidades_perdidas,tempo_medio_resposta_s,taxa_resposta')
         .order('data_ref', { ascending: false }).limit(60);
     let qAderencia = supabase.from('aderencia_diaria').select('user_id,data_ref,por_etapa').gte('data_ref', diaMenos(hoje, 7)).order('data_ref', { ascending: false });
-    let qAnalises = supabase.from('analises_conversa').select('conversa_id,payload').gte('data_ref', diaMenos(hoje, 7)).order('data_ref', { ascending: false }).limit(1000);
     // Só 48 h de conversa: a espera que importa ao gestor é a de agora. A
     // mensagens(...) embutida também é filtrada pelas mesmas 48h — sem isso,
     // cada conversa ativa trazia o histórico inteiro. Acima de 500 conversas
@@ -57,21 +56,29 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         qPendentes = qPendentes.in('unidade_id', unidadeIds);
         qUnidade = qUnidade.in('unidade_id', unidadeIds);
         qAderencia = qAderencia.in('unidade_id', unidadeIds);
-        qAnalises = qAnalises.in('unidade_id', unidadeIds);
         qConversas = qConversas.in('unidade_id', unidadeIds);
     }
     // Desvio do brief: o PostgREST corta em 1000 linhas por pedido mesmo com
     // .limit(2000) (mesmo comportamento documentado em lib/paginar.ts), então
     // uma rede inteira com muita objeção na semana perderia linhas em
     // silêncio. Pagina com paginar() em vez de .limit(2000) direto.
+    const qAnalises = (de: number, ate: number) => {
+        let q = supabase.from('analises_conversa').select('conversa_id,data_ref,user_id,tipo_conversa,payload')
+            .eq('tipo_conversa', 'negociacao').gte('data_ref', diaMenos(hoje, 7)).order('id').range(de, ate);
+        if (unidadeIds) q = q.in('unidade_id', unidadeIds);
+        return q;
+    };
+    // Quem é vendedor, ativo ou não (quem saiu na semana ainda conta): as
+    // conversas de um gestor com WhatsApp conectado ficam fora das objeções.
+    const qVendedores = supabase.from('profiles').select('id').eq('role', 'vendedor');
     const qObjecoes = (de: number, ate: number) => {
-        let q = supabase.from('mec_observacoes').select('conversa_id,item_chave').eq('sinal', 'objecao')
+        let q = supabase.from('mec_observacoes').select('conversa_id,data_ref,item_chave').eq('sinal', 'objecao')
             .gte('data_ref', diaMenos(hoje, 7)).order('id').range(de, ate);
         if (unidadeIds) q = q.in('unidade_id', unidadeIds);
         return q;
     };
 
-    const [{ data: pessoas }, { data: diarios }, { data: conexoes }, { count: pendentes }, { data: daUnidade }, { data: rede }, { data: aderencias }, { data: analises }, { data: conversas }, objecoesCodigo, pb] = await Promise.all([
+    const [{ data: pessoas }, { data: diarios }, { data: conexoes }, { count: pendentes }, { data: daUnidade }, { data: rede }, { data: aderencias }, analises, { data: conversas }, objecoesCodigo, pb, { data: vendedores }] = await Promise.all([
         qPessoas.returns<{ id: string; nome: string; unidade_id: string; unidades: { nome: string } | null }[]>(),
         qDiarios.returns<Diario[]>(),
         qConexoes.returns<{ user_id: string; status: string; ultimo_evento_em: string | null }[]>(),
@@ -79,10 +86,11 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         qUnidade.returns<LinhaDia[]>(),
         supabase.from('relatorios_rede').select('data_ref,score_geral').order('data_ref', { ascending: false }).limit(1).maybeSingle<{ data_ref: string; score_geral: number | null }>(),
         qAderencia.returns<{ user_id: string; data_ref: string; por_etapa: Record<string, number | null> | null }[]>(),
-        qAnalises.returns<{ conversa_id: string; payload: unknown }[]>(),
+        paginar<{ conversa_id: string; data_ref: string; user_id: string; tipo_conversa: string | null; payload: unknown }>(qAnalises),
         qConversas.returns<{ id: string; user_id: string; mensagens: Msg[] }[]>(),
-        paginar<{ conversa_id: string; item_chave: string | null }>(qObjecoes),
+        paginar<{ conversa_id: string; data_ref: string; item_chave: string | null }>(qObjecoes),
         carregarPlaybook(supabase, null),
+        qVendedores.returns<{ id: string }[]>(),
     ]);
 
     const equipe = pessoas ?? [];
@@ -113,10 +121,13 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     // Pelo código do catálogo nas conversas que já o têm; nas outras (outras
     // lojas, fora do piloto), pelo texto livre de antes. Uma conversa entra
     // numa lista só, e as duas se somam pelo rótulo.
-    const comCodigo = new Set(objecoesCodigo.map((o) => o.conversa_id));
+    // Só negociação dos vendedores da lista: ver `diasDeVenda`.
+    const deVenda = diasDeVenda(analises, new Set((vendedores ?? []).map((v) => v.id)));
+    const codigoDeVenda = objecoesCodigo.filter((o) => deVenda.has(`${o.conversa_id}|${o.data_ref}`));
+    const comCodigo = new Set(codigoDeVenda.map((o) => o.conversa_id));
     const objecoes = juntarObjecoes(
-        contarObjecoesPorCodigo(objecoesCodigo, pb?.rotulos ?? new Map(), Infinity),
-        contarObjecoes((analises ?? []).filter((a) => !comCodigo.has(a.conversa_id)).map((a) => a.payload), Infinity),
+        contarObjecoesPorCodigo(codigoDeVenda, pb?.rotulos ?? new Map(), Infinity),
+        contarObjecoes(analises.filter((a) => deVenda.has(`${a.conversa_id}|${a.data_ref}`) && !comCodigo.has(a.conversa_id)).map((a) => a.payload), Infinity),
     );
 
     const linhas = equipe

@@ -6,7 +6,7 @@ import {
 import { contextoApp, dataCurta } from '@/lib/contexto-app';
 import { ehCelular, esperaDoCliente, esperaEmTexto, linkWhatsapp, telefoneBonito } from '@/lib/painel';
 import { aderenciaPercentual } from '@/lib/analise';
-import { grifarConversa, listaDeTextos, rotuloPerfilCliente, rotuloPotencial, tomEspera, urgenciaAlta, type Tom } from '@/lib/visual';
+import { grifarConversa, listaDeTextos, rotuloPerfilCliente, rotuloPotencial, STATUS_CONVERSA, TIPO_CONVERSA, tomEspera, urgenciaAlta, type Tom } from '@/lib/visual';
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
 import { contestarAderencia } from '@/app/actions/gestao';
 import { bloquearContato } from '@/app/actions/conexao';
@@ -24,15 +24,6 @@ type Payload = {
 };
 type Marcacao = { id: string; etapa: string; aplicavel: boolean; aplicado: string | null; justificativa: string; itens: unknown; playbook_id: string };
 
-const TIPO: Record<string, string> = { negociacao: 'Negociação', suporte: 'Suporte', social: 'Social' };
-const STATUS: Record<string, { rotulo: string; tom: Tom }> = {
-    em_andamento: { rotulo: 'Em andamento', tom: 'neutro' },
-    venda_feita: { rotulo: 'Venda feita', tom: 'bom' },
-    lead_frio: { rotulo: 'Lead frio', tom: 'neutro' },
-    sem_resposta: { rotulo: 'Sem resposta', tom: 'risco' },
-    perdida: { rotulo: 'Perdida', tom: 'risco' },
-    encerrada: { rotulo: 'Encerrada', tom: 'neutro' },
-};
 
 function seloDaMarcacao(a: Marcacao): { rotulo: string; tom: Tom; tracejado?: boolean } {
     if (!a.aplicavel) return { rotulo: 'Não cabia', tom: 'neutro' };
@@ -104,7 +95,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
     const podeContestar = ['gestor', 'supervisor', 'admin'].includes(perfil.role);
     const pct = aderencia?.length ? aderenciaPercentual(aderencia) : null;
     const cabiam = (aderencia ?? []).filter((a) => a.aplicavel && a.aplicado !== 'nao_verificavel' && a.aplicado !== null).length;
-    const status = analise?.status ? STATUS[analise.status as string] : undefined;
+    const status = analise?.status ? STATUS_CONVERSA[analise.status as string] : undefined;
 
     return (
         <Shell papel={perfil.role} nome={perfil.nome} unidade={perfil.unidade} atual="/conversas">
@@ -127,7 +118,10 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                     </>} />
 
                 <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
-                    <Cartao className="flex flex-col gap-4 lg:col-span-7 2xl:col-span-6">
+                    {/* No desktop, conversa e análise rolam cada uma na sua coluna: com a
+                        rolagem da página só, a análise (fixa) ficava presa até a conversa
+                        inteira passar — em conversa longa, não dava para chegar ao fim dela. */}
+                    <Cartao className="flex flex-col gap-4 lg:sticky lg:top-6 lg:col-span-7 lg:max-h-[calc(100dvh-3rem)] 2xl:col-span-6">
                         <div className="flex items-center justify-between gap-3">
                             <h2 className="text-xs font-bold uppercase tracking-[0.09em] text-tinta-3">Conversa</h2>
                             {evidencias.length > 0 && (
@@ -137,17 +131,19 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                 </span>
                             )}
                         </div>
-                        <Transcricao mensagens={mensagens} grifos={grifos} />
-                        {espera !== null && (
-                            <p className={`flex items-center gap-2.5 rounded-[10px] px-3.5 py-3 text-[13.5px] font-semibold ${SELO[tomEspera(espera)]}`}>
-                                O cliente falou por último. Sem resposta há {esperaEmTexto(espera)}.
-                            </p>
-                        )}
+                        <div className="-mx-1 flex flex-col gap-4 px-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
+                            <Transcricao mensagens={mensagens} grifos={grifos} />
+                            {espera !== null && (
+                                <p className={`flex items-center gap-2.5 rounded-[10px] px-3.5 py-3 text-[13.5px] font-semibold ${SELO[tomEspera(espera)]}`}>
+                                    O cliente falou por último. Sem resposta há {esperaEmTexto(espera)}.
+                                </p>
+                            )}
+                        </div>
                     </Cartao>
 
                     {/* Em tela bem larga, a análise ocupa duas colunas: empilhada numa faixa
                         estreita, ela ficava muito mais alta que o necessário. */}
-                    <aside className="grid content-start gap-4 lg:sticky lg:top-6 lg:col-span-5 2xl:col-span-6 2xl:grid-cols-2">
+                    <aside className="grid content-start gap-4 lg:sticky lg:top-6 lg:col-span-5 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:overscroll-contain 2xl:col-span-6 2xl:grid-cols-2">
                         {!analise ? (
                             <Cartao variante="tracejado" className="2xl:col-span-2">
                                 <h2 className="display text-lg font-bold">Análise ainda não disponível</h2>
@@ -179,7 +175,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
 
                                 <Cartao className="flex flex-col gap-4">
                                     <div className="flex flex-wrap gap-1.5">
-                                        {analise.tipo_conversa && <Selo tom="azul">{TIPO[analise.tipo_conversa as string] ?? String(analise.tipo_conversa)}</Selo>}
+                                        {analise.tipo_conversa && <Selo tom="azul">{TIPO_CONVERSA[analise.tipo_conversa as string] ?? String(analise.tipo_conversa)}</Selo>}
                                         {status && <Selo tom={status.tom}>{status.rotulo}</Selo>}
                                         {analise.estagio_funil && <Selo>{String(analise.estagio_funil).charAt(0).toUpperCase() + String(analise.estagio_funil).slice(1).replaceAll('_', ' ')}</Selo>}
                                         {rotuloPotencial(analise.potencial_venda) && <Selo tom={analise.potencial_venda === 'alto' ? 'azul' : 'neutro'}>{rotuloPotencial(analise.potencial_venda)}</Selo>}
