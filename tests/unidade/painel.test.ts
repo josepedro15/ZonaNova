@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, juntarPorDia, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -242,4 +242,27 @@ test('celular é reconhecido pelo User-Agent; na dúvida, computador', () => {
     assert.equal(ehCelular('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15'), false);
     assert.equal(ehCelular('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0'), false);
     assert.equal(ehCelular(null), false);
+});
+
+// Com mais de um vendedor a média do tempo saía quebrada (734,5) e a coluna
+// integer recusava o relatório da loja: o último gravado era de dias atrás.
+test('fechamento: tempo inteiro, nota com 2 casas, médias ponderadas por leads', () => {
+    const r = numerosDoFechamento([
+        { score_geral: 18.88, leads_atendidos: 11, conversoes_confirmadas: 3, oportunidades_perdidas: 0, tempo_medio_resposta_s: 720, taxa_resposta: 90 },
+        { score_geral: 23.33, leads_atendidos: 4, conversoes_confirmadas: 0, oportunidades_perdidas: 1, tempo_medio_resposta_s: 301, taxa_resposta: null },
+        { score_geral: null, leads_atendidos: 0, conversoes_confirmadas: 0, oportunidades_perdidas: 0, tempo_medio_resposta_s: null, taxa_resposta: null },
+    ]);
+    assert.ok(Number.isInteger(r.tempo_medio_resposta_s));
+    assert.equal(r.tempo_medio_resposta_s, Math.round((720 * 11 + 301 * 4) / 15));
+    assert.equal(r.score_geral, Math.round(((18.88 * 11 + 23.33 * 4) / 15) * 100) / 100);
+    assert.equal(r.taxa_resposta, 90);
+    assert.equal(r.leads_atendidos, 15);
+    assert.equal(r.conversoes_confirmadas, 3);
+    assert.equal(r.oportunidades_perdidas, 1);
+});
+
+test('fechamento sem nenhum valor deixa a média vazia, não zero', () => {
+    const r = numerosDoFechamento([{ score_geral: null, leads_atendidos: 2, tempo_medio_resposta_s: null }]);
+    assert.equal(r.score_geral, null);
+    assert.equal(r.tempo_medio_resposta_s, null);
 });

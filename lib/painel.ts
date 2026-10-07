@@ -259,6 +259,33 @@ export type LinhaDia = {
 };
 
 /**
+ * Os números de um fechamento (unidade a partir dos vendedores, rede a partir
+ * das unidades): contagens somam, médias ponderadas por leads (mínimo 1).
+ * Tempo de resposta sai inteiro e nota/taxa com 2 casas, como as colunas: uma
+ * média 734,5 s numa coluna integer fazia o banco recusar o relatório da loja
+ * inteira, em silêncio, sempre que havia mais de um vendedor.
+ */
+export function numerosDoFechamento(linhas: readonly Record<string, unknown>[]) {
+    const ponderada = (campo: string) => {
+        const validas = linhas.filter((l) => l[campo] !== null && l[campo] !== undefined);
+        const peso = (l: Record<string, unknown>) => Math.max(1, Number(l.leads_atendidos ?? 1));
+        const total = validas.reduce((s, l) => s + peso(l), 0);
+        return total ? validas.reduce((s, l) => s + Number(l[campo]) * peso(l), 0) / total : null;
+    };
+    const duasCasas = (v: number | null) => (v === null ? null : Math.round(v * 100) / 100);
+    const tempo = ponderada('tempo_medio_resposta_s');
+    const soma = (campo: string) => linhas.reduce((s, x) => s + Number(x[campo] ?? 0), 0);
+    return {
+        score_geral: duasCasas(ponderada('score_geral')),
+        leads_atendidos: soma('leads_atendidos'),
+        conversoes_confirmadas: soma('conversoes_confirmadas'),
+        oportunidades_perdidas: soma('oportunidades_perdidas'),
+        tempo_medio_resposta_s: tempo === null ? null : Math.round(tempo),
+        taxa_resposta: duasCasas(ponderada('taxa_resposta')),
+    };
+}
+
+/**
  * Junta num dia só as linhas de várias unidades. Contagens somam; médias são
  * ponderadas por leads atendidos (mínimo 1), a mesma regra do rollup da rede —
  * uma unidade com 2 leads não pode pesar o mesmo que outra com 200.

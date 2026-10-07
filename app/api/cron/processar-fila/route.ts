@@ -9,7 +9,7 @@ import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoe
 import { doutrinaMec } from '@/lib/pedido-analise';
 import { naturezaSuspeita } from '@/lib/natureza';
 import { paginar } from '@/lib/paginar';
-import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
+import { foiRespondido, numerosDoFechamento, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { drenarEntradas, expurgarEntradas } from '@/lib/uazapi/ingestao';
@@ -538,25 +538,17 @@ async function consolidarAderenciaDiaria(supabase: Admin, userId: string, unidad
     if (erroDiaria) throw erroDiaria;
 }
 
-const mediaPonderada = (linhas: Record<string, unknown>[], campo: string, peso = 'leads_atendidos') => {
-    const validas = linhas.filter((l) => l[campo] !== null && l[campo] !== undefined);
-    const total = validas.reduce((s, l) => s + Math.max(1, Number(l[peso] ?? 1)), 0);
-    return total ? validas.reduce((s, l) => s + Number(l[campo]) * Math.max(1, Number(l[peso] ?? 1)), 0) / total : null;
-};
-
 async function rollupUnidade(supabase: Admin, unidadeId: string, dataRef: string) {
     const { data: relatorios, error } = await supabase.from('relatorios_diarios').select('*').eq('unidade_id', unidadeId).eq('data_ref', dataRef);
     if (error) throw error;
     if (!relatorios?.length) throw new IgnorarItem('unidade sem relatórios');
     const r = relatorios as Record<string, unknown>[];
-    await supabase.from('relatorios_unidade').upsert({
-        unidade_id: unidadeId, data_ref: dataRef, vendedores_ativos: r.length,
-        score_geral: mediaPonderada(r, 'score_geral'), leads_atendidos: r.reduce((s, x) => s + Number(x.leads_atendidos ?? 0), 0),
-        conversoes_confirmadas: r.reduce((s, x) => s + Number(x.conversoes_confirmadas ?? 0), 0),
-        oportunidades_perdidas: r.reduce((s, x) => s + Number(x.oportunidades_perdidas ?? 0), 0),
-        tempo_medio_resposta_s: mediaPonderada(r, 'tempo_medio_resposta_s'), taxa_resposta: mediaPonderada(r, 'taxa_resposta'),
+    // Sem conferir o erro, o item saía "concluído" e o relatório não existia.
+    const { error: erroGravar } = await supabase.from('relatorios_unidade').upsert({
+        unidade_id: unidadeId, data_ref: dataRef, vendedores_ativos: r.length, ...numerosDoFechamento(r),
         resumo_ia: `A unidade fechou o dia com ${r.length} vendedor${r.length === 1 ? '' : 'es'} com movimento.`, updated_at: new Date().toISOString(),
     }, { onConflict: 'unidade_id,data_ref' });
+    if (erroGravar) throw erroGravar;
 }
 
 async function rollupRede(supabase: Admin, dataRef: string) {
@@ -564,14 +556,12 @@ async function rollupRede(supabase: Admin, dataRef: string) {
     if (error) throw error;
     if (!unidades?.length) throw new IgnorarItem('rede sem unidades consolidadas');
     const r = unidades as Record<string, unknown>[];
-    await supabase.from('relatorios_rede').upsert({
+    const { error: erroGravar } = await supabase.from('relatorios_rede').upsert({
         data_ref: dataRef, unidades_ativas: r.length, vendedores_ativos: r.reduce((s, x) => s + Number(x.vendedores_ativos ?? 0), 0),
-        score_geral: mediaPonderada(r, 'score_geral'), leads_atendidos: r.reduce((s, x) => s + Number(x.leads_atendidos ?? 0), 0),
-        conversoes_confirmadas: r.reduce((s, x) => s + Number(x.conversoes_confirmadas ?? 0), 0),
-        oportunidades_perdidas: r.reduce((s, x) => s + Number(x.oportunidades_perdidas ?? 0), 0),
-        tempo_medio_resposta_s: mediaPonderada(r, 'tempo_medio_resposta_s'), taxa_resposta: mediaPonderada(r, 'taxa_resposta'),
+        ...numerosDoFechamento(r),
         resumo_ia: `A rede fechou ${r.length} unidade${r.length === 1 ? '' : 's'} com movimento.`, updated_at: new Date().toISOString(),
     }, { onConflict: 'data_ref' });
+    if (erroGravar) throw erroGravar;
 }
 
 type CandidatoCrm = {
