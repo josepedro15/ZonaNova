@@ -5,7 +5,9 @@ import { baixarMidiaSegura, hashDoAudio, transcrever } from '@/lib/transcricao';
 import { descreverMidia, formatoLegivel, MAX_BYTES_MIDIA, midiaLigada } from '@/lib/midia';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
 import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, saudacaoInvisivel, type MensagemAnalise } from '@/lib/analise';
-import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type ItemPlaybook, type LinhaObservacao, type TipoItem } from '@/lib/mec';
+import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao } from '@/lib/mec';
+import { doutrinaMec } from '@/lib/pedido-analise';
+import { naturezaSuspeita } from '@/lib/natureza';
 import { paginar } from '@/lib/paginar';
 import { foiRespondido, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
@@ -313,38 +315,6 @@ async function descreverMensagem(supabase: Admin, mensagemId: string, apiKey: st
 }
 
 /**
- * O Book vigente em texto para o prompt. `comChaves` só quando a unidade tem o
- * detalhe ligado: fora do piloto, o texto é byte a byte o de antes do detalhe.
- */
-async function doutrinaMec(supabase: Admin, comChaves: boolean): Promise<{ texto: string; playbookId: string | null; itens: ItemPlaybook[] }> {
-    const { data: playbook, error: erroPlaybook } = await supabase.from('playbooks').select('id,nome,versao').is('vigente_ate', null)
-        .maybeSingle<{ id: string; nome: string; versao: string }>();
-    if (erroPlaybook) throw erroPlaybook;
-    if (!playbook) return { playbookId: null, itens: [], texto: 'Avalie acolhida, sondagem, solução completa, contorno de objeções, estratégia de preço, fechamento e acompanhamento conforme aplicabilidade.' };
-    const { data: etapas, error: erroEtapas } = await supabase.from('playbook_etapas').select('id,chave,nome,descricao,criterios,ordem').eq('playbook_id', playbook.id).order('ordem');
-    if (erroEtapas) throw erroEtapas;
-    const ids = (etapas ?? []).map((e) => e.id as string);
-    const { data: itensBanco, error: erroItens } = ids.length
-        ? await supabase.from('playbook_itens').select('etapa_id,chave,tipo,rotulo,detalhe,ordem').in('etapa_id', ids).order('ordem')
-        : { data: [], error: null };
-    if (erroItens) throw erroItens;
-    const chaveDaEtapa = new Map((etapas ?? []).map((e) => [e.id as string, e.chave as string]));
-    const itens: ItemPlaybook[] = (itensBanco ?? []).map((i) => ({
-        chave: i.chave as string, tipo: i.tipo as TipoItem, rotulo: i.rotulo as string, etapa: chaveDaEtapa.get(i.etapa_id as string) ?? '',
-    }));
-    return {
-        playbookId: playbook.id,
-        itens,
-        texto: `${playbook.nome} (${playbook.versao})\n${(etapas ?? []).map((e) => {
-            // O código entre colchetes é o que o mec_detalhe devolve.
-            const seus = (itensBanco ?? []).filter((i) => i.etapa_id === e.id)
-                .map((i) => `- ${comChaves ? `[${i.chave}] ` : ''}${i.rotulo}${i.detalhe ? `: ${i.detalhe}` : ''}`).join('\n');
-            return `${e.nome}: ${e.descricao}\n${seus}`;
-        }).join('\n\n')}`,
-    };
-}
-
-/**
  * O relatório do vendedor no dia é mais velho que alguma análise dele no
  * mesmo dia (ou não existe)? Compara com a MAIS RECENTE, não só com a
  * análise da vez: duas análises no mesmo lote — uma nova, outra repetida —
@@ -473,11 +443,16 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
 }
 
 async function consolidarItem(supabase: Admin, userId: string, dataRef: string) {
-    const { data: analises, error } = await supabase.from('analises_conversa')
+    const { data: todas, error } = await supabase.from('analises_conversa')
         .select('conversa_id,unidade_id,tipo_conversa,status,score_atendimento,payload')
         .eq('user_id', userId).eq('data_ref', dataRef);
     if (error) throw error;
-    if (!analises?.length) throw new IgnorarItem('nenhuma análise para consolidar');
+    if (!todas?.length) throw new IgnorarItem('nenhuma análise para consolidar');
+    // Conversa que a análise viu, com confiança, como de colega, fornecedor ou
+    // pessoal não entra no relatório — nem nota, nem lead, nem coaching — até
+    // o gestor decidir no Perfil (lib/natureza.ts), o mesmo recorte das objeções.
+    const analises = todas.filter((a) => !naturezaSuspeita(a.payload));
+    if (!analises.length) throw new IgnorarItem('só conversas sugeridas como contato interno');
     const negociacoes = analises.filter((a) => a.tipo_conversa === 'negociacao');
     const conversaIds = analises.map((a) => a.conversa_id as string);
     const { inicio, fim } = janelaDoDia(dataRef);

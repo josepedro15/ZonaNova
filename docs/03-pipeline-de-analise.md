@@ -134,6 +134,8 @@ dado, e o dashboard mostra isso como "sem movimento".
 | `evidencias` | array 1-5 | trechos do transcript que sustentam as conclusões |
 | `perfil_cliente` | `consumidor_final\|profissional_obra\|empresa_revenda\|nao_identificado` | só pelo que o cliente disse; sem indício, `nao_identificado` |
 | `profissao_cliente` | texto | profissão como o cliente disse ("carpinteiro"); `""` quando não disse |
+| `natureza_contato` | `cliente\|colega_ou_loja\|fornecedor_ou_parceiro\|pessoal` | quem é o contato; fora do enum vira `cliente`. Primeiro campo do JSON (ver doc 11) |
+| `confianca_natureza` / `evidencia_natureza` | 0-100 / texto | ≠ `cliente` com ≥ 80 vira sugestão de contato interno no Perfil e sai das objeções e do relatório do vendedor até o gestor decidir |
 
 **Prompt:** porta o prompt do MetricsIA (`lib/prompts/individual-analysis.ts`),
 que já carrega a doutrina do §1.5. Ajustes necessários para o GPT:

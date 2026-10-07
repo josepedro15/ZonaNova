@@ -122,6 +122,15 @@ test('perfil do cliente fora do contrato vira não identificado, sem derrubar a 
     assert.equal(schemaAnalise.shape.perfil_cliente.parse('profissional_obra'), 'profissional_obra');
 });
 
+test('natureza do contato fora do contrato vira cliente, sem derrubar a análise', () => {
+    assert.equal(schemaAnalise.shape.natureza_contato.parse('agencia'), 'cliente');
+    assert.equal(schemaAnalise.shape.natureza_contato.parse(undefined), 'cliente');
+    assert.equal(schemaAnalise.shape.natureza_contato.parse('fornecedor_ou_parceiro'), 'fornecedor_ou_parceiro');
+    assert.equal(schemaAnalise.shape.confianca_natureza.parse(150), 0);
+    assert.equal(schemaAnalise.shape.confianca_natureza.parse(85), 85);
+    assert.equal(schemaAnalise.shape.evidencia_natureza.parse(null), '');
+});
+
 // A acolhida pertence ao primeiro contato. Numa negociação que vinha de dias
 // anteriores, a IA via só o recorte do dia e cobrava um "bom dia" de novo.
 test('conversa que vinha de dias anteriores ganha a marca de retomada', () => {

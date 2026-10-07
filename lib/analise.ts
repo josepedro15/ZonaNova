@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { schemaDetalhe, schemaJsonDetalhe, type DetalheMec, type ItemPlaybook } from './mec.ts';
+import { NATUREZAS } from './natureza.ts';
 
 export type MensagemAnalise = {
     direcao: 'entrada' | 'saida';
@@ -37,6 +38,11 @@ export const schemaAnalise = z.object({
     // "não identificado" em vez de derrubar a análise (como o mec_detalhe).
     perfil_cliente: z.enum(['consumidor_final', 'profissional_obra', 'empresa_revenda', 'nao_identificado']).catch('nao_identificado'),
     profissao_cliente: z.string().catch(''),
+    // Quem é o contato (lib/natureza.ts). Fora do contrato vira cliente: na
+    // dúvida a conversa continua contando, como sempre contou.
+    natureza_contato: z.enum(NATUREZAS).catch('cliente'),
+    confianca_natureza: z.number().int().min(0).max(100).catch(0),
+    evidencia_natureza: z.string().catch(''),
     evidencias: z.array(z.object({ trecho: z.string(), conclusao: z.string() })).min(1).max(5),
     mec: z.array(z.object({
         etapa: z.enum(['acolhida', 'sondagem', 'solucao_completa', 'contorno_objecoes', 'estrategia_preco', 'fechamento', 'acompanhamento']),
@@ -52,8 +58,13 @@ export type ResultadoAnalise = z.infer<typeof schemaAnalise>;
 
 export const schemaJsonAnalise = {
     type: 'object', additionalProperties: false,
-    required: ['tipo_conversa','status','sentiment','score_atendimento','score_oportunidade','score_risco','estagio_funil','potencial_venda','urgencia','resumo','destaque','proxima_acao','script_sugerido','objecoes','tecnicas_usadas','erros_vendedor','tags','evidencias','mec','perfil_cliente','profissao_cliente'],
+    required: ['natureza_contato','confianca_natureza','evidencia_natureza','tipo_conversa','status','sentiment','score_atendimento','score_oportunidade','score_risco','estagio_funil','potencial_venda','urgencia','resumo','destaque','proxima_acao','script_sugerido','objecoes','tecnicas_usadas','erros_vendedor','tags','evidencias','mec','perfil_cliente','profissao_cliente'],
+    // A natureza vem primeiro: o modelo escreve na ordem do schema, e decidir
+    // quem é o contato depois de avaliar a venda inteira dava "cliente" quase sempre.
     properties: {
+        natureza_contato: { type: 'string', enum: [...NATUREZAS] },
+        confianca_natureza: { type: 'integer', minimum: 0, maximum: 100 },
+        evidencia_natureza: { type: 'string' },
         tipo_conversa: { type: 'string', enum: ['negociacao','suporte','social'] },
         status: { type: 'string', enum: ['em_andamento','venda_feita','lead_frio','sem_resposta','perdida','encerrada'] },
         sentiment: { type: 'integer', minimum: 0, maximum: 100 },

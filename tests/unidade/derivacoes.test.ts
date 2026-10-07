@@ -69,6 +69,19 @@ test('objeções só de negociação de vendedor da equipe', () => {
     assert.deepEqual([...dias], ['c1|2026-10-05']);
 });
 
+// Conversa com a agência que nenhum gestor cadastrou ainda: a análise
+// desconfia com força e ela sai das objeções até o gestor decidir.
+test('objeções deixam de fora a conversa que a IA viu como contato interno', () => {
+    const a = (conversa_id: string, payload: unknown) => ({ conversa_id, data_ref: '2026-10-05', user_id: 'vend', tipo_conversa: 'negociacao', payload });
+    const dias = diasDeVenda([
+        a('agencia', { natureza_contato: 'fornecedor_ou_parceiro', confianca_natureza: 90 }),
+        a('duvida', { natureza_contato: 'colega_ou_loja', confianca_natureza: 60 }),
+        a('cliente', { natureza_contato: 'cliente', confianca_natureza: 95 }),
+        a('antiga', { objecoes: ['preço'] }),
+    ], new Set(['vend']));
+    assert.deepEqual([...dias].sort(), ['antiga|2026-10-05', 'cliente|2026-10-05', 'duvida|2026-10-05']);
+});
+
 test('objeções: conta por conversa, junta maiúsculas e ordena', () => {
     const r = contarObjecoes([
         { objecoes: ['Preço', 'preço', 'Prazo de entrega'] },

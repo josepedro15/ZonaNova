@@ -1,4 +1,5 @@
 import { media } from './visual.ts';
+import { naturezaSuspeita } from './natureza.ts';
 
 /**
  * Números que as telas novas mostram e que o banco não guarda pronto. Tudo
@@ -84,14 +85,16 @@ export type ContagemObjecao = { objecao: string; total: number };
  * Objeção da semana é do cliente numa venda. Análise de suporte ou social, ou
  * de quem não é vendedor da equipe (gestor com WhatsApp conectado), enchia o
  * card com "custo alto da campanha" e "dependência da Meta" — conversa com a
- * agência, não com cliente. Devolve as chaves `conversa|dia` que contam.
+ * agência, não com cliente. Conversa que a análise viu, com confiança, como de
+ * colega, fornecedor ou pessoal também fica fora enquanto o gestor não a
+ * cadastra (lib/natureza.ts). Devolve as chaves `conversa|dia` que contam.
  */
 export function diasDeVenda(
-    analises: readonly { conversa_id: string; data_ref: string; user_id: string; tipo_conversa: string | null }[],
+    analises: readonly { conversa_id: string; data_ref: string; user_id: string; tipo_conversa: string | null; payload?: unknown }[],
     vendedores: ReadonlySet<string>,
 ): Set<string> {
     return new Set(analises
-        .filter((a) => a.tipo_conversa === 'negociacao' && vendedores.has(a.user_id))
+        .filter((a) => a.tipo_conversa === 'negociacao' && vendedores.has(a.user_id) && !naturezaSuspeita(a.payload))
         .map((a) => `${a.conversa_id}|${a.data_ref}`));
 }
 
