@@ -64,7 +64,7 @@ export async function GET(req: Request) {
         .map((o) => (o.ultima_mensagem_em ? new Date(o.ultima_mensagem_em) : null));
 
     let conferidas = 0, corrigidas = 0, numerados = 0, ilegiveis = 0, alheias = 0;
-    const captura = { abertos: 0, recuperando: 0, fechados: 0 };
+    const captura = { abertos: 0, recuperando: 0, fechados: 0, descartados: 0 };
 
     const conferir = async (c: Linha) => {
         let token: string;
@@ -104,6 +104,7 @@ export async function GET(req: Request) {
                 if (desfecho === 'aberto') captura.abertos++;
                 if (desfecho === 'recuperando') captura.recuperando++;
                 if (desfecho === 'fechado') captura.fechados++;
+                if (desfecho === 'descartado') captura.descartados++;
             }
         } catch (e) {
             console.error(`checar-conexoes: ${c.id}`, e);

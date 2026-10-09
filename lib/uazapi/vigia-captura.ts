@@ -2,6 +2,7 @@ import 'server-only';
 import type { criarClienteAdmin } from '@/lib/supabase/admin';
 import { msDeExpediente } from '@/lib/painel';
 import { ancorasDoHistorico, emSilencio, LIMIAR_SILENCIO_MS, recuperarMensagens, resumoErrosWebhook, type ErroWebhookResumido, type ResultadoRecuperacao } from '@/lib/captura';
+import { estaFora } from '@/lib/exclusao';
 import type { Uazapi } from '@/lib/uazapi/cliente';
 import type { MensagemUazapi } from '@/lib/uazapi/normalizar';
 
@@ -49,6 +50,25 @@ async function idsGravados(supabase: Admin, ids: string[]): Promise<Set<string>>
     return achados;
 }
 
+/**
+ * As listas que a ingestão usa para descartar (lib/uazapi/ingestao.ts): a
+ * pessoal do vendedor, a interna da unidade e os números dos colegas conectados.
+ */
+async function regraDeExclusao(supabase: Admin, c: ConexaoVigiada): Promise<(telefone: string) => boolean> {
+    const [pessoais, internos, colegas] = await Promise.all([
+        supabase.from('contatos_bloqueados').select('telefone').eq('user_id', c.user_id).returns<{ telefone: string }[]>(),
+        supabase.from('contatos_internos').select('telefone').eq('unidade_id', c.unidade_id).returns<{ telefone: string }[]>(),
+        supabase.from('conexoes_whatsapp').select('numero').neq('id', c.id).not('numero', 'is', null).returns<{ numero: string }[]>(),
+    ]);
+    for (const r of [pessoais, internos, colegas]) if (r.error) throw r.error;
+    const listas = {
+        pessoais: (pessoais.data ?? []).map((x) => x.telefone),
+        internos: (internos.data ?? []).map((x) => x.telefone),
+        colegas: (colegas.data ?? []).map((x) => x.numero),
+    };
+    return (telefone) => estaFora(telefone, listas);
+}
+
 async function recuperar(supabase: Admin, uaz: Uazapi, token: string, c: ConexaoVigiada, desde: Date): Promise<ResultadoRecuperacao> {
     return recuperarMensagens({
         buscar: (offset, limite) => uaz.buscarMensagens(token, { limit: limite, offset }),
@@ -56,7 +76,21 @@ async function recuperar(supabase: Admin, uaz: Uazapi, token: string, c: Conexao
         ingerir: (mensagens) => enfileirar(supabase, c.id, mensagens),
         desde,
         dono: c.numero,
+        fora: await regraDeExclusao(supabase, c),
     });
+}
+
+/**
+ * A UAZAPI recebeu depois do "buraco", só que de contatos fora da análise
+ * (`so_contatos_fora`): a captura nunca parou, quem ficou quieto foram os
+ * clientes. Não é buraco — apagar evita o alerta do gestor e o
+ * `captura_incompleta` no relatório do dia. Se o silêncio continuar, a próxima
+ * rodada abre e descarta de novo, ao custo de uma /message/find.
+ */
+async function descartar(supabase: Admin, c: ConexaoVigiada, buracoId: string) {
+    const { error } = await supabase.from('buracos_captura').delete().eq('id', buracoId);
+    if (error) throw error;
+    await supabase.from('conexoes_whatsapp').update({ silencio_desde: null }).eq('id', c.id);
 }
 
 /**
@@ -103,7 +137,7 @@ async function pedirHistorico(supabase: Admin, uaz: Uazapi, token: string, c: Co
     return pedidas;
 }
 
-export type DesfechoVigia = 'aberto' | 'recuperando' | 'fechado' | null;
+export type DesfechoVigia = 'aberto' | 'recuperando' | 'fechado' | 'descartado' | null;
 
 /**
  * A captura de uma conexão conectada, numa rodada do checar-conexoes:
@@ -112,7 +146,9 @@ export type DesfechoVigia = 'aberto' | 'recuperando' | 'fechado' | null;
  *   e, se nada tinha sido recuperado, pede o histórico ao celular;
  * - buraco aberto e ainda em silêncio: tenta de novo a /message/find;
  * - sem buraco e em silêncio (lib/captura.ts `emSilencio`): abre um, marca o
- *   alerta do gestor (`silencio_desde`) e já tenta recuperar.
+ *   alerta do gestor (`silencio_desde`) e já tenta recuperar;
+ * - nos dois últimos, se a UAZAPI só tem conversa fora da análise depois do
+ *   início, não era buraco: descarta (ver `descartar`).
  */
 export async function vigiarCaptura(supabase: Admin, uaz: Uazapi, token: string, c: ConexaoVigiada, outrasDaUnidade: (Date | null)[], aberto: BuracoAberto | undefined, agora: Date): Promise<DesfechoVigia> {
     const ultima = c.ultima_mensagem_em ? new Date(c.ultima_mensagem_em) : null;
@@ -140,9 +176,15 @@ export async function vigiarCaptura(supabase: Admin, uaz: Uazapi, token: string,
         }
         const erros = await errosDoBuraco(uaz, token, inicio);
         const r = await recuperar(supabase, uaz, token, c, inicio);
+        if (r.motivo === 'so_contatos_fora') {
+            await descartar(supabase, c, aberto.id);
+            return 'descartado';
+        }
         await supabase.from('buracos_captura').update({
+            // Máximo, não soma: o que uma rodada reinjeta e não chega ao banco
+            // volta a faltar na seguinte e seria contado de novo.
             tentativas: aberto.tentativas + 1, encontradas: Math.max(aberto.encontradas, r.encontradas),
-            recuperadas: aberto.recuperadas + r.recuperadas, motivo: r.motivo, updated_at: carimbo,
+            recuperadas: Math.max(aberto.recuperadas, r.recuperadas), motivo: r.motivo, updated_at: carimbo,
             // Só substitui quando há o que mostrar: um reinício da UAZAPI zera a lista dela.
             ...(erros?.length ? { erros_webhook: erros } : {}),
         }).eq('id', aberto.id);
@@ -159,6 +201,10 @@ export async function vigiarCaptura(supabase: Admin, uaz: Uazapi, token: string,
     await supabase.from('conexoes_whatsapp').update({ silencio_desde: ultima!.toISOString() }).eq('id', c.id);
     const erros = await errosDoBuraco(uaz, token, ultima!);
     const r = await recuperar(supabase, uaz, token, c, ultima!);
+    if (r.motivo === 'so_contatos_fora') {
+        await descartar(supabase, c, novo.id);
+        return 'descartado';
+    }
     await supabase.from('buracos_captura').update({
         tentativas: 1, encontradas: r.encontradas, recuperadas: r.recuperadas, motivo: r.motivo, updated_at: carimbo,
         erros_webhook: erros,

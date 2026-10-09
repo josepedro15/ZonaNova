@@ -18,6 +18,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { decifrar } from '../lib/crypto.ts';
 import { recuperarMensagens, resumoErrosWebhook } from '../lib/captura.ts';
+import { estaFora } from '../lib/exclusao.ts';
 import { Uazapi } from '../lib/uazapi/cliente.ts';
 import type { MensagemUazapi } from '../lib/uazapi/normalizar.ts';
 
@@ -77,6 +78,19 @@ const idsGravados = async (ids: string[]) => {
     return achados;
 };
 
+// A mesma exclusão da ingestão: o que ela descartaria não "falta" no banco.
+const [pessoais, internos, colegas] = await Promise.all([
+    db.from('contatos_bloqueados').select('telefone').eq('user_id', conexao.user_id),
+    db.from('contatos_internos').select('telefone').eq('unidade_id', conexao.unidade_id),
+    db.from('conexoes_whatsapp').select('numero').neq('id', conexao.id).not('numero', 'is', null),
+]);
+for (const l of [pessoais, internos, colegas]) if (l.error) { console.error(l.error.message); process.exit(1); }
+const listas = {
+    pessoais: (pessoais.data ?? []).map((x) => x.telefone as string),
+    internos: (internos.data ?? []).map((x) => x.telefone as string),
+    colegas: (colegas.data ?? []).map((x) => x.numero as string),
+};
+
 let faltam: MensagemUazapi[] = [];
 const r = await recuperarMensagens({
     buscar: (offset, limite) => uaz.buscarMensagens(token, { limit: limite, offset }),
@@ -84,6 +98,7 @@ const r = await recuperarMensagens({
     ingerir: async (mensagens) => { faltam = mensagens; },
     desde: inicio,
     dono: conexao.numero,
+    fora: (telefone) => estaFora(telefone, listas),
     maxPaginas: 10,
 });
 const noIntervalo = (m: MensagemUazapi) => {
@@ -92,9 +107,10 @@ const noIntervalo = (m: MensagemUazapi) => {
     return !ate || ms < Date.parse(ate);
 };
 console.log('\n== /message/find depois de', inicio.toISOString());
-console.log(`encontradas ${r.encontradas}, faltando no banco ${r.recuperadas}${r.motivo ? ` (${r.motivo})` : ''}`);
+console.log(`encontradas ${r.encontradas}, faltando no banco ${r.recuperadas}, de contatos fora da análise ${r.excluidas}${r.motivo ? ` (${r.motivo})` : ''}`);
 if (ate) console.log(`faltando dentro do intervalo até ${new Date(ate).toISOString()}: ${faltam.filter(noIntervalo).length}`);
 if (r.motivo === 'uazapi_sem_mensagens') console.log('A UAZAPI também não tem nada: a sessão parou de receber, não foi o webhook.');
+else if (r.motivo === 'so_contatos_fora') console.log('A UAZAPI só recebeu de contatos fora da análise: a captura está em dia, não há buraco.');
 else if (r.recuperadas > 0) console.log('A UAZAPI tem o que o banco não tem: o webhook não entregou.');
 
 if (reinjetar && faltam.length) {

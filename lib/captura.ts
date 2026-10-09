@@ -85,20 +85,27 @@ export type PaginaMensagens = {
 };
 
 export type ResultadoRecuperacao = {
-    /** Mensagens que a UAZAPI tem depois do início do buraco. */
+    /** Mensagens que a UAZAPI tem depois do início do buraco e que o banco guardaria. */
     encontradas: number;
     /** As que faltavam no banco e foram reinjetadas. */
     recuperadas: number;
     /**
+     * As de depois do buraco com contato fora da análise (bloqueado, interno,
+     * colega conectado). A ingestão as descarta: não faltam no banco.
+     */
+    excluidas: number;
+    /**
      * Por que nada foi reinjetado, quando é o caso:
      * - `uazapi_sem_mensagens`: a UAZAPI também não tem nada depois do buraco —
      *   a sessão é que parou de receber, não o webhook que deixou de entregar;
+     * - `so_contatos_fora`: a UAZAPI recebeu, mas só de contatos fora da
+     *   análise. A captura está em dia; quem ficou quieto foram os clientes;
      * - `sem_ancora`: não deu para achar, entre as que o banco já tem, uma
      *   mensagem para conferir o formato do id;
      * - `formato_id_divergente`: o id da /message/find não bate com o que o
      *   webhook gravou. Reinjetar duplicaria cada mensagem.
      */
-    motivo: 'uazapi_sem_mensagens' | 'sem_ancora' | 'formato_id_divergente' | null;
+    motivo: 'uazapi_sem_mensagens' | 'so_contatos_fora' | 'sem_ancora' | 'formato_id_divergente' | null;
 };
 
 /**
@@ -113,8 +120,11 @@ const FORMATOS_DE_ID: ((m: MensagemUazapi, dono: string | null) => string | unde
     (m) => m.messageid,
 ];
 
-/** Seria gravada pela ingestão? Grupo, status e canal nunca estão no banco. */
-const guardavel = (m: MensagemUazapi) => !('descartar' in normalizarMensagem({ message: m }));
+/** O telefone com que a ingestão gravaria a mensagem, ou null se ela nem chega ao banco (grupo, status, canal). */
+const telefoneGuardavel = (m: MensagemUazapi): string | null => {
+    const n = normalizarMensagem({ message: m });
+    return 'descartar' in n ? null : n.clienteTelefone;
+};
 
 /** Teto de páginas por tentativa: um buraco de um dia cabe com folga. */
 export const MAX_PAGINAS_RECUPERACAO = 5;
@@ -127,39 +137,49 @@ export const MAX_PAGINAS_RECUPERACAO = 5;
  * teto). As que vêm daí para trás são as âncoras: ao menos uma delas tem de
  * estar no banco para se saber em que formato gravar o id. A ingestão é
  * idempotente por `wa_message_id`, então rodar duas vezes não duplica nada.
+ *
+ * `fora` é a regra de exclusão da ingestão (lib/exclusao.ts `estaFora`). Sem
+ * ela, a conversa com um colega bloqueado "faltava" no banco a cada rodada,
+ * era reinjetada, descartada de novo pela ingestão, e o buraco nunca fechava
+ * (o Marco, 08–09/10).
  */
-export async function recuperarMensagens({ buscar, idsGravados, ingerir, desde, dono, porPagina = 200, maxPaginas = MAX_PAGINAS_RECUPERACAO }: {
+export async function recuperarMensagens({ buscar, idsGravados, ingerir, desde, dono, fora = () => false, porPagina = 200, maxPaginas = MAX_PAGINAS_RECUPERACAO }: {
     buscar: (offset: number, limite: number) => Promise<PaginaMensagens>;
     idsGravados: (ids: string[]) => Promise<Set<string>>;
     ingerir: (mensagens: MensagemUazapi[]) => Promise<void>;
     desde: Date;
     dono: string | null;
+    fora?: (telefone: string) => boolean;
     porPagina?: number;
     maxPaginas?: number;
 }): Promise<ResultadoRecuperacao> {
     const novas: MensagemUazapi[] = [];
     const ancoras: MensagemUazapi[] = [];
+    let excluidas = 0;
     let offset = 0;
     for (let pagina = 0; pagina < maxPaginas; pagina++) {
         const r = await buscar(offset, porPagina);
         const mensagens = r.messages ?? [];
         for (const m of mensagens) {
-            if (!guardavel(m)) continue;
-            (paraData(m.messageTimestamp ?? m.timestamp).getTime() > desde.getTime() ? novas : ancoras).push(m);
+            const telefone = telefoneGuardavel(m);
+            if (!telefone) continue;
+            const depois = paraData(m.messageTimestamp ?? m.timestamp).getTime() > desde.getTime();
+            if (depois && fora(telefone)) excluidas++;
+            else if (!fora(telefone)) (depois ? novas : ancoras).push(m);
         }
         if (ancoras.length || !mensagens.length || !r.pagination?.hasMore) break;
         offset = r.pagination.nextOffset ?? offset + mensagens.length;
     }
 
-    if (!novas.length) return { encontradas: 0, recuperadas: 0, motivo: 'uazapi_sem_mensagens' };
-    if (!ancoras.length) return { encontradas: novas.length, recuperadas: 0, motivo: 'sem_ancora' };
+    if (!novas.length) return { encontradas: 0, recuperadas: 0, excluidas, motivo: excluidas ? 'so_contatos_fora' : 'uazapi_sem_mensagens' };
+    if (!ancoras.length) return { encontradas: novas.length, recuperadas: 0, excluidas, motivo: 'sem_ancora' };
 
     let formato: (typeof FORMATOS_DE_ID)[number] | null = null;
     for (const f of FORMATOS_DE_ID) {
         const ids = ancoras.slice(0, 50).map((m) => f(m, dono)).filter((id): id is string => !!id);
         if (ids.length && (await idsGravados(ids)).size > 0) { formato = f; break; }
     }
-    if (!formato) return { encontradas: novas.length, recuperadas: 0, motivo: 'formato_id_divergente' };
+    if (!formato) return { encontradas: novas.length, recuperadas: 0, excluidas, motivo: 'formato_id_divergente' };
 
     const comId = novas.flatMap((m) => {
         const id = formato(m, dono);
@@ -168,7 +188,7 @@ export async function recuperarMensagens({ buscar, idsGravados, ingerir, desde, 
     const jaGravados = await idsGravados(comId.map((m) => m.id));
     const faltam = comId.filter((m) => !jaGravados.has(m.id));
     if (faltam.length) await ingerir(faltam);
-    return { encontradas: novas.length, recuperadas: faltam.length, motivo: null };
+    return { encontradas: novas.length, recuperadas: faltam.length, excluidas, motivo: null };
 }
 
 /**

@@ -4,6 +4,7 @@ import {
     emSilencio, capturaDoDia, recuperarMensagens, ancorasDoHistorico, resumoErrosWebhook, LIMIAR_SILENCIO_MS,
 } from '../../lib/captura.ts';
 import { Uazapi } from '../../lib/uazapi/cliente.ts';
+import { estaFora } from '../../lib/exclusao.ts';
 import type { MensagemUazapi } from '../../lib/uazapi/normalizar.ts';
 
 /** Horário de Brasília (UTC−3) em 07/10/2026, uma quarta-feira. */
@@ -142,7 +143,7 @@ test('recupera o buraco: reinjeta só o que faltou, com o id no formato do webho
         idsGravados: banco.idsGravados, ingerir: banco.ingerir, desde, dono: DONO, porPagina: 2,
     });
 
-    assert.deepEqual(r, { encontradas: 3, recuperadas: 2, motivo: null });
+    assert.deepEqual(r, { encontradas: 3, recuperadas: 2, excluidas: 0, motivo: null });
     assert.deepEqual(banco.ingeridas.flat().map((m) => m.id), [`${DONO}:3EB0AAA0002`, `${DONO}:3EB0AAA0001`]);
     // Parou na página que alcançou a última mensagem gravada.
     assert.deepEqual(pedidos, [{ limit: 2, offset: 0 }, { limit: 2, offset: 2 }]);
@@ -151,7 +152,7 @@ test('recupera o buraco: reinjeta só o que faltou, com o id no formato do webho
         buscar: (offset, limite) => uaz.buscarMensagens('tok', { limit: limite, offset }),
         idsGravados: banco.idsGravados, ingerir: banco.ingerir, desde, dono: DONO, porPagina: 2,
     });
-    assert.deepEqual(deNovo, { encontradas: 3, recuperadas: 0, motivo: null });
+    assert.deepEqual(deNovo, { encontradas: 3, recuperadas: 0, excluidas: 0, motivo: null });
 });
 
 test('id em formato que o banco não reconhece: não reinjeta nada (duplicaria tudo)', async () => {
@@ -162,7 +163,7 @@ test('id em formato que o banco não reconhece: não reinjeta nada (duplicaria t
         buscar: (offset, limite) => uaz.buscarMensagens('tok', { limit: limite, offset }),
         idsGravados: banco.idsGravados, ingerir: banco.ingerir, desde, dono: DONO,
     });
-    assert.deepEqual(r, { encontradas: 1, recuperadas: 0, motivo: 'formato_id_divergente' });
+    assert.deepEqual(r, { encontradas: 1, recuperadas: 0, excluidas: 0, motivo: 'formato_id_divergente' });
     assert.equal(banco.ingeridas.length, 0);
 });
 
@@ -174,7 +175,7 @@ test('o banco guarda o messageid puro: a conferência descobre e usa esse format
         buscar: (offset, limite) => uaz.buscarMensagens('tok', { limit: limite, offset }),
         idsGravados: banco.idsGravados, ingerir: banco.ingerir, desde, dono: DONO,
     });
-    assert.deepEqual(r, { encontradas: 1, recuperadas: 1, motivo: null });
+    assert.deepEqual(r, { encontradas: 1, recuperadas: 1, excluidas: 0, motivo: null });
     assert.deepEqual(banco.ingeridas.flat().map((m) => m.id), ['3EB0AAA0001']);
 });
 
@@ -186,7 +187,7 @@ test('a UAZAPI também não tem nada depois do buraco: a sessão é que caiu', a
         buscar: (offset, limite) => uaz.buscarMensagens('tok', { limit: limite, offset }),
         idsGravados: banco.idsGravados, ingerir: banco.ingerir, desde, dono: DONO,
     });
-    assert.deepEqual(r, { encontradas: 0, recuperadas: 0, motivo: 'uazapi_sem_mensagens' });
+    assert.deepEqual(r, { encontradas: 0, recuperadas: 0, excluidas: 0, motivo: 'uazapi_sem_mensagens' });
 });
 
 test('mensagem de grupo não serve de âncora: só conta o que o banco guardaria', async () => {
@@ -200,8 +201,53 @@ test('mensagem de grupo não serve de âncora: só conta o que o banco guardaria
         buscar: (offset, limite) => uaz.buscarMensagens('tok', { limit: limite, offset }),
         idsGravados: banco.idsGravados, ingerir: banco.ingerir, desde, dono: DONO,
     });
-    assert.deepEqual(r, { encontradas: 1, recuperadas: 0, motivo: 'sem_ancora' });
+    assert.deepEqual(r, { encontradas: 1, recuperadas: 0, excluidas: 0, motivo: 'sem_ancora' });
     assert.equal(banco.ingeridas.length, 0);
+});
+
+// O Marco, 08–09/10: "conectada", nada gravado desde 08/10 17:40 e a unidade
+// conversando. A UAZAPI tinha tudo — só que com o Rafael (colega conectado,
+// bloqueado por ele como VENDEDOR) e com outro número do Rafael. A ingestão
+// descarta essas, então a cada rodada elas "faltavam" de novo, eram
+// reinjetadas, descartadas outra vez, e o buraco nunca fechava.
+const RAFAEL_CONECTADO = '5551999997768';
+const RAFAEL_PESSOAL = '5551999991025';
+const foraDoMarco = (telefone: string) => estaFora(telefone, { pessoais: [RAFAEL_CONECTADO, RAFAEL_PESSOAL], internos: [], colegas: [RAFAEL_CONECTADO] });
+
+test('o caso do Marco: depois do buraco só há conversa fora da análise — a captura está em dia', async () => {
+    const desde = brt('08', '17:40');
+    const { uaz } = uazapiFalsa([
+        achada('3EB0MARCO03', brt('09', '15:05'), { chatid: `${RAFAEL_CONECTADO}@s.whatsapp.net` }),
+        achada('3EB0MARCO02', brt('09', '09:55'), { chatid: `${RAFAEL_PESSOAL}@s.whatsapp.net`, fromMe: false }),
+        achada('3EB0MARCO01', brt('09', '08:27'), { chatid: `${RAFAEL_CONECTADO}@s.whatsapp.net`, fromMe: false }),
+        achada('3EB0MARCO00', desde),
+    ]);
+    const banco = bancoFalso([`${DONO}:3EB0MARCO00`]);
+    const recuperar = () => recuperarMensagens({
+        buscar: (offset, limite) => uaz.buscarMensagens('tok', { limit: limite, offset }),
+        idsGravados: banco.idsGravados, ingerir: banco.ingerir, desde, dono: DONO, fora: foraDoMarco,
+    });
+
+    assert.deepEqual(await recuperar(), { encontradas: 0, recuperadas: 0, excluidas: 3, motivo: 'so_contatos_fora' });
+    assert.equal(banco.ingeridas.length, 0);
+    // Rodar de novo dá o mesmo: nada se acumula como "recuperado".
+    assert.deepEqual(await recuperar(), { encontradas: 0, recuperadas: 0, excluidas: 3, motivo: 'so_contatos_fora' });
+});
+
+test('buraco de verdade com conversa fora da análise no meio: reinjeta só a do cliente', async () => {
+    const desde = brt('08', '17:40');
+    const { uaz } = uazapiFalsa([
+        achada('3EB0MISTO02', brt('09', '10:00'), { chatid: `${RAFAEL_CONECTADO}@s.whatsapp.net` }),
+        achada('3EB0MISTO01', brt('09', '09:00'), { fromMe: false }),
+        achada('3EB0MISTO00', desde),
+    ]);
+    const banco = bancoFalso([`${DONO}:3EB0MISTO00`]);
+    const r = await recuperarMensagens({
+        buscar: (offset, limite) => uaz.buscarMensagens('tok', { limit: limite, offset }),
+        idsGravados: banco.idsGravados, ingerir: banco.ingerir, desde, dono: DONO, fora: foraDoMarco,
+    });
+    assert.deepEqual(r, { encontradas: 1, recuperadas: 1, excluidas: 1, motivo: null });
+    assert.deepEqual(banco.ingeridas.flat().map((m) => m.id), [`${DONO}:3EB0MISTO01`]);
 });
 
 test('para de paginar no teto, sem varrer a instância inteira', async () => {
