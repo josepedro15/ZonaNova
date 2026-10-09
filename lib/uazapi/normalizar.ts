@@ -153,9 +153,11 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
     const tipo = TIPOS[bruto] ?? 'outro';
 
     // `content` objeto é a mídia, não o texto: sem esta checagem o objeto ia
-    // parar inteiro na coluna `conteudo`.
-    const midia = m.content && typeof m.content === 'object' ? m.content : null;
-    const textoOriginal = m.text || (typeof m.content === 'string' ? m.content : null) || m.caption || midia?.caption || null;
+    // parar inteiro na coluna `conteudo`. Às vezes (sobretudo no `history`) o
+    // mesmo objeto vem serializado em texto, em `content` ou `text`.
+    const midia = m.content && typeof m.content === 'object' ? m.content : midiaSerializada(m.content) ?? midiaSerializada(m.text);
+    const soTexto = (s: unknown) => (typeof s === 'string' && s && !midiaSerializada(s) ? s : null);
+    const textoOriginal = soTexto(m.text) || soTexto(m.content) || m.caption || midia?.caption || null;
     const texto = tipo === 'outro' ? marcaDeMidia(bruto, textoOriginal) ?? textoOriginal : textoOriginal;
 
     return {
@@ -199,6 +201,21 @@ const REGRAS_AUTOMATICA: RegExp[][] = [
 export function ehRespostaAutomatica(texto: string | null | undefined): boolean {
     const t = (texto ?? '').replace(/\s+/g, ' ');
     return !!t && REGRAS_AUTOMATICA.some((regra) => regra.every((r) => r.test(t)));
+}
+
+/**
+ * O objeto de mídia do WhatsApp em texto ({"URL":…,"mediaKey":…}), ou null.
+ * Reconhecido pelas chaves que só ele tem: um cliente que escreve "{...}" não
+ * perde a fala.
+ */
+export function midiaSerializada(s: unknown): ConteudoMidia | null {
+    if (typeof s !== 'string' || !s.startsWith('{')) return null;
+    try {
+        const o = JSON.parse(s) as Record<string, unknown>;
+        return o && typeof o === 'object' && ('URL' in o || 'mediaKey' in o || 'directPath' in o) ? (o as ConteudoMidia) : null;
+    } catch {
+        return null;
+    }
 }
 
 /** Teto do nome guardado: o resto de um nome de 300 caracteres não ajuda a análise. */

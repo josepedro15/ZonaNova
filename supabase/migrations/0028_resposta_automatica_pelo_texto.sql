@@ -15,6 +15,10 @@
 --    08/10 eram 759 saídas e 76 entradas.
 -- 2. A ausência automática do cliente não tira mais a conversa do
 --    "Não é atendimento" (0027): não é o cliente escrevendo de novo.
+-- 3. Mídia gravada com o objeto do WhatsApp em texto no `conteudo`
+--    ({"URL":…,"mediaKey":…}; 124 em 07/10, quase todas do `history`). Fica a
+--    legenda, quando houver, e o nome do documento vai para `midia_nome`, como
+--    lib/uazapi/normalizar.ts `midiaSerializada` faz daqui em diante.
 --
 -- Relatórios já fechados não mudam sozinhos: reprocessar o dia na Operação.
 -- =============================================================================
@@ -51,3 +55,25 @@ create trigger trg_mensagem_reativa_dispensada
     for each row
     when (new.direcao = 'entrada' and not new.automatica)
     execute function public.conversas_reativa_dispensada();
+
+-- 3. Uma a uma: linha que não for JSON válido fica como está, sem derrubar a migração.
+do $$
+declare
+    r record;
+    o jsonb;
+begin
+    for r in select id, tipo, conteudo, midia_nome from public.mensagens
+             where conteudo ~ '^\{"(URL|mediaKey|directPath)"' loop
+        begin
+            o := r.conteudo::jsonb;
+        exception when others then
+            continue;
+        end;
+        update public.mensagens
+        set conteudo = nullif(btrim(o->>'caption'), ''),
+            midia_nome = case when r.tipo = 'documento' and r.midia_nome is null
+                then left(nullif(btrim(regexp_replace(coalesce(o->>'fileName', o->>'title', ''), '\s+', ' ', 'g')), ''), 120)
+                else r.midia_nome end
+        where id = r.id;
+    end loop;
+end $$;

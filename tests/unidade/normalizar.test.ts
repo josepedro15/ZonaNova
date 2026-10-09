@@ -150,6 +150,19 @@ test('a saudação do vendedor e a ausência do cliente chegam marcadas', () => 
     assert.equal(ok(normalizarMensagem(base({ fromMe: true, text: 'Bom dia' }))).automatica, false);
 });
 
+// 07/10: 124 mídias gravadas com o objeto do WhatsApp em texto no `conteudo`
+// ({"URL":…,"mediaKey":…}), a maioria vinda do `history`.
+test('mídia que chega serializada em texto vira mídia, não conteúdo', () => {
+    const doc = JSON.stringify({ URL: 'https://mmg.whatsapp.net/x', mediaKey: 'k', mimetype: 'application/pdf', fileName: 'Anexo.pdf', title: 'Anexo.pdf' });
+    const foto = JSON.stringify({ URL: 'https://mmg.whatsapp.net/y', directPath: '/v/t62', mimetype: 'image/jpeg', caption: 'esse aqui' });
+    const d = ok(normalizarMensagem(base({ messageType: 'documentMessage', text: '', content: doc })));
+    assert.equal(d.conteudo, null);
+    assert.equal(d.midiaNome, 'Anexo.pdf');
+    assert.equal(ok(normalizarMensagem(base({ messageType: 'imageMessage', text: foto }))).conteudo, 'esse aqui', 'fica só a legenda');
+    assert.equal(ok(normalizarMensagem(base({ messageType: 'audioMessage', text: '', content: JSON.stringify({ URL: 'u', PTT: true }) }))).conteudo, null);
+    assert.equal(ok(normalizarMensagem(base({ text: '{"preço": 10}' }))).conteudo, '{"preço": 10}', 'texto com chaves continua texto');
+});
+
 test('extrai todas as mensagens de um lote de histórico', () => {
     const messages = [{ id: '1' }, { id: '2' }];
     assert.deepEqual(mensagensDoEvento({ EventType: 'history', event: 'messages', messages }), messages);
