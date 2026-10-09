@@ -29,12 +29,16 @@ const ITENS: Record<Papel, Item[]> = {
     ],
     supervisor: [
         { href: '/unidades', rotulo: 'Rede', icone: 'rede' },
+        // A tela de /equipe já servia ao supervisor (todas as lojas), só não
+        // tinha caminho no menu (piloto, 07/10/2026). O celular mostra os cinco
+        // primeiros: Descobertas, a leitura da semana, é a que cede o lugar.
+        { href: '/equipe', rotulo: 'Minha equipe', curto: 'Equipe', icone: 'equipe' },
         { href: '/mec', rotulo: 'O MEC', icone: 'mec' },
-        { href: '/descobertas', rotulo: 'Descobertas', icone: 'lampada' },
         { href: '/conversas', rotulo: 'Conversas', icone: 'conversa' },
         // Só supervisor e admin aprovam alguém como gestor, e só eles resolvem
         // cadastro de unidade que ainda não tem gestor.
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        { href: '/descobertas', rotulo: 'Descobertas', icone: 'lampada' },
         { href: '/perfil', rotulo: 'Perfil', icone: 'pessoa' },
     ],
     admin: [

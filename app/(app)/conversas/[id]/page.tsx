@@ -10,6 +10,8 @@ import { grifarConversa, listaDeTextos, rotuloPerfilCliente, rotuloPotencial, ST
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
 import { contestarAderencia } from '@/app/actions/gestao';
 import { bloquearContato } from '@/app/actions/conexao';
+import { desfazerDispensa, desfazerFechadoPresencial, dispensarConversa, marcarFechadoPresencial } from '@/app/actions/conversa';
+import { AvisoMarca } from '@/components/aviso-marca';
 import { carregarPlaybook } from '@/lib/mec-dados';
 import { Transcricao, textoDaMensagem, type Mensagem } from './transcricao';
 import { ChecklistMec, type ObsTela } from './checklist-mec';
@@ -52,7 +54,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
     const { id } = await params;
     const { supabase, perfil } = await contextoApp();
     const { data: conversa } = await supabase.from('conversas')
-        .select('id,cliente_nome,cliente_telefone,user_id,ultima_mensagem_em,profiles!conversas_user_id_fkey(nome),mensagens(id,direcao,tipo,conteudo,transcricao,automatica,enviada_em)')
+        .select('id,cliente_nome,cliente_telefone,user_id,ultima_mensagem_em,dispensada_em,fechada_presencial_em,profiles!conversas_user_id_fkey(nome),dispensou:profiles!conversas_dispensada_por_fkey(nome),fechou:profiles!conversas_fechada_presencial_por_fkey(nome),mensagens(id,direcao,tipo,conteudo,transcricao,automatica,enviada_em)')
         .eq('id', id).eq('bloqueada', false).maybeSingle();
     // Bloqueada some para todo mundo, inclusive por link direto.
     if (!conversa) notFound();
@@ -94,6 +96,15 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
     const vendedor = conversa.profiles as unknown as { nome: string } | null;
     const nome = conversa.cliente_nome || telefoneBonito(conversa.cliente_telefone);
     const podeContestar = ['gestor', 'supervisor', 'admin'].includes(perfil.role);
+    // Quem chegou até aqui já passou pela RLS: o gestor só vê conversa da loja
+    // dele. A server action confere de novo (app/actions/conversa.ts).
+    const podeMarcar = conversa.user_id === perfil.id || perfil.role !== 'vendedor';
+    const dispensadaEm = conversa.dispensada_em as string | null;
+    const fechadaEm = conversa.fechada_presencial_em as string | null;
+    const quem = (p: unknown) => {
+        const nome = (p as { nome?: string } | null)?.nome;
+        return nome ? ` por ${nome.split(' ')[0]}` : '';
+    };
     const pct = aderencia?.length ? aderenciaPercentual(aderencia) : null;
     const cabiam = (aderencia ?? []).filter((a) => a.aplicavel && a.aplicado !== 'nao_verificavel' && a.aplicado !== null).length;
     const status = analise?.status ? STATUS_CONVERSA[analise.status as string] : undefined;
@@ -106,17 +117,33 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                     titulo={<span className="flex items-center gap-3.5"><Avatar nome={conversa.cliente_nome} tamanho={48} />{nome}</span>}
                     sobre={[telefoneBonito(conversa.cliente_telefone), rotuloPerfilCliente(payload.perfil_cliente, payload.profissao_cliente), vendedor?.nome && `atendida por ${vendedor.nome}`, dataCurta(conversa.ultima_mensagem_em as string)].filter(Boolean).join(' · ')}
                     acoes={<>
-                        {conversa.user_id === perfil.id && (
-                            // Único caminho para bloquear contato `@lid`, que não tem número para digitar no Perfil.
-                            <form action={bloquearContato}>
+                        {podeMarcar && !fechadaEm && (
+                            <form action={marcarFechadoPresencial}>
                                 <input type="hidden" name="conversaId" value={conversa.id} />
-                                <input type="hidden" name="motivo" value="Bloqueado pela conversa" />
-                                <input type="hidden" name="voltar" value="conversas" />
+                                <Botao variante="secundario" type="submit">Fechado presencialmente</Botao>
+                            </form>
+                        )}
+                        {podeMarcar && !dispensadaEm && (
+                            <form action={dispensarConversa}>
+                                <input type="hidden" name="conversaId" value={conversa.id} />
                                 <Botao variante="secundario" type="submit">Não é atendimento</Botao>
                             </form>
                         )}
                         {responder && <BotaoLink href={responder} externo>Responder no WhatsApp</BotaoLink>}
                     </>} />
+
+                {fechadaEm && (
+                    <AvisoMarca tom="bom" titulo={`Fechada presencialmente — marcada${quem(conversa.fechou)} em ${dataCurta(fechadaEm)}`}
+                                desfazer={podeMarcar ? { acao: desfazerFechadoPresencial, conversaId: conversa.id } : undefined}>
+                        Conta como venda feita no relatório do vendedor e aparece no filtro &ldquo;Fechada presencialmente&rdquo; das conversas.
+                    </AvisoMarca>
+                )}
+                {dispensadaEm && (
+                    <AvisoMarca tom="neutro" titulo={`Não é atendimento — marcada${quem(conversa.dispensou)} em ${dataCurta(dispensadaEm)}`}
+                                desfazer={podeMarcar ? { acao: desfazerDispensa, conversaId: conversa.id } : undefined}>
+                        Saiu do &ldquo;Esperando você&rdquo;, da análise e do relatório. Se o cliente escrever de novo, ela volta sozinha.
+                    </AvisoMarca>
+                )}
 
                 <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
                     {/* No desktop, conversa e análise rolam cada uma na sua coluna: com a
@@ -140,6 +167,18 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                 </p>
                             )}
                         </div>
+                        {conversa.user_id === perfil.id && (
+                            // O bloqueio de antes, para sempre: o "Não é atendimento" agora só
+                            // dispensa. Único caminho para contato `@lid`, que não tem número
+                            // para digitar no Perfil.
+                            <form action={bloquearContato} className="flex flex-wrap items-center gap-x-2 border-t border-linha-2 pt-3 text-[12.5px] text-tinta-3">
+                                <input type="hidden" name="conversaId" value={conversa.id} />
+                                <input type="hidden" name="motivo" value="Bloqueado pela conversa" />
+                                <input type="hidden" name="voltar" value="conversas" />
+                                Número pessoal ou de fornecedor, que nunca deve ser analisado?
+                                <Botao variante="texto" type="submit" className="text-[12.5px]">Bloquear este contato</Botao>
+                            </form>
+                        )}
                     </Cartao>
 
                     {/* Em tela bem larga, a análise ocupa duas colunas: empilhada numa faixa

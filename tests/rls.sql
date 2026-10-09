@@ -637,3 +637,36 @@ begin
     then raise notice 'PASSOU  virar gestor cria o vínculo da unidade do perfil';
     else raise notice 'FALHOU  virar gestor deixou %', v; end if;
 end $$;
+
+-- 0027: "Não é atendimento" dispensa a conversa até o cliente escrever de
+-- novo. Mensagem do vendedor e mensagem antiga do cliente (histórico importado)
+-- não trazem a conversa de volta; mensagem nova do cliente traz. Tudo é
+-- desfeito no fim.
+do $$
+declare v timestamptz;
+begin
+    update public.conversas set dispensada_em = now() - interval '1 hour', dispensada_por = '55555555-5555-5555-5555-555555555555'
+     where id = 'cccccccc-0000-0000-0000-000000000001';
+
+    insert into public.mensagens (conversa_id, wa_message_id, direcao, conteudo, enviada_em)
+    values ('cccccccc-0000-0000-0000-000000000001', 'teste-0027-saida', 'saida', 'oi', now());
+    insert into public.mensagens (conversa_id, wa_message_id, direcao, conteudo, enviada_em)
+    values ('cccccccc-0000-0000-0000-000000000001', 'teste-0027-antiga', 'entrada', 'antiga', now() - interval '2 hours');
+    select dispensada_em into v from public.conversas where id = 'cccccccc-0000-0000-0000-000000000001';
+    if v is not null
+    then raise notice 'PASSOU  dispensa resiste a mensagem do vendedor e a histórico antigo';
+    else raise notice 'FALHOU  dispensa apagada sem mensagem nova do cliente'; end if;
+
+    insert into public.mensagens (conversa_id, wa_message_id, direcao, conteudo, enviada_em)
+    values ('cccccccc-0000-0000-0000-000000000001', 'teste-0027-nova', 'entrada', 'voltei', now());
+    select dispensada_em into v from public.conversas where id = 'cccccccc-0000-0000-0000-000000000001';
+    if v is null
+    then raise notice 'PASSOU  cliente que escreve de novo desfaz a dispensa';
+    else raise notice 'FALHOU  dispensa continuou depois de mensagem nova do cliente'; end if;
+
+    delete from public.mensagens where wa_message_id like 'teste-0027-%';
+
+    if has_function_privilege('authenticated', 'public.conversas_reativa_dispensada()', 'execute')
+    then raise notice 'FALHOU  authenticated executa conversas_reativa_dispensada';
+    else raise notice 'PASSOU  conversas_reativa_dispensada fora do cliente'; end if;
+end $$;

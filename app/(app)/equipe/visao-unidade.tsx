@@ -1,23 +1,41 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import {
-    Alerta, Avatar, Barra, CabecalhoPagina, Cartao, Comparacao, Kpi, Pagina, Selo, Tabela, TEXTO,
+    Alerta, Avatar, Barra, CabecalhoPagina, Cartao, Comparacao, Kpi, Pagina, Selo, Tabela, TempoEspera, TEXTO,
 } from '@/components/ui';
 import { dataHoje, type contextoApp } from '@/lib/contexto-app';
 import { paginar } from '@/lib/paginar';
-import { esperaNaLista, juntarPorDia, type LinhaDia, type Msg } from '@/lib/painel';
+import { esperaNaLista, juntarPorDia, marcadaDepoisDoCliente, telefoneBonito, type LinhaDia, type Msg } from '@/lib/painel';
 import { comQuemFalar, contarObjecoes, diaMenos, diasDeVenda, variacaoSemanal, type NotaDia } from '@/lib/derivacoes';
-import { setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
+import { falaCurta, setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
 import { contarObjecoesPorCodigo, juntarObjecoes } from '@/lib/mec';
 import { carregarPlaybook } from '@/lib/mec-dados';
 import { ObjecoesDaSemana } from './objecoes-da-semana';
 
 type Supabase = Awaited<ReturnType<typeof contextoApp>>['supabase'];
+type Espera = { id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string; espera: number };
 type Diario = NotaDia & { user_id: string; leads_atendidos: number; conversoes_confirmadas: number; tempo_medio_resposta_s: number | null };
 
 const DUAS_HORAS = 2 * 60 * 60 * 1000;
+/** A fila da equipe na tela: uma lista maior que isso ninguém percorre. */
+const MAX_FILA = 50;
 const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const minutos = (s: number | string | null | undefined) => (s == null ? null : Math.round(Number(s) / 60));
+
+/**
+ * A última fala do cliente em cada conversa da fila, para o gestor saber do
+ * que se trata sem abrir uma por uma. Uma consulta só, paginada.
+ */
+async function ultimasFalas(supabase: Supabase, ids: string[], desde: string): Promise<Map<string, string>> {
+    if (!ids.length) return new Map();
+    const falas = await paginar<{ conversa_id: string; tipo: string; conteudo: string | null; enviada_em: string }>((de, ate) =>
+        supabase.from('mensagens').select('conversa_id,tipo,conteudo,enviada_em').in('conversa_id', ids)
+            .eq('direcao', 'entrada').gte('enviada_em', desde).order('enviada_em', { ascending: false }).range(de, ate));
+    const ultima = new Map<string, string>();
+    // Mais recente primeiro: a primeira de cada conversa é a última fala dela.
+    for (const m of falas) if (!ultima.has(m.conversa_id)) ultima.set(m.conversa_id, falaCurta(m, 80));
+    return ultima;
+}
 
 /**
  * A equipe de uma loja (ou várias): serve o gestor (`/equipe`, a loja dele
@@ -30,7 +48,8 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
 }) {
     const hoje = dataHoje();
     const agora = new Date();
-    const doisDias = new Date(agora.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    // Sete dias, a mesma janela do "Esperando você" do vendedor (dashboard).
+    const janela = new Date(agora.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     let qPessoas = supabase.from('profiles').select('id,nome,unidade_id,unidades!profiles_unidade_id_fkey(nome)').eq('role', 'vendedor').eq('status', 'ativo').order('nome');
     let qDiarios = supabase.from('relatorios_diarios').select('user_id,data_ref,score_geral,leads_atendidos,conversoes_confirmadas,tempo_medio_resposta_s')
@@ -41,13 +60,15 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         .select('unidade_id,data_ref,score_geral,leads_atendidos,conversoes_confirmadas,oportunidades_perdidas,tempo_medio_resposta_s,taxa_resposta')
         .order('data_ref', { ascending: false }).limit(60);
     let qAderencia = supabase.from('aderencia_diaria').select('user_id,data_ref,por_etapa').gte('data_ref', diaMenos(hoje, 7)).order('data_ref', { ascending: false });
-    // Só 48 h de conversa: a espera que importa ao gestor é a de agora. A
-    // mensagens(...) embutida também é filtrada pelas mesmas 48h — sem isso,
-    // cada conversa ativa trazia o histórico inteiro. Acima de 500 conversas
-    // ativas em 48h, a contagem de espera fica aproximada (só as 500 mais
-    // recentes entram na conta).
-    let qConversas = supabase.from('conversas').select('id,user_id,mensagens(direcao,automatica,enviada_em)')
-        .gte('ultima_mensagem_em', doisDias).gte('mensagens.enviada_em', doisDias).eq('bloqueada', false)
+    // A fila da equipe (pedido do piloto, 07/10/2026): a mesma regra e a mesma
+    // janela de sete dias do "Esperando você" de cada vendedor. A
+    // mensagens(...) embutida também é filtrada pela janela — sem isso, cada
+    // conversa ativa trazia o histórico inteiro — e só com as três colunas da
+    // conta; o texto da última fala vem depois, só de quem está esperando.
+    // Acima de 500 conversas ativas na semana, a fila fica aproximada (só as
+    // 500 mais recentes entram na conta).
+    let qConversas = supabase.from('conversas').select('id,user_id,cliente_nome,cliente_telefone,dispensada_em,fechada_presencial_em,mensagens(direcao,automatica,enviada_em)')
+        .gte('ultima_mensagem_em', janela).gte('mensagens.enviada_em', janela).eq('bloqueada', false)
         .order('ultima_mensagem_em', { ascending: false }).limit(500);
     if (unidadeIds) {
         qPessoas = qPessoas.in('unidade_id', unidadeIds);
@@ -87,7 +108,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         supabase.from('relatorios_rede').select('data_ref,score_geral').order('data_ref', { ascending: false }).limit(1).maybeSingle<{ data_ref: string; score_geral: number | null }>(),
         qAderencia.returns<{ user_id: string; data_ref: string; por_etapa: Record<string, number | null> | null }[]>(),
         paginar<{ conversa_id: string; data_ref: string; user_id: string; tipo_conversa: string | null; payload: unknown }>(qAnalises),
-        qConversas.returns<{ id: string; user_id: string; mensagens: Msg[] }[]>(),
+        qConversas.returns<{ id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string; dispensada_em: string | null; fechada_presencial_em: string | null; mensagens: Msg[] }[]>(),
         paginar<{ conversa_id: string; data_ref: string; item_chave: string | null }>(qObjecoes),
         carregarPlaybook(supabase, null),
         qVendedores.returns<{ id: string }[]>(),
@@ -113,9 +134,16 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     for (const a of aderencias ?? []) if (!etapas.has(a.user_id)) etapas.set(a.user_id, a.por_etapa);
     const conexao = new Map((conexoes ?? []).map((c) => [c.user_id, c]));
 
-    // A mesma regra da lista "Esperando você": o alerta conta as conversas que
-    // os vendedores veem lá, nem uma a mais.
-    const esperas = (conversas ?? []).map((c) => esperaNaLista(c.mensagens, agora)).filter((e): e is number => e !== null);
+    // A mesma regra da lista "Esperando você": o alerta e a fila contam as
+    // conversas que os vendedores veem lá, nem uma a mais.
+    const esperando: Espera[] = (conversas ?? [])
+        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em))
+        .map((c) => ({ id: c.id, user_id: c.user_id, cliente_nome: c.cliente_nome, cliente_telefone: c.cliente_telefone, espera: esperaNaLista(c.mensagens, agora) }))
+        .filter((e): e is Espera => e.espera !== null)
+        .sort((a, b) => b.espera - a.espera);
+    const esperas = esperando.map((e) => e.espera);
+    const ultimaFala = await ultimasFalas(supabase, esperando.slice(0, MAX_FILA).map((e) => e.id), janela);
+    const nomeDoVendedor = new Map(equipe.map((p) => [p.id, p.nome]));
     const foraDoAr = equipe.filter((p) => conexao.get(p.id)?.status !== 'conectada');
     const sugestoes = comQuemFalar(equipe, notas, etapas);
     // Pelo código do catálogo nas conversas que já o têm; nas outras (outras
@@ -172,7 +200,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                     )}
                     {esperas.length > 0 && (
                         <Alerta tom="atencao" icone="relogio" titulo={`${esperas.length} clientes esperando`}
-                                acao={{ href: '/conversas', rotulo: 'Ver lista' }}>
+                                acao={{ href: '#esperando', rotulo: 'Ver lista' }}>
                             {esperas.filter((e) => e > DUAS_HORAS).length} deles há mais de 2 horas
                         </Alerta>
                     )}
@@ -196,6 +224,42 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                      legenda={perdidas !== null && deltaPerdidas === null ? 'sem dia anterior para comparar' : undefined} />
                 <Kpi rotulo="Resposta média" valor={minutos(ultimo?.tempo_medio_resposta_s) ?? '—'} unidade={ultimo?.tempo_medio_resposta_s == null ? undefined : ' min'} legenda="média ponderada por leads" />
             </section>
+
+            {esperando.length > 0 && (
+                <section id="esperando" className="scroll-mt-6">
+                    <Tabela titulo="Esperando resposta na equipe"
+                            acao={<span className="text-[12.5px] text-tinta-3">{esperando.length > MAX_FILA ? `as ${MAX_FILA} mais antigas de ${esperando.length}` : 'quem espera há mais tempo primeiro'}</span>}
+                            vazio="Ninguém esperando resposta agora."
+                            colunas={['Cliente', 'Vendedor', 'Esperando', 'Última mensagem do cliente']}
+                            grade="minmax(0,1.4fr) minmax(0,1fr) minmax(0,0.6fr) minmax(0,2fr)"
+                            linhas={esperando.slice(0, MAX_FILA).map((e) => {
+                                const cliente = e.cliente_nome ?? telefoneBonito(e.cliente_telefone);
+                                const vendedor = nomeDoVendedor.get(e.user_id) ?? '—';
+                                const fala = ultimaFala.get(e.id) ?? '';
+                                return {
+                                    chave: e.id,
+                                    href: `/conversas/${e.id}`,
+                                    celulas: [
+                                        <span key="c" className="flex min-w-0 items-center gap-2.5"><Avatar nome={e.cliente_nome} tamanho={32} /><span className="truncate font-semibold">{cliente}</span></span>,
+                                        <span key="v" className="flex min-w-0 flex-col"><span className="truncate">{vendedor}</span>
+                                            {multiplas && <span className="truncate text-xs text-tinta-3">{lojaDoVendedor.get(e.user_id) ?? '—'}</span>}</span>,
+                                        <span key="t"><TempoEspera ms={e.espera} /></span>,
+                                        <span key="f" className="truncate text-[13px] text-tinta-2">{fala}</span>,
+                                    ],
+                                    resumo: (
+                                        <span className="flex items-center gap-3">
+                                            <Avatar nome={e.cliente_nome} tamanho={32} />
+                                            <span className="flex min-w-0 grow flex-col">
+                                                <span className="truncate text-sm font-semibold">{cliente}</span>
+                                                <span className="truncate text-xs text-tinta-3">{vendedor}{fala && ` · ${fala}`}</span>
+                                            </span>
+                                            <TempoEspera ms={e.espera} />
+                                        </span>
+                                    ),
+                                };
+                            })} />
+                </section>
+            )}
 
             <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
                 <div className="lg:col-span-8 2xl:col-span-9">

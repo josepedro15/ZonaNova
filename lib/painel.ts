@@ -70,6 +70,19 @@ export function esperaNaLista(msgs: Msg[], agora: Date, corte: Date = INICIO_DA_
 }
 
 /**
+ * Alguma marca (dispensa, venda presencial; ISO 8601) é posterior à última
+ * fala do cliente? Então a conversa sai da fila de espera até ele escrever de
+ * novo. Sem fala do cliente, qualquer marca vale.
+ */
+export function marcadaDepoisDoCliente(msgs: Msg[], ...marcas: (string | null | undefined)[]): boolean {
+    const ultimaDoCliente = emOrdem(msgs).filter(ehCliente).at(-1);
+    // Por instante, não por texto: o banco devolve "+00:00" e milissegundos
+    // que o `toISOString` do servidor escreve diferente.
+    const fala = ultimaDoCliente ? Date.parse(ultimaDoCliente.enviada_em) : -Infinity;
+    return marcas.some((marca) => !!marca && Date.parse(marca) >= fala);
+}
+
+/**
  * Um tempo de resposta (ms) por bloco do cliente que foi respondido.
  *
  * Medido da primeira mensagem do bloco até a resposta, pelo mesmo motivo

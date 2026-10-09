@@ -2,8 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, listaDeTextos, media, NAO_ANALISADA, passaNoFiltro, rotuloPerfilCliente, rotuloPotencial, urgenciaAlta,
-    setaDoTom, tomDelta, tomEspera, tomFaixa, tomResposta,
-} from '../../lib/visual.ts';
+    setaDoTom, tomDelta, tomEspera, tomFaixa, tomResposta, falaCurta } from '../../lib/visual.ts';
 
 const MIN = 60 * 1000;
 
@@ -195,4 +194,18 @@ test('filtro "não analisada" pega só conversa sem análise', () => {
     assert.equal(passaNoFiltro(undefined, { status: NAO_ANALISADA }), true);
     assert.equal(passaNoFiltro({ tipo_conversa: 'social', status: 'encerrada' }, { status: NAO_ANALISADA }), false);
     assert.equal(passaNoFiltro(undefined, { status: NAO_ANALISADA, tipo: 'negociacao' }), false);
+});
+
+// --- a fala do cliente numa linha de lista ----------------------------------
+
+test('fala de texto vem entre aspas e cortada', () => {
+    assert.equal(falaCurta({ tipo: 'texto', conteudo: '  tem cimento?  ' }), '"tem cimento?"');
+    assert.equal(falaCurta({ tipo: 'texto', conteudo: 'a'.repeat(70) }), `"${'a'.repeat(60)}…"`);
+    assert.equal(falaCurta({ tipo: 'texto', conteudo: 'a'.repeat(70) }, 80), `"${'a'.repeat(70)}"`);
+});
+
+test('áudio e mídia aparecem pelo tipo', () => {
+    assert.equal(falaCurta({ tipo: 'audio', conteudo: null }), 'Áudio');
+    assert.equal(falaCurta({ tipo: 'imagem', conteudo: null }), 'Imagem');
+    assert.equal(falaCurta(undefined), '');
 });

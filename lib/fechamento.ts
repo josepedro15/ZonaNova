@@ -18,13 +18,14 @@ const PAGINA = 1000;
  * negociação que continuou no dia seguinte já tem a última mensagem fora da
  * janela, e quem conversa todo dia nunca seria analisado. O que decide é ter
  * mensagem no dia. `ultima_mensagem_em >= inicio` só pré-filtra: toda conversa
- * com mensagem na janela passa por ele. Contato bloqueado fica de fora.
+ * com mensagem na janela passa por ele. Contato bloqueado fica de fora, e
+ * conversa marcada como "Não é atendimento" (0027) também, enquanto a marca durar.
  */
 export async function conversasComMensagemNoDia(supabase: Admin, inicio: Date, fim: Date, userId?: string): Promise<string[]> {
     const candidatas: string[] = [];
     for (let de = 0; ; de += PAGINA) {
         let consulta = supabase.from('conversas')
-            .select('id').eq('bloqueada', false)
+            .select('id').eq('bloqueada', false).is('dispensada_em', null)
             .gte('ultima_mensagem_em', inicio.toISOString());
         if (userId) consulta = consulta.eq('user_id', userId);
         const { data, error } = await consulta

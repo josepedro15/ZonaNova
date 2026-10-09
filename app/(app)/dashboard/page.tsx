@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { cookies, headers } from 'next/headers';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { CabecalhoPagina, EstadoVazio, Icone, Pagina, RotuloSecao, Selo, Shell, type DiaSerie } from '@/components/ui';
-import { aparelhoDe, COOKIE_WHATSAPP_APP, desde, diasAte, esperaNaLista, foiRespondido, primeiroNome, respostaMediaEmMinutos, temposDeResposta } from '@/lib/painel';
+import { aparelhoDe, COOKIE_WHATSAPP_APP, desde, diasAte, esperaNaLista, foiRespondido, marcadaDepoisDoCliente, primeiroNome, respostaMediaEmMinutos, telefoneBonito, temposDeResposta } from '@/lib/painel';
+import { desfazerDispensa, desfazerFechadoPresencial } from '@/app/actions/conversa';
+import { AvisoMarca } from '@/components/aviso-marca';
 import { dataEmSaoPaulo } from '@/lib/analise';
 import { media } from '@/lib/visual';
 import { variacaoSemanal } from '@/lib/derivacoes';
@@ -17,8 +19,9 @@ import {
 // ele mostraria o dia do deploy para sempre.
 export const dynamic = 'force-dynamic';
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ aviso?: string; conversa?: string }> }) {
     const supabase = await criarClienteServidor();
+    const { aviso, conversa: conversaDoAviso } = await searchParams;
     const { data: { user } } = await supabase.auth.getUser();
 
     const agora = new Date();
@@ -36,7 +39,7 @@ export default async function Dashboard() {
         supabase.from('vw_conexoes_status').select('status, numero, ultimo_evento_em').eq('user_id', user!.id)
             .maybeSingle<{ status: string; numero: string | null; ultimo_evento_em: string | null }>(),
         supabase.from('conversas')
-            .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, mensagens(direcao, automatica, enviada_em, tipo, conteudo), analises_conversa(data_ref, urgencia, potencial_venda)')
+            .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, dispensada_em, fechada_presencial_em, mensagens(direcao, automatica, enviada_em, tipo, conteudo), analises_conversa(data_ref, urgencia, potencial_venda)')
             .gte('ultima_mensagem_em', janela.toISOString()).eq('bloqueada', false)
             .order('ultima_mensagem_em', { ascending: false }).returns<ConversaComMensagens[]>(),
         supabase.from('relatorios_diarios')
@@ -51,14 +54,17 @@ export default async function Dashboard() {
         // Só as conversas do próprio vendedor: a lista é o que ELE tem para retomar.
         supabase.from('conversas')
             .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, analises_conversa(data_ref, tipo_conversa, status, potencial_venda, score_oportunidade)')
-            .eq('user_id', user!.id).eq('bloqueada', false)
+            .eq('user_id', user!.id).eq('bloqueada', false).is('dispensada_em', null)
             .gte('ultima_mensagem_em', frias.de.toISOString()).lt('ultima_mensagem_em', frias.ate.toISOString())
             .order('ultima_mensagem_em', { ascending: false }).limit(500).returns<CandidataRetomar[]>(),
     ]);
 
     const todas = conversas ?? [];
     const deHoje = todas.filter((c) => new Date(c.ultima_mensagem_em) >= comeco);
+    // "Não é atendimento" e "Fechado presencialmente" tiram da fila até o
+    // cliente escrever de novo (app/actions/conversa.ts).
     const esperando = todas
+        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em))
         .map((c) => ({ conversa: c, espera: esperaNaLista(c.mensagens, agora) }))
         .filter((e): e is { conversa: ConversaComMensagens; espera: number } => e.espera !== null)
         .sort((a, b) => b.espera - a.espera);
@@ -100,6 +106,9 @@ export default async function Dashboard() {
     const anteriores = relatorio ? rels.filter((r) => r.data_ref < relatorio.data_ref).slice(0, 7) : [];
     const respostaOntem = porDia.get(ontem)?.tempo_medio_resposta_s;
     const coaching = (relatorio?.payload ?? {}) as Coaching;
+    // O aviso só fala de conversa que está na lista desta pessoa (RLS).
+    const doAviso = (aviso === 'presencial' || aviso === 'dispensada') ? todas.find((c) => c.id === conversaDoAviso) : undefined;
+    const nomeDoAviso = doAviso ? doAviso.cliente_nome ?? telefoneBonito(doAviso.cliente_telefone) : '';
     const temTreino = temConteudoDeTreino(coaching);
 
     return (
@@ -114,6 +123,18 @@ export default async function Dashboard() {
                     quem ele não desvia — e para o caso de o proxy não correr. */}
                 {!ligado && <AvisoConexao conexao={conexao} />}
                 {gere && <AvisoAprovacoes pendentes={pendentes ?? 0} />}
+                {doAviso && aviso === 'presencial' && (
+                    <AvisoMarca tom="bom" titulo={`${nomeDoAviso}: fechada presencialmente`}
+                                desfazer={{ acao: desfazerFechadoPresencial, conversaId: doAviso.id, voltar: 'dashboard' }}>
+                        Conta como venda feita no seu relatório e saiu do &ldquo;Esperando você&rdquo;.
+                    </AvisoMarca>
+                )}
+                {doAviso && aviso === 'dispensada' && (
+                    <AvisoMarca tom="neutro" titulo={`${nomeDoAviso}: não é atendimento`}
+                                desfazer={{ acao: desfazerDispensa, conversaId: doAviso.id, voltar: 'dashboard' }}>
+                        Saiu do &ldquo;Esperando você&rdquo; e da análise. Se o cliente escrever de novo, ela volta sozinha.
+                    </AvisoMarca>
+                )}
 
                 {/* Em tela larga, o que é de agora e o relatório de ontem ficam lado a
                     lado: empilhados, metade da tela ficava vazia. */}

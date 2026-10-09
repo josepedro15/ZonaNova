@@ -4,10 +4,11 @@ import {
     Avatar, Barra, BotaoLink, Cartao, Comparacao, Icone, Kpi, Numero, SELO, Selo, SerieDias, Tabela, TEXTO, TempoEspera,
     type DiaSerie,
 } from '@/components/ui';
-import { comparaTempo, listaDeTextos, rotuloPerfilCliente, setaDoTom, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
+import { comparaTempo, falaCurta, listaDeTextos, rotuloPerfilCliente, setaDoTom, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
 import { ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
 import { esperaDoCliente, esperaEmTexto, linkResponder, type Aparelho, telefoneBonito, type Msg } from '@/lib/painel';
 import { DIAS_PARA_RETOMAR, type ItemRetomar } from '@/lib/retomar';
+import { marcarFechadoPresencial } from '@/app/actions/conversa';
 import { dataCurtaBrasilia, horaBrasilia } from './formato';
 
 export type ConversaComMensagens = {
@@ -15,6 +16,9 @@ export type ConversaComMensagens = {
     cliente_nome: string | null;
     cliente_telefone: string;
     ultima_mensagem_em: string;
+    // Marcas da conversa (0027): tiram da fila "Esperando você".
+    dispensada_em?: string | null;
+    fechada_presencial_em?: string | null;
     mensagens: (Msg & { tipo: string; conteudo: string | null })[];
     // Só as análises da própria conversa; a mais recente dá urgência e potencial.
     analises_conversa?: { data_ref: string; urgencia: number | null; potencial_venda: string | null }[];
@@ -60,12 +64,7 @@ function destinoResponder(c: { id: string; cliente_telefone: string }, aparelho:
 /** A última coisa que o cliente disse, para o item da fila ter contexto. */
 function ultimaFalaDoCliente(c: ConversaComMensagens): string {
     const dele = c.mensagens.filter((m) => m.direcao === 'entrada').sort((a, b) => a.enviada_em.localeCompare(b.enviada_em));
-    const ultima = dele[dele.length - 1];
-    if (!ultima) return '';
-    if (ultima.tipo === 'audio') return 'Áudio';
-    if (ultima.tipo !== 'texto') return ultima.tipo;
-    const texto = (ultima.conteudo ?? '').trim();
-    return texto.length > 60 ? `"${texto.slice(0, 60)}…"` : `"${texto}"`;
+    return falaCurta(dele[dele.length - 1]);
 }
 
 const nomeDaConversa = (c: ConversaComMensagens) => c.cliente_nome ?? telefoneBonito(c.cliente_telefone);
@@ -103,8 +102,8 @@ function ItemEspera({ conversa, espera, aparelho }: { conversa: ConversaComMensa
     const urgente = urgenciaAlta(analise?.urgencia);
     const potencialAlto = analise?.potencial_venda === 'alto';
     return (
-        <li className="border-t border-linha-2">
-            <a {...destino} className="flex min-h-11 items-center gap-3.5 py-3 text-tinta">
+        <li className="flex items-center gap-2 border-t border-linha-2">
+            <a {...destino} className="flex min-h-11 min-w-0 grow items-center gap-3.5 py-3 text-tinta">
                 <Avatar nome={conversa.cliente_nome} />
                 <span className="flex min-w-0 grow flex-col gap-0.5">
                     <span className="flex min-w-0 items-center gap-1.5">
@@ -119,6 +118,16 @@ function ItemEspera({ conversa, espera, aparelho }: { conversa: ConversaComMensa
                     Responder<Icone nome={destino.target ? 'externo' : 'seta_direita'} tamanho={14} />
                 </span>
             </a>
+            {/* Fora do link: formulário dentro de <a> não é HTML válido. Nos Pisos a
+                venda fecha na loja e o cliente não volta a escrever (piloto, 08/10). */}
+            <form action={marcarFechadoPresencial} className="shrink-0">
+                <input type="hidden" name="conversaId" value={conversa.id} />
+                <input type="hidden" name="voltar" value="dashboard" />
+                <button type="submit" title="Fechado presencialmente" aria-label={`${nomeDaConversa(conversa)}: fechado presencialmente`}
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-ctl border border-linha px-2.5 text-[12.5px] font-semibold text-bom-texto hover:bg-superficie-2">
+                    <Icone nome="check" tamanho={14} />{/* Na coluna estreita do xl só o ícone; o título e o aria-label dizem o resto. */}<span className="hidden sm:inline xl:hidden 2xl:inline">Fechou presencial</span>
+                </button>
+            </form>
         </li>
     );
 }

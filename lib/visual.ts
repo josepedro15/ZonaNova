@@ -189,6 +189,18 @@ export function rotuloPerfilCliente(perfil?: string | null, profissao?: string |
     return NOMES_PERFIL[perfil ?? ''] ?? null;
 }
 
+/**
+ * A fala do cliente em uma linha de lista: texto entre aspas e cortado, áudio
+ * e mídia pelo tipo.
+ */
+export function falaCurta(m: { tipo: string; conteudo: string | null } | undefined, max = 60): string {
+    if (!m) return '';
+    if (m.tipo === 'audio') return 'Áudio';
+    if (m.tipo !== 'texto') return m.tipo.charAt(0).toLocaleUpperCase('pt-BR') + m.tipo.slice(1);
+    const texto = (m.conteudo ?? '').trim();
+    return texto.length > max ? `"${texto.slice(0, max)}…"` : `"${texto}"`;
+}
+
 export const TIPO_CONVERSA: Record<string, string> = { negociacao: 'Negociação', suporte: 'Suporte', social: 'Social' };
 
 /** O desfecho da análise, na ordem em que aparece no filtro de /conversas. */
@@ -203,6 +215,12 @@ export const STATUS_CONVERSA: Record<string, { rotulo: string; tom: Tom }> = {
 
 /** Filtro de status para conversa que ainda não tem análise nenhuma. */
 export const NAO_ANALISADA = 'nao_analisada';
+
+/**
+ * Filtro de status para a venda que o vendedor marcou como fechada na loja
+ * (lib/presencial.ts). Sai da conversa, não da análise.
+ */
+export const FECHADA_PRESENCIAL = 'fechada_presencial';
 
 /**
  * A conversa entra na lista filtrada? Tipo e status vêm da análise mais

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -75,6 +75,30 @@ test('mensagem exatamente no corte entra na lista', () => {
 test('conversa respondida não entra na lista', () => {
     const corte = new Date(em('12:00'));
     assert.equal(esperaNaLista([cliente('13:00'), vendedor('13:10')], AGORA, corte), null);
+});
+
+// --- marcas que tiram da fila (dispensa, venda presencial) -------------------
+
+test('marca depois da última fala do cliente tira da fila', () => {
+    assert.equal(marcadaDepoisDoCliente([cliente('14:00')], em('15:00')), true);
+});
+
+test('cliente que escreve depois da marca volta para a fila', () => {
+    assert.equal(marcadaDepoisDoCliente([cliente('14:00'), cliente('16:00')], em('15:00')), false);
+});
+
+test('sem marca nenhuma, nada sai da fila', () => {
+    assert.equal(marcadaDepoisDoCliente([cliente('14:00')], null, undefined), false);
+});
+
+test('basta uma das marcas ser posterior', () => {
+    assert.equal(marcadaDepoisDoCliente([cliente('14:00')], em('13:00'), em('14:30')), true);
+});
+
+// O banco devolve "+00:00" e milissegundos; o servidor grava com "Z".
+test('compara instantes, não a grafia da data', () => {
+    assert.equal(marcadaDepoisDoCliente([cliente('14:00')], '2026-09-21T14:00:00.500+00:00'), true);
+    assert.equal(marcadaDepoisDoCliente([cliente('14:00')], '2026-09-21T10:59:00-03:00'), false);
 });
 
 // --- tempo de resposta -------------------------------------------------------

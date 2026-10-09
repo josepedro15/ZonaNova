@@ -8,6 +8,7 @@ import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTr
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao } from '@/lib/mec';
 import { doutrinaMec } from '@/lib/pedido-analise';
 import { DESCARTADA, naturezaSuspeita } from '@/lib/natureza';
+import { comVendaPresencial } from '@/lib/presencial';
 import { paginar } from '@/lib/paginar';
 import { foiRespondido, numerosDoFechamento, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
@@ -375,9 +376,12 @@ async function gravarObservacoes(
  */
 async function analisarItem(supabase: Admin, conversaId: string, dataRef: string): Promise<boolean> {
     const { inicio, fim } = janelaDoDia(dataRef);
-    const { data: conversa } = await supabase.from('conversas').select('id,user_id,unidade_id')
-        .eq('id', conversaId).maybeSingle<{ id: string; user_id: string; unidade_id: string }>();
+    const { data: conversa } = await supabase.from('conversas').select('id,user_id,unidade_id,dispensada_em,fechada_presencial_ref')
+        .eq('id', conversaId).maybeSingle<{ id: string; user_id: string; unidade_id: string; dispensada_em: string | null; fechada_presencial_ref: string | null }>();
     if (!conversa) throw new IgnorarItem('conversa não existe mais');
+    // "Não é atendimento" (0027): a marca some sozinha quando o cliente escreve
+    // de novo, e aí a conversa volta a ser analisada.
+    if (conversa.dispensada_em) throw new IgnorarItem('marcada como não é atendimento');
     // A unidade vigente do vendedor HOJE, não a de quando a conversa nasceu
     // (doc 3 §3.3): depois de uma transferência, a carteira antiga dele
     // passaria a contar para sempre na unidade que ele deixou.
@@ -448,10 +452,16 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     const { data: descartada, error: erroDescartada } = await supabase.from('analises_conversa').select('id')
         .eq('conversa_id', conversaId).eq(`payload->>${DESCARTADA}`, 'true').limit(1);
     if (erroDescartada) throw erroDescartada;
-    const payload = descartada?.length ? { ...resultado, [DESCARTADA]: true } : resultado;
+    const comDescarte = descartada?.length ? { ...resultado, [DESCARTADA]: true } : resultado;
+    // Venda fechada na loja (lib/presencial.ts): a análise nova do dia marcado
+    // continua contando como venda, e guarda o que a IA disse agora.
+    const marca = conversa.fechada_presencial_ref === dataRef
+        ? comVendaPresencial({ tipo_conversa: resultado.tipo_conversa, status: resultado.status, payload: comDescarte })
+        : { tipo_conversa: resultado.tipo_conversa, status: resultado.status, payload: comDescarte };
+    const payload = marca.payload;
     const { error: erroAnalise } = await supabase.from('analises_conversa').upsert({
         conversa_id: conversaId, user_id: conversa.user_id, unidade_id: unidadeId, data_ref: dataRef,
-        tipo_conversa: resultado.tipo_conversa, status: resultado.status, sentiment: resultado.sentiment,
+        tipo_conversa: marca.tipo_conversa, status: marca.status, sentiment: resultado.sentiment,
         score_atendimento: resultado.score_atendimento, score_oportunidade: resultado.score_oportunidade,
         score_risco: resultado.score_risco, estagio_funil: resultado.estagio_funil,
         potencial_venda: resultado.potencial_venda, urgencia: resultado.urgencia,
@@ -468,10 +478,20 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
         .eq('user_id', userId).eq('data_ref', dataRef);
     if (error) throw error;
     if (!todas?.length) throw new IgnorarItem('nenhuma análise para consolidar');
+    // "Não é atendimento" (0027) também fica de fora, enquanto a marca durar.
+    // Lotes de 100 ids, pela URL do PostgREST, como as mensagens abaixo.
+    const doDia = [...new Set(todas.map((a) => a.conversa_id as string))];
+    const fora = new Set<string>();
+    for (let i = 0; i < doDia.length; i += 100) {
+        const { data: dispensadas, error: erroDispensadas } = await supabase.from('conversas').select('id')
+            .in('id', doDia.slice(i, i + 100)).not('dispensada_em', 'is', null).returns<{ id: string }[]>();
+        if (erroDispensadas) throw erroDispensadas;
+        for (const c of dispensadas ?? []) fora.add(c.id);
+    }
     // Conversa que a análise viu, com confiança, como de colega, fornecedor ou
     // pessoal não entra no relatório — nem nota, nem lead, nem coaching — até
     // o gestor decidir no Perfil (lib/natureza.ts), o mesmo recorte das objeções.
-    const analises = todas.filter((a) => !naturezaSuspeita(a.payload));
+    const analises = todas.filter((a) => !naturezaSuspeita(a.payload) && !fora.has(a.conversa_id as string));
     if (!analises.length) throw new IgnorarItem('só conversas sugeridas como contato interno');
     const negociacoes = analises.filter((a) => a.tipo_conversa === 'negociacao');
     const conversaIds = analises.map((a) => a.conversa_id as string);
@@ -599,10 +619,10 @@ type CandidatoCrm = {
 /** A conversa, a análise DO DIA e o nome do vendedor — o que o envio ao CRM precisa. */
 async function candidatoCrm(supabase: Admin, conversaId: string, dataRef: string): Promise<CandidatoCrm | null> {
     const { data: conversa, error } = await supabase.from('conversas')
-        .select('user_id, unidade_id, cliente_telefone, cliente_nome, bloqueada, analises_conversa(unidade_id, tipo_conversa, status, potencial_venda, score_oportunidade, payload)')
+        .select('user_id, unidade_id, cliente_telefone, cliente_nome, bloqueada, dispensada_em, analises_conversa(unidade_id, tipo_conversa, status, potencial_venda, score_oportunidade, payload)')
         .eq('id', conversaId).eq('analises_conversa.data_ref', dataRef)
         .maybeSingle<{
-            user_id: string; unidade_id: string; cliente_telefone: string; cliente_nome: string | null; bloqueada: boolean;
+            user_id: string; unidade_id: string; cliente_telefone: string; cliente_nome: string | null; bloqueada: boolean; dispensada_em: string | null;
             analises_conversa: { unidade_id: string; tipo_conversa: string | null; status: string | null; potencial_venda: string | null; score_oportunidade: number | null; payload: Record<string, unknown> | null }[];
         }>();
     if (error) throw error;
@@ -619,7 +639,8 @@ async function candidatoCrm(supabase: Admin, conversaId: string, dataRef: string
     const texto = (campo: string) => typeof analise?.payload?.[campo] === 'string' ? analise.payload[campo] as string : '';
     return {
         dados: {
-            unidadeId, bloqueada: conversa.bloqueada, telefone: conversa.cliente_telefone,
+            // Dispensada ("Não é atendimento") não é lead: o CRM a trata como bloqueada.
+            unidadeId, bloqueada: conversa.bloqueada || !!conversa.dispensada_em, telefone: conversa.cliente_telefone,
             suspeitaInterno: naturezaSuspeita(analise?.payload) !== null,
             analise: analise && {
                 tipo_conversa: analise.tipo_conversa, status: analise.status,
