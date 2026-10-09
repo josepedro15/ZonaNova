@@ -2,6 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import type { ResultadoComDetalhe } from '@/lib/analise';
 import type { ItemPlaybook } from '@/lib/mec';
+import type { SinalContato } from '@/lib/natureza';
 import { MODELO_PADRAO, pedidoAnalise } from '@/lib/pedido-analise';
 import { finalizarConsolidado, pedidoConsolidacao, schemaConsolidado, type CapturaDoRelatorio, type ConsolidadoIa } from '@/lib/consolidacao';
 
@@ -24,11 +25,11 @@ function textoDaResposta(resposta: unknown): string {
     throw new Error('OpenAI não devolveu texto estruturado');
 }
 
-export async function analisarConversa({ transcript, doutrina, itens, midia = false }: { transcript: string; doutrina: string; itens: readonly ItemPlaybook[] | null; midia?: boolean }): Promise<{ resultado: ResultadoComDetalhe; modelo: string; entrada: number; saida: number }> {
+export async function analisarConversa({ transcript, doutrina, itens, midia = false, contato = null }: { transcript: string; doutrina: string; itens: readonly ItemPlaybook[] | null; midia?: boolean; contato?: SinalContato | null }): Promise<{ resultado: ResultadoComDetalhe; modelo: string; entrada: number; saida: number }> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY não configurada');
     const modelo = process.env.OPENAI_MODEL || MODELO_PADRAO;
-    const { schema, corpo: pedido } = pedidoAnalise({ transcript, doutrina, itens, midia, modelo });
+    const { schema, corpo: pedido } = pedidoAnalise({ transcript, doutrina, itens, midia, modelo, contato });
 
     const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',

@@ -121,3 +121,76 @@ guarda só a legenda e o nome do arquivo.
   semana: o "social" deve crescer, porque cliente sem prova sai da negociação.
 - Quantas vendas vêm só da regra do comprovante. Hoje não fica marcado; se
   precisar, dá para gravar a marca no payload.
+
+## Quem é o contato: sinais de fora da conversa (09/10)
+
+Depois do reprocessamento de 05 a 08/10, seis contatos ainda saíam como
+cliente e entravam na nota e nas vendas: Bongo 84 (motorista, venda),
+Sergio (cobrança de nota antiga, venda), Mateus Xavier com Rafael e com Ana
+Paula (compras, perdida), Uilian Nemecek (compras, sem resposta), Silas MKT
+(marketing, negociação com 90) e Adenilza (representante, 60).
+
+**Por que o `quem_pede` não decidia.** Ele é só um passo do prompt; nenhum
+código o lê. Quando dizia `vendedor_pede_ao_contato` com natureza cliente, 3
+de 4 eram clientes de verdade (Jasson e Jair recebendo orçamento), então ele
+não serve para decidir sozinho. Nos casos que erravam, o modelo trocava quem
+falou ("O Maicon me pediu uma botina", linha V:, virava "o cliente pediu") ou
+acertava o `quem_pede` e mesmo assim punha cliente/70.
+
+**O que decide agora** (`lib/natureza.ts`, aplicado em `pedidoAnalise`, por
+cima da IA, a não ser que ela já tenha visto alguém de fora com 80+):
+
+- **Cadastro em qualquer loja da rede** (95). A lista é da loja e é ela que
+  barra a mensagem, mas os gestores cadastram o mesmo número em várias lojas,
+  e o de uma não valia na outra: "MATHEUS COMPRAS" e "UILIAN NEMECEC COMPRAS"
+  na Venda Externa, conversando com Capão; "SILAS MARK." na Venda Externa,
+  conversando com Pisos Matriz. Com o 9º dígito ou sem ele.
+- **Cargo ou setor no nome** (85): MKT, Marketing, Motora, Motorista, Bongo +
+  número (os caminhões), CD, Compras, Crediário, Financeiro, Expedição,
+  Gerente, Recursos Humanos, Zona Nova, Redemac → colega; Representante →
+  fornecedor. Fica de fora o que pode ser empresa de cliente (Depósito,
+  Construtora, Entregas).
+- **Oferta do contato** (85): fala do contato com preço e estoque dele
+  ("R$32,56M² / Estoque 273,60m2") → fornecedor.
+
+Tipo e status ficam como a IA disse: o contato sai das contas inteiro
+(`naturezaSuspeita`), aparece em "Sugeridos pela IA" no Perfil com a
+evidência ("Cadastrado como contato interno em Venda Externa: …"), e o "É
+cliente" do gestor devolve a conversa com o que ela tinha.
+
+**Nota antiga** (`ajustarResultado`): o contato fala de nota tirada antes
+("Tiraram nota meses", "aquela nota") e não há comprovante no dia → a compra
+"fechada" é pós-venda. O modelo alternava entre venda e pós-venda no Sergio.
+
+**Bloqueio vale para trás.** O relatório do vendedor não olhava
+`conversas.bloqueada`: a análise feita antes do cadastro continuava contando
+como lead e venda (Silas, Uilian, Mateus). Agora a conversa bloqueada fica
+fora, como a dispensada, e cadastrar ou remover um contato interno refaz o
+relatório dos dias fechados em que ela teve análise.
+
+### Calibração
+
+O gabarito e o controle de 08/10 se perderam com o /tmp e foram remontados
+das sessões: 59 dos 66 casos (7 conversas sumiram na unificação LID da 0031)
+mais Mateus com Ana Paula. O controle passou a ser o que está em produção
+(735d9d8) para as 54 conversas de 07/10 que a auditoria não apontou; três
+delas o gestor já cadastrou como internas (Crediário, RH, Silas) e contam como
+interno. Bongo 84 passou a esperar interno (o nome prova). Mesmo critério nas
+duas versões, 2 rodadas:
+
+| | HEAD (735d9d8 + dados) | Agora |
+|---|---|---|
+| Gabarito (120) | 97 | 111 |
+| Os 6 casos (14 análises) | 3 | 14 |
+| Controle (108) | 98 | 105 |
+| Gabarito só com a IA, sem cadastro nem nome (`SEM_SINAL=1`, 60) | — | 52 |
+
+No controle, as falhas que sobram: Samuel (venda na IA, em andamento em
+produção) nas duas versões; "trabalho" (Pix pedido sem comprovante) saiu
+venda em 1 de 2 rodadas — oscilação do modelo, não da natureza.
+
+Em produção (05–08/10, leitura): o sinal tiraria das contas 55 análises hoje
+cliente — 25 negociações e 3 vendas (Bongo 84, Crediário, Mateus 08/10) —,
+todas de número interno. E 39 análises de conversas já bloqueadas ainda
+contavam no relatório (24 negociações, 4 vendas). Nada disso muda sem
+reprocessar.

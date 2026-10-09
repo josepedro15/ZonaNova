@@ -9,6 +9,9 @@
  * suspeita forte fica fora das objeções e do relatório do vendedor.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { semTelefone, variantesTelefone } from './painel.ts';
+
 export const NATUREZAS = ['cliente', 'colega_ou_loja', 'fornecedor_ou_parceiro', 'pessoal'] as const;
 export type Natureza = (typeof NATUREZAS)[number];
 
@@ -49,6 +52,106 @@ export const REGRA_NATUREZA = '- quem_pede: decida ANTES de tudo quem pede o qu�
     + '4) cliente = só se nada acima serviu: quem compra ou pode comprar da loja para si, para a própria obra ou empresa — consumidor, pedreiro, arquiteto, empreiteiro, empresa —, inclusive falando da compra DELE em pós-venda, entrega, cobrança, reclamação ou papo social. Profissional que fala do cliente DELE ("meu cliente", "o dono da obra", "o cliente gostou do piso") continua cliente, e quem manda alguém dele buscar ("o Adair tá lá no depósito", "meu pedreiro vai pegar") também. '
     + 'Não decida pela transcrição de um nome ou cargo solto num áudio ("Olá, gestão"): a transcrição erra nomes; olhe o assunto. '
     + 'confianca_natureza (0–100) é o quanto a conversa PROVA a escolha. Conversa curta ou só mídia, sem sinal de quem é o contato, fica cliente com confiança baixa (abaixo de 50). evidencia_natureza é o trecho literal curto que mostra a natureza ("" se não houver).';
+
+/**
+ * O que se sabe do contato fora da conversa do dia e que decide quem ele é,
+ * por cima do que a IA leu. Na auditoria de 07/10, o motorista, o comprador e
+ * o marketing saíam cliente com 60–90 de confiança, mesmo com o número já
+ * cadastrado como interno em OUTRA loja da rede ("MATHEUS COMPRAS" na Venda
+ * Externa, falando com Capão) ou com o cargo no nome ("Silas MKT", "Bongo 84").
+ */
+export type SinalContato = { natureza: Exclude<Natureza, 'cliente'>; confianca: number; evidencia: string };
+
+/** Cadastro de interno na rede: o gestor de uma loja já disse quem é. */
+export const CONFIANCA_CADASTRO = 95;
+/** Cargo ou setor no nome: forte, mas o gestor ainda confirma (é sugestão). */
+export const CONFIANCA_NOME = 85;
+
+/**
+ * Cargo ou setor no nome que o contato tem no WhatsApp. Só o que cliente não
+ * põe no próprio nome: "Depósito", "Construtora" ou "Entregas" podem ser a
+ * empresa de um cliente e ficam de fora. Os caminhões da rede ("Bongo 67",
+ * "Bongo 84") são os motoristas.
+ */
+const NOME_DE_COLEGA = /\b(mkt|marketing|motora|motorista|bongo ?\d+|cd|compras|crediario|financeiro|expedicao|gerente|recursos humanos|zona ?nova|redemac)\b/;
+const NOME_DE_FORNECEDOR = /\b(representante|representacoes|repres)\b/;
+
+const semAcento = (texto: string) => texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+export function sinalDoNome(nome: string | null | undefined): SinalContato | null {
+    const n = semAcento(nome?.trim() ?? '');
+    if (!n) return null;
+    const natureza = NOME_DE_FORNECEDOR.test(n) ? 'fornecedor_ou_parceiro' : NOME_DE_COLEGA.test(n) ? 'colega_ou_loja' : null;
+    return natureza ? { natureza, confianca: CONFIANCA_NOME, evidencia: `Nome do contato: "${nome!.trim()}"` } : null;
+}
+
+/**
+ * O contato oferece à loja produto com preço e estoque DELE ("R$32,56M² /
+ * Estoque 273,60m2"): é representante ou fornecedor. Cliente pergunta o
+ * estoque da loja, não manda o próprio. A regra está no prompt, e a IA ainda
+ * lia a tabela da representante como "cliente consultando porcelanato" (07/10).
+ */
+const PRECO = /R\$ ?\d/i;
+const ESTOQUE_DELE = /\bestoque:? ?\d/i;
+
+export function sinalDaOferta(transcript: string): SinalContato | null {
+    // O texto da fala, não a linha: no JSON, a quebra antes de "Estoque" é "\nEstoque".
+    const fala = transcript.split('\n').filter((l) => l.startsWith('C:') && !l.includes('[automática]')).map((l) => {
+        const aspas = l.indexOf(' "');
+        try { return aspas < 0 ? '' : JSON.parse(l.slice(aspas + 1)) as string; } catch { return ''; }
+    }).find((f) => PRECO.test(f) && ESTOQUE_DELE.test(f));
+    if (!fala) return null;
+    return { natureza: 'fornecedor_ou_parceiro', confianca: CONFIANCA_NOME, evidencia: `Oferta com preço e estoque do contato: "${fala.replace(/\s+/g, ' ').trim().slice(0, 120)}"` };
+}
+
+/** A natureza que a descrição do cadastro diz (a sugestão aceita grava "— Pessoal"); sem pista, colega. */
+export function naturezaDaDescricao(descricao: string): Exclude<Natureza, 'cliente'> {
+    const d = semAcento(descricao);
+    if (/fornecedor|parceiro|representante/.test(d)) return 'fornecedor_ou_parceiro';
+    if (/\b(pessoal|particular|part)\b/.test(d)) return 'pessoal';
+    return 'colega_ou_loja';
+}
+
+export type CadastroNaRede = { unidade: string | null; descricao: string };
+
+/** O cadastro em qualquer loja da rede vence o nome; sem nenhum dos dois, null. */
+export function sinalDoContato({ nome, cadastros }: { nome: string | null | undefined; cadastros: readonly CadastroNaRede[] }): SinalContato | null {
+    const cadastro = cadastros[0];
+    if (cadastro) {
+        return {
+            natureza: naturezaDaDescricao(cadastro.descricao),
+            confianca: CONFIANCA_CADASTRO,
+            evidencia: `Cadastrado como contato interno${cadastro.unidade ? ` em ${cadastro.unidade}` : ''}: "${cadastro.descricao}"`,
+        };
+    }
+    return sinalDoNome(nome);
+}
+
+/**
+ * Os cadastros deste número como contato interno em qualquer loja da rede. A
+ * lista é da loja — é ela que barra a mensagem —, mas quem é o contato não
+ * muda de uma loja para outra.
+ */
+export async function cadastrosNaRede(db: SupabaseClient, telefone: string): Promise<CadastroNaRede[]> {
+    if (semTelefone(telefone)) return [];
+    const { data, error } = await db.from('contatos_internos').select('descricao,created_at,unidades(nome)')
+        .in('telefone', variantesTelefone(telefone)).order('created_at', { ascending: false })
+        .returns<{ descricao: string; unidades: { nome: string } | null }[]>();
+    if (error) throw error;
+    return (data ?? []).map((c) => ({ unidade: c.unidades?.nome ?? null, descricao: c.descricao }));
+}
+
+/**
+ * O sinal entra no lugar da natureza que a IA deu, a não ser que ela já tenha
+ * visto, com confiança, alguém de fora. Tipo e status ficam como a IA disse:
+ * contato interno sai das contas inteiro (naturezaSuspeita), e se o gestor
+ * disser "É cliente" a conversa volta com a venda que tinha.
+ */
+export function aplicarSinal<T extends { natureza_contato: Natureza; confianca_natureza: number; evidencia_natureza: string }>(r: T, sinal: SinalContato | null | undefined): T {
+    if (!sinal) return r;
+    if (r.natureza_contato !== 'cliente' && r.confianca_natureza >= LIMIAR_NATUREZA) return r;
+    return { ...r, natureza_contato: sinal.natureza, confianca_natureza: sinal.confianca, evidencia_natureza: sinal.evidencia };
+}
 
 type ComNatureza = { natureza_contato?: unknown; confianca_natureza?: unknown; natureza_descartada?: unknown };
 

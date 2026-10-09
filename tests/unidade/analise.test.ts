@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ajustarAcolhida, ajustarResultado, comprovanteNoDia, aderenciaPercentual, saudacaoInvisivel, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
+import { ajustarAcolhida, ajustarResultado, comprovanteNoDia, notaAntiga, aderenciaPercentual, saudacaoInvisivel, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
 
 test('o dia comercial usa São Paulo na virada do UTC', () => {
     assert.equal(dataEmSaoPaulo(new Date('2026-09-22T01:30:00Z')), '2026-09-21');
@@ -298,4 +298,28 @@ test('schema traz quem pede e os assuntos antes da natureza e do status', () => 
     assert.ok(ordem.indexOf('natureza_contato') < ordem.indexOf('status'));
     assert.equal(schemaAnalise.shape.quem_pede.parse('outra_coisa'), 'contato_pede_a_loja');
     assert.deepEqual(schemaAnalise.shape.assuntos_do_dia.parse(undefined), []);
+});
+
+// Sergio (07/10): orçamento novo no mesmo dia, mas o Pix pedido era da nota
+// tirada meses antes. O modelo dava compra fechada uma rodada sim, outra não.
+test('Pix de nota antiga sem comprovante é pós-venda, não venda', () => {
+    const transcript = ['V: "Só estou vendo os descontos e já te mando o orçamento"', 'V: [Mídia: documento]', 'C: [Mídia: documento]',
+        'C: "Tiraram nota meses dados"', 'C: "Me envia o pix que mando pra ele"', 'V: "Chave pix\\nfinanceiro@zonanova.com.br"'].join('\n');
+    assert.equal(notaAntiga(transcript), true);
+    const r = ajustarResultado(resultado({ status: 'venda_feita', assuntos_do_dia: [{ assunto: 'orçamento e pix', situacao: 'compra_nova_fechada' }] }), transcript);
+    assert.equal(r.status, 'encerrada');
+    assert.equal(r.tipo_conversa, 'suporte');
+    assert.deepEqual(r.assuntos_do_dia, [{ assunto: 'orçamento e pix', situacao: 'pos_venda' }]);
+    // Com outro pedido ainda aberto, continua negociação em andamento.
+    const comAberto = ajustarResultado(resultado({ status: 'venda_feita', assuntos_do_dia: [
+        { assunto: 'pix da nota', situacao: 'compra_nova_fechada' }, { assunto: 'piso novo', situacao: 'compra_nova_em_aberto' }] }), transcript);
+    assert.equal(comAberto.status, 'em_andamento');
+    assert.equal(comAberto.tipo_conversa, 'negociacao');
+    // Com comprovante no dia, a regra não mexe: pode ser compra nova paga.
+    const pago = `${transcript}\nC: [Mídia: imagem]`;
+    assert.equal(ajustarResultado(resultado({ status: 'venda_feita', assuntos_do_dia: [{ assunto: 'x', situacao: 'compra_nova_fechada' }] }), pago).status, 'venda_feita');
+    // Nota do pedido de hoje não é nota antiga; o vendedor falando de nota também não conta.
+    assert.equal(notaAntiga('C: "Me manda a nota desse pedido"'), false);
+    assert.equal(notaAntiga('V: "Aquela nota de meses atrás"'), false);
+    assert.equal(notaAntiga('C: "é sobre aquela nota"'), true);
 });

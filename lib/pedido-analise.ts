@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ajustarResultado, montarSchemaAnalise } from './analise.ts';
 import { REGRAS_DETALHE_MEC, type ItemPlaybook, type TipoItem } from './mec.ts';
 import { regraDeMidia } from './midia.ts';
-import { REGRA_NATUREZA } from './natureza.ts';
+import { aplicarSinal, REGRA_NATUREZA, sinalDaOferta, type SinalContato } from './natureza.ts';
 
 /**
  * O pedido da análise de uma conversa à OpenAI, sem rede nem `server-only`:
@@ -38,7 +38,7 @@ export const REGRA_STATUS = '- ASSUNTOS E STATUS: antes do status, liste em assu
     + 'Também é compra_nova_fechada o pagamento feito hoje de mercadoria que ainda vai ser retirada ou entregue, mesmo de pedido montado antes ("Pedido do Fulano", "Jones está aqui para pegar esse material"): o vendedor manda a chave Pix ou pede o comprovante, ou o cliente diz que vai pagar, e logo depois vem C: [Mídia: imagem] ou C: [Mídia: documento] — isso é o comprovante, a compra está paga. Chave Pix pedida ou enviada sem comprovante nem confirmação depois ("fico no aguardo do comprovante") ainda é compra_nova_em_aberto. '
     + 'Exemplos: V: "*Aguardo comprovante!*" / C: [Mídia: documento] / V: "Certo" = compra_nova_fechada. V: "Chave pix - financeiro@…" / C: [Mídia: documento] / V: "Obrigada" = compra_nova_fechada. C: "Posso pagar agora e coloca na primeira carga?" / C: [Mídia: documento] = compra_nova_fechada. '
     + 'Orçamento de outro dia (só orçado, ainda não comprado) que o cliente fecha hoje (manda separar, faturar, liberar ou entregar) é compra_nova_fechada: pós-venda é só compra já FECHADA antes. "Fechou" ou "beleza" sozinho, sem pedido, é "combinado", não prova compra. '
-    + 'Pix de nota antiga ou de compra já entregue ou retirada ("tiraram nota faz meses", "aquela nota") é pos_venda, nunca compra nova. Preço ou orçamento enviado, cliente que agradece, diz que vai ver ou ainda escolhe = compra_nova_em_aberto. '
+    + 'Pix de nota antiga ou de compra já entregue ou retirada ("tiraram nota faz meses", "Tiraram nota meses", "aquela nota") é pos_venda, nunca compra nova, mesmo que o vendedor tenha mandado orçamento no mesmo dia. Imagem ou documento do contato que vem ANTES de qualquer Pix ou pagamento não é comprovante. Preço ou orçamento enviado, cliente que agradece, diz que vai ver ou ainda escolhe = compra_nova_em_aberto. '
     + 'STATUS: venda_feita se QUALQUER assunto é compra_nova_fechada, mesmo que outro assunto do dia tenha ficado aberto. Senão: '
     + 'perdida = cliente desistiu ou comprou em outro lugar, ou não havia o produto e o cliente encerrou ("ok, obrigada", "vou tentar em outro lugar"), mesmo com o vendedor indicando outra loja; '
     + 'em_andamento = compra nova ou pós-venda ficou pendente com alguém; lead_frio = sumiu sem decidir depois de receber o que pediu; '
@@ -77,12 +77,15 @@ export const REGRA_SUPORTE = '- SUPORTE: cliente que só trata de compra fechada
     + 'Em suporte, score_atendimento mede só se o vendedor respondeu, resolveu ou encaminhou para quem resolve, deu prazo ou retorno e foi cordial: 70–100 resolveu ou encaminhou com retorno; 40–69 respondeu sem resolver nem encaminhar; 0–39 ignorou, deixou sem retorno ou informou errado. '
     + 'Fechamento, sondagem, oferta e preço não se aplicam a suporte: nunca baixam a nota nem entram em erros_vendedor. Se no meio do suporte o cliente pede produto novo, a conversa é negociação.';
 
-export function pedidoAnalise({ transcript, doutrina, itens, midia = false, modelo }: { transcript: string; doutrina: string; itens: readonly ItemPlaybook[] | null; midia?: boolean; modelo: string }) {
+export function pedidoAnalise({ transcript, doutrina, itens, midia = false, modelo, contato = null }: { transcript: string; doutrina: string; itens: readonly ItemPlaybook[] | null; midia?: boolean; modelo: string; contato?: SinalContato | null }) {
     const base = montarSchemaAnalise(itens);
-    // O resultado sai conferido contra a própria conversa (ajustarResultado):
-    // o worker e as calibrações em scripts/ recebem o mesmo, sem ninguém
-    // esquecer de chamar.
-    const schema = { json: base.json, zod: base.zod.transform((r) => ajustarResultado(r, transcript)) };
+    // O resultado sai conferido contra a própria conversa (ajustarResultado) e
+    // contra o que se sabe do contato (aplicarSinal, lib/natureza.ts): o
+    // cadastro na rede ou o nome, que vêm de fora, e a oferta com preço e
+    // estoque dele, que está no transcript. O worker e as calibrações em
+    // scripts/ recebem o mesmo, sem ninguém esquecer de chamar.
+    const sinal = contato ?? sinalDaOferta(transcript);
+    const schema = { json: base.json, zod: base.zod.transform((r) => ajustarResultado(aplicarSinal(r, sinal), transcript)) };
     return {
         schema,
         corpo: {

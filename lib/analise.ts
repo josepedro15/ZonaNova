@@ -133,6 +133,11 @@ export function comprovanteNoDia(transcript: string): boolean {
         MIDIA_DO_CONTATO.test(m) && (!/descrição automática| "/.test(m) || /comprovante|pix|pag[oa]|paguei|transfer/i.test(m))));
 }
 
+/** O contato fala de nota tirada antes: "Tiraram nota meses", "aquela nota", "a nota do mês passado". */
+export function notaAntiga(transcript: string): boolean {
+    return falasDe(transcript, 'C').some((f) => /\bnotas?\b.*\b(meses|antiga|faz tempo|ano passado|mes passado)\b|\b(aquela|da outra) nota\b/.test(f));
+}
+
 /**
  * Conferências que o modelo não fazia sozinho, nem com a regra no prompt
  * (auditoria de 07/10):
@@ -151,9 +156,21 @@ export function comprovanteNoDia(transcript: string): boolean {
  *   das conversões; continua na conversa para o gestor ver.
  * - Objeção que repete uma fala do vendedor e nenhuma do cliente ("Não temos
  *   mais nada tratado") sai: virava "objeção frequente" no relatório.
+ * - O contato fala de nota antiga ("Tiraram nota meses") e não há comprovante
+ *   no dia: o Pix é dessa nota, pós-venda. A regra está no prompt, e o modelo
+ *   ainda chamava de compra fechada uma rodada sim, outra não (09/10).
  */
 export function ajustarResultado<T extends Pick<ResultadoAnalise, 'assuntos_do_dia' | 'status' | 'tipo_conversa' | 'natureza_contato' | 'confianca_natureza' | 'objecoes'>>(r: T, transcript: string): T {
     let ajustado = r;
+    if (notaAntiga(transcript) && !comprovanteNoDia(transcript) && r.assuntos_do_dia.some((a) => a.situacao === 'compra_nova_fechada')) {
+        const assuntos = r.assuntos_do_dia.map((a) => (a.situacao === 'compra_nova_fechada' ? { ...a, situacao: 'pos_venda' as const } : a));
+        const aberta = assuntos.some((a) => a.situacao.startsWith('compra_nova_'));
+        ajustado = {
+            ...ajustado, assuntos_do_dia: assuntos,
+            status: r.status === 'venda_feita' ? (aberta ? 'em_andamento' : 'encerrada') : r.status,
+            tipo_conversa: r.tipo_conversa === 'negociacao' && !aberta ? 'suporte' : r.tipo_conversa,
+        };
+    }
     const deCliente = r.natureza_contato === 'cliente' || r.confianca_natureza < LIMIAR_NATUREZA;
     const compraNova = ajustado.assuntos_do_dia.some((a) => a.situacao.startsWith('compra_nova_'));
     const fechou = ajustado.assuntos_do_dia.some((a) => a.situacao === 'compra_nova_fechada') || (compraNova && comprovanteNoDia(transcript));

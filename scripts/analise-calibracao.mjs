@@ -15,13 +15,15 @@
 //
 // Roda a análise de produção (mesmo prompt, schema e pós-processamento —
 // lib/pedido-analise.ts) no transcript do dia, sem mídia e sem o detalhe do
-// MEC. Só LÊ o banco. Usa a service role e a OPENAI_API_KEY; ~US$ 0,005 por
-// conversa no gpt-4.1-mini.
+// MEC, mas com o sinal do contato (lib/natureza.ts: cadastro de interno em
+// qualquer loja da rede, cargo no nome); SEM_SINAL=1 roda sem ele. Só LÊ o
+// banco. Usa a service role e a OPENAI_API_KEY; ~US$ 0,005 por conversa no
+// gpt-4.1-mini.
 // =============================================================================
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { custoEstimado } from '../lib/analise.ts';
-import { naturezaSuspeita } from '../lib/natureza.ts';
+import { cadastrosNaRede, naturezaSuspeita, sinalDoContato } from '../lib/natureza.ts';
 import { doutrinaMec, MODELO_PADRAO, pedidoAnalise } from '../lib/pedido-analise.ts';
 import { transcriptDoDia } from './transcript-do-dia.mjs';
 
@@ -72,10 +74,19 @@ function conferir(r, esperado) {
     return falhas;
 }
 
+/** O mesmo sinal do worker (cadastro na rede, cargo no nome). SEM_SINAL=1 mede só a IA. */
+async function sinalDaConversa(conversaId) {
+    if (process.env.SEM_SINAL) return null;
+    const { data: c, error } = await db.from('conversas').select('cliente_nome,cliente_telefone').eq('id', conversaId).single();
+    if (error) throw error;
+    return sinalDoContato({ nome: c.cliente_nome, cadastros: await cadastrosNaRede(db, c.cliente_telefone) });
+}
+
 async function analisar(caso, doutrina) {
     const transcript = await transcriptDoDia(db, caso.conversa_id, caso.data_ref);
     if (!transcript) return { pulado: 'sem mensagem do contato no dia' };
-    const { corpo, schema } = pedidoAnalise({ transcript, doutrina, itens: null, midia: false, modelo });
+    const contato = await sinalDaConversa(caso.conversa_id);
+    const { corpo, schema } = pedidoAnalise({ transcript, doutrina, itens: null, midia: false, modelo, contato });
     const resposta = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify(corpo),
     });

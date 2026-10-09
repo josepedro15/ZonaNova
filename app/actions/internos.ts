@@ -5,6 +5,7 @@ import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { telefoneE164, variantesTelefone } from '@/lib/painel';
 import { liberarConversas } from '@/lib/exclusao-dados';
 import { DESCARTADA } from '@/lib/natureza';
+import { diaFechado } from '@/lib/analise';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -25,6 +26,30 @@ async function quemCuida(unidadeId: string) {
     return count ? { admin, userId: user.id } : null;
 }
 
+type Admin = ReturnType<typeof criarClienteAdmin>;
+
+/**
+ * Refaz o relatório dos dias já fechados em que a conversa com estes números
+ * teve análise: cadastrar (ou tirar) um contato interno muda quem conta como
+ * lead e venda nesses dias, e o relatório não se refaz sozinho. Hoje fica com
+ * o fechamento das 00h30, que já lê a marca.
+ */
+async function refazerRelatorios(admin: Admin, unidadeId: string, telefones: string[]) {
+    const { data: conversas, error } = await admin.from('conversas').select('id')
+        .eq('unidade_id', unidadeId).in('cliente_telefone', telefones).returns<{ id: string }[]>();
+    if (error) throw error;
+    if (!conversas?.length) return;
+    const { data: analises, error: erroAnalises } = await admin.from('analises_conversa').select('user_id,data_ref')
+        .in('conversa_id', conversas.map((c) => c.id)).returns<{ user_id: string; data_ref: string }[]>();
+    if (erroAnalises) throw erroAnalises;
+    const agora = new Date();
+    const dias = new Map((analises ?? []).filter((a) => diaFechado(a.data_ref, agora)).map((a) => [`${a.user_id}|${a.data_ref}`, a]));
+    for (const d of dias.values()) {
+        const { error: erroFila } = await admin.rpc('zn_reabrir_item', { p_tipo: 'relatorio_vendedor', p_referencia: d.user_id, p_data: d.data_ref });
+        if (erroFila) throw erroFila;
+    }
+}
+
 function revalidar() {
     for (const caminho of ['/perfil', '/dashboard', '/conversas', '/equipe']) revalidatePath(caminho);
 }
@@ -43,6 +68,7 @@ export async function adicionarContatoInterno(form: FormData) {
     const { error: erroBloqueio } = await ctx.admin.from('conversas').update({ bloqueada: true })
         .eq('unidade_id', unidadeId).in('cliente_telefone', variantesTelefone(telefone));
     if (erroBloqueio) throw erroBloqueio;
+    await refazerRelatorios(ctx.admin, unidadeId, variantesTelefone(telefone));
     await ctx.admin.from('eventos_admin').insert({
         actor_id: ctx.userId, acao: 'adicionou_contato_interno', alvo_id: unidadeId, detalhes: { telefone, descricao },
     });
@@ -60,6 +86,7 @@ export async function removerContatoInterno(form: FormData) {
     const { error } = await ctx.admin.from('contatos_internos').delete().eq('id', id);
     if (error) throw error;
     await liberarConversas(ctx.admin, { unidadeId: alvo.unidade_id }, variantesTelefone(alvo.telefone));
+    await refazerRelatorios(ctx.admin, alvo.unidade_id, variantesTelefone(alvo.telefone));
     await ctx.admin.from('eventos_admin').insert({
         actor_id: ctx.userId, acao: 'removeu_contato_interno', alvo_id: alvo.unidade_id, detalhes: { telefone: alvo.telefone, descricao: alvo.descricao },
     });

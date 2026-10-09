@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pedidoAnalise, REGRA_ERROS, REGRA_ESCALAS, REGRA_OBJECOES, REGRA_STATUS, REGRA_SUPORTE, REGRA_TIPO } from '../../lib/pedido-analise.ts';
-import { REGRA_NATUREZA } from '../../lib/natureza.ts';
+import { naturezaSuspeita, REGRA_NATUREZA } from '../../lib/natureza.ts';
 
 const instrucoes = () => pedidoAnalise({ transcript: 'C: "oi"', doutrina: 'MEC', itens: null, modelo: 'gpt-4.1-mini' }).corpo.instructions;
 
@@ -36,6 +36,19 @@ test('a resposta sai conferida contra a conversa (ajustarResultado)', () => {
             .map((etapa) => ({ etapa, aplicavel: true, aplicado: 'sim', justificativa: 'j', evidencias: [], itens: [] })),
     };
     assert.equal(schema.zod.parse(resposta).status, 'venda_feita');
+
+    // Com o sinal do contato (cadastro na rede), a natureza é a do cadastro, e
+    // a compra fechada da IA não vira venda: contato interno não vende.
+    const comSinal = pedidoAnalise({ transcript: 'C: "separa no nome"\nV: "Já está no pacote"', doutrina: 'MEC', itens: null, modelo: 'gpt-4.1-mini',
+        contato: { natureza: 'colega_ou_loja', confianca: 95, evidencia: 'Cadastrado como contato interno em Capão da Canoa: "estoque"' } });
+    const r = comSinal.schema.zod.parse(resposta);
+    assert.equal(r.natureza_contato, 'colega_ou_loja');
+    assert.equal(r.status, 'em_andamento');
+    assert.equal(naturezaSuspeita(r), 'colega_ou_loja');
+
+    // Sem sinal de fora, a oferta com preço e estoque do contato vale como sinal.
+    const oferta = pedidoAnalise({ transcript: `C: ${JSON.stringify('LM URBANO CINZA\nR$32,56M²\nEstoque 273,60m2')}`, doutrina: 'MEC', itens: null, modelo: 'gpt-4.1-mini' });
+    assert.equal(oferta.schema.zod.parse(resposta).natureza_contato, 'fornecedor_ou_parceiro');
 });
 
 // O caso do piloto (08/10): cliente perguntando pela entrega ou pelo crediário

@@ -7,7 +7,7 @@ import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/
 import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, saudacaoInvisivel, type MensagemAnalise } from '@/lib/analise';
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao } from '@/lib/mec';
 import { doutrinaMec } from '@/lib/pedido-analise';
-import { DESCARTADA, naturezaSuspeita } from '@/lib/natureza';
+import { cadastrosNaRede, DESCARTADA, naturezaSuspeita, sinalDoContato } from '@/lib/natureza';
 import { comVendaPresencial } from '@/lib/presencial';
 import { semAtividadeDeSaida } from '@/lib/consolidacao';
 import { paginar } from '@/lib/paginar';
@@ -378,8 +378,8 @@ async function gravarObservacoes(
  */
 async function analisarItem(supabase: Admin, conversaId: string, dataRef: string): Promise<boolean> {
     const { inicio, fim } = janelaDoDia(dataRef);
-    const { data: conversa } = await supabase.from('conversas').select('id,user_id,unidade_id,dispensada_em,fechada_presencial_ref')
-        .eq('id', conversaId).maybeSingle<{ id: string; user_id: string; unidade_id: string; dispensada_em: string | null; fechada_presencial_ref: string | null }>();
+    const { data: conversa } = await supabase.from('conversas').select('id,user_id,unidade_id,dispensada_em,fechada_presencial_ref,cliente_telefone,cliente_nome')
+        .eq('id', conversaId).maybeSingle<{ id: string; user_id: string; unidade_id: string; dispensada_em: string | null; fechada_presencial_ref: string | null; cliente_telefone: string; cliente_nome: string | null }>();
     if (!conversa) throw new IgnorarItem('conversa não existe mais');
     // "Não é atendimento" (0027): a marca some sozinha quando o cliente escreve
     // de novo, e aí a conversa volta a ser analisada.
@@ -426,7 +426,10 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     const comDetalhe = detalheLigado(unidadeId, process.env.MEC_DETALHE_UNIDADES);
     const doutrina = await doutrinaMec(supabase, comDetalhe);
     const itensDetalhe = doutrina.playbookId && comDetalhe ? doutrina.itens : null;
-    const analise = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe, midia: comMidia });
+    // Número cadastrado como interno em outra loja da rede, ou cargo no nome:
+    // decide quem é o contato por cima da leitura da IA (lib/natureza.ts).
+    const contato = sinalDoContato({ nome: conversa.cliente_nome, cadastros: await cadastrosNaRede(supabase, conversa.cliente_telefone) });
+    const analise = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe, midia: comMidia, contato });
     const { modelo, entrada, saida } = analise;
     const resultado = ajustarAcolhida(analise.resultado, { retomada, invisivel: saudacaoInvisivel(recorte) });
     // As provas do detalhe são conferidas contra a conversa antes de gravar
@@ -481,13 +484,16 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
         .eq('user_id', userId).eq('data_ref', dataRef);
     if (error) throw error;
     if (!todas?.length) throw new IgnorarItem('nenhuma análise para consolidar');
-    // "Não é atendimento" (0027) também fica de fora, enquanto a marca durar.
+    // "Não é atendimento" (0027) também fica de fora, enquanto a marca durar,
+    // e a conversa bloqueada — contato interno da loja, colega conectado ou
+    // bloqueio do vendedor: a análise feita antes do cadastro não pode
+    // continuar contando como lead depois dele.
     // Lotes de 100 ids, pela URL do PostgREST, como as mensagens abaixo.
     const doDia = [...new Set(todas.map((a) => a.conversa_id as string))];
     const fora = new Set<string>();
     for (let i = 0; i < doDia.length; i += 100) {
         const { data: dispensadas, error: erroDispensadas } = await supabase.from('conversas').select('id')
-            .in('id', doDia.slice(i, i + 100)).not('dispensada_em', 'is', null).returns<{ id: string }[]>();
+            .in('id', doDia.slice(i, i + 100)).or('dispensada_em.not.is.null,bloqueada.eq.true').returns<{ id: string }[]>();
         if (erroDispensadas) throw erroDispensadas;
         for (const c of dispensadas ?? []) fora.add(c.id);
     }
