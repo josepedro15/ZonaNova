@@ -53,6 +53,8 @@ export type MensagemUazapi = {
         pushName?: string;
         fromApi?: boolean;
         wasSentByApi?: boolean;
+        /** Número da instância. Vem na /message/find; o id do webhook é `owner:messageid`. */
+        owner?: string;
 };
 
 /** Os campos do chat que identificam o contato. */

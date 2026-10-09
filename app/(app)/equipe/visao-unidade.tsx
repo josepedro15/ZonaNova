@@ -11,10 +11,15 @@ import { falaCurta, setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/vis
 import { contarObjecoesPorCodigo, juntarObjecoes } from '@/lib/mec';
 import { carregarPlaybook } from '@/lib/mec-dados';
 import { ObjecoesDaSemana } from './objecoes-da-semana';
+import { horaBrasilia, dataCurtaBrasilia, inicioDoDia } from '../dashboard/formato';
 
 type Supabase = Awaited<ReturnType<typeof contextoApp>>['supabase'];
 type Espera = { id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string; espera: number };
-type Diario = NotaDia & { user_id: string; leads_atendidos: number; conversoes_confirmadas: number; tempo_medio_resposta_s: number | null };
+type Diario = NotaDia & { user_id: string; leads_atendidos: number; conversoes_confirmadas: number; tempo_medio_resposta_s: number | null; captura_incompleta: boolean | null };
+type ConexaoDaEquipe = { user_id: string; status: string; ultimo_evento_em: string | null; silencio_desde: string | null };
+
+/** "desde 10h56" hoje; "desde 7 de out." quando começou antes. */
+const desdeQuando = (iso: string, agora: Date) => (Date.parse(iso) >= inicioDoDia(agora).getTime() ? horaBrasilia(iso) : dataCurtaBrasilia(iso));
 
 const DUAS_HORAS = 2 * 60 * 60 * 1000;
 /** A fila da equipe na tela: uma lista maior que isso ninguém percorre. */
@@ -52,9 +57,9 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     const janela = new Date(agora.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     let qPessoas = supabase.from('profiles').select('id,nome,unidade_id,unidades!profiles_unidade_id_fkey(nome)').eq('role', 'vendedor').eq('status', 'ativo').order('nome');
-    let qDiarios = supabase.from('relatorios_diarios').select('user_id,data_ref,score_geral,leads_atendidos,conversoes_confirmadas,tempo_medio_resposta_s')
+    let qDiarios = supabase.from('relatorios_diarios').select('user_id,data_ref,score_geral,leads_atendidos,conversoes_confirmadas,tempo_medio_resposta_s,captura_incompleta')
         .gte('data_ref', diaMenos(hoje, 15)).order('data_ref', { ascending: false }).limit(1000);
-    let qConexoes = supabase.from('vw_conexoes_status').select('user_id,status,ultimo_evento_em');
+    let qConexoes = supabase.from('vw_conexoes_status').select('user_id,status,ultimo_evento_em,silencio_desde');
     let qPendentes = supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'pendente');
     let qUnidade = supabase.from('relatorios_unidade')
         .select('unidade_id,data_ref,score_geral,leads_atendidos,conversoes_confirmadas,oportunidades_perdidas,tempo_medio_resposta_s,taxa_resposta')
@@ -102,7 +107,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     const [{ data: pessoas }, { data: diarios }, { data: conexoes }, { count: pendentes }, { data: daUnidade }, { data: rede }, { data: aderencias }, analises, { data: conversas }, objecoesCodigo, pb, { data: vendedores }] = await Promise.all([
         qPessoas.returns<{ id: string; nome: string; unidade_id: string; unidades: { nome: string } | null }[]>(),
         qDiarios.returns<Diario[]>(),
-        qConexoes.returns<{ user_id: string; status: string; ultimo_evento_em: string | null }[]>(),
+        qConexoes.returns<ConexaoDaEquipe[]>(),
         qPendentes,
         qUnidade.returns<LinhaDia[]>(),
         supabase.from('relatorios_rede').select('data_ref,score_geral').order('data_ref', { ascending: false }).limit(1).maybeSingle<{ data_ref: string; score_geral: number | null }>(),
@@ -145,6 +150,9 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     const ultimaFala = await ultimasFalas(supabase, esperando.slice(0, MAX_FILA).map((e) => e.id), janela);
     const nomeDoVendedor = new Map(equipe.map((p) => [p.id, p.nome]));
     const foraDoAr = equipe.filter((p) => conexao.get(p.id)?.status !== 'conectada');
+    // Conectado e em silêncio enquanto a loja conversa (lib/captura.ts): o
+    // número está no ar, mas as mensagens não estão chegando.
+    const semCaptura = equipe.filter((p) => conexao.get(p.id)?.status === 'conectada' && !!conexao.get(p.id)?.silencio_desde);
     const sugestoes = comQuemFalar(equipe, notas, etapas);
     // Pelo código do catálogo nas conversas que já o têm; nas outras (outras
     // lojas, fora do piloto), pelo texto livre de antes. Uma conversa entra
@@ -190,12 +198,20 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         <Pagina>
             <CabecalhoPagina voltar={voltar} sobre={sobre} titulo={titulo} />
 
-            {(foraDoAr.length > 0 || esperas.length > 0 || !!pendentes) && (
+            {(foraDoAr.length > 0 || semCaptura.length > 0 || esperas.length > 0 || !!pendentes) && (
                 <section aria-label="Alertas" className="grid gap-4 lg:grid-cols-3">
                     {foraDoAr.length > 0 && (
                         <Alerta tom="risco" icone="wifi_off"
                                 titulo={foraDoAr.length === 1 ? `WhatsApp de ${foraDoAr[0].nome.split(' ')[0]} fora do ar` : `${foraDoAr.length} números fora do ar`}>
                             Nada é capturado enquanto o número estiver desconectado.
+                        </Alerta>
+                    )}
+                    {semCaptura.length > 0 && (
+                        <Alerta tom="atencao" icone="alerta"
+                                titulo={semCaptura.length === 1
+                                    ? `${semCaptura[0].nome.split(' ')[0]}: conectado, sem mensagens desde ${desdeQuando(conexao.get(semCaptura[0].id)!.silencio_desde!, agora)}`
+                                    : `${semCaptura.length} números conectados sem receber mensagens`}>
+                            A loja segue conversando e nada chega deste número. O sistema está tentando recuperar as mensagens; o silêncio não conta contra o vendedor.
                         </Alerta>
                     )}
                     {esperas.length > 0 && (
@@ -273,7 +289,8 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                                 const resp = minutos(r?.tempo_medio_resposta_s);
                                 const respTom = resp === null ? null : tomResposta(resp);
                                 const atrasado = r && ultimo && r.data_ref !== ultimo.data_ref;
-                                const seloConexao = <Selo tom={ligado ? 'bom' : 'risco'} ponto>{ligado ? 'Conectado' : 'Fora do ar'}</Selo>;
+                                const mudo = ligado && !!cx?.silencio_desde;
+                                const seloConexao = <Selo tom={mudo ? 'atencao' : ligado ? 'bom' : 'risco'} ponto>{mudo ? 'Sem captura' : ligado ? 'Conectado' : 'Fora do ar'}</Selo>;
                                 return {
                                     chave: p.id,
                                     href: `/equipe/${p.id}`,
@@ -288,7 +305,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                                         </span>,
                                         nota === null
                                             ? <span key="n" className="text-[12.5px] italic">{r ? 'sem nota' : 'sem dado'}</span>
-                                            : <span key="n" className="flex items-center gap-2.5"><span className="display num w-7 text-base font-bold">{nota}</span><span className="grow"><Barra pct={nota} tom={tomFaixa(nota, 50, 65)} rotulo={`Nota de ${p.nome}`} /></span>{atrasado && <span className="text-[11px] text-atencao-texto">{diaMes(r.data_ref)}</span>}</span>,
+                                            : <span key="n" className="flex items-center gap-2.5"><span className="display num w-7 text-base font-bold">{nota}</span><span className="grow"><Barra pct={nota} tom={tomFaixa(nota, 50, 65)} rotulo={`Nota de ${p.nome}`} /></span>{atrasado && <span className="text-[11px] text-atencao-texto">{diaMes(r.data_ref)}</span>}{r.captura_incompleta && <span className="text-[11px] text-atencao-texto" title="Houve um intervalo sem registro de mensagens neste dia">captura incompleta</span>}</span>,
                                         <span key="l" className="num">{r?.leads_atendidos ?? '—'}</span>,
                                         <span key="c" className="num">{r?.conversoes_confirmadas ?? '—'}</span>,
                                         <span key="r" className={`num ${respTom === 'atencao' ? 'font-semibold text-atencao-texto' : ''}`}>

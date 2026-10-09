@@ -106,6 +106,25 @@ test('toda chamada sai com prazo', async () => {
     assert.ok(sinal instanceof AbortSignal);
 });
 
+test('histórico sob demanda leva a âncora quando há uma, e só então', async () => {
+    const { f, chamadas } = falso({ '/message/history-sync': { request_id: 'x' } });
+    const uaz = new Uazapi('https://uaz', 'admin', f);
+    await uaz.sincronizarHistorico('tk', '5551981009857@s.whatsapp.net', 100, '3EB0ANCORA');
+    await uaz.sincronizarHistorico('tk', '5551981009857@s.whatsapp.net');
+    assert.deepEqual(chamadas.map((c) => c.corpo), [
+        { number: '5551981009857@s.whatsapp.net', mode: 'history', count: 100, messageid: '3EB0ANCORA' },
+        { number: '5551981009857@s.whatsapp.net', mode: 'history', count: 50 },
+    ]);
+    assert.equal(chamadas[0].headers.token, 'tk');
+});
+
+test('buscarMensagens pede a /message/find com o token da instância', async () => {
+    const { f, chamadas } = falso({ '/message/find': { messages: [{ messageid: 'M1' }], pagination: { hasMore: false } } });
+    const r = await new Uazapi('https://uaz', 'admin', f).buscarMensagens('tk', { limit: 200, offset: 0 });
+    assert.deepEqual(r.messages, [{ messageid: 'M1' }]);
+    assert.deepEqual(chamadas, [{ url: '/message/find', metodo: 'POST', headers: { 'content-type': 'application/json', token: 'tk' }, corpo: { limit: 200, offset: 0 } }]);
+});
+
 test('verificarNumeros consulta o /chat/check com o token da instância', async () => {
     const resposta = [{ query: '141562256314579@lid', jid: '555181009857@s.whatsapp.net', isInWhatsapp: true }];
     const { f, chamadas } = falso({ '/chat/check': resposta });
@@ -115,4 +134,12 @@ test('verificarNumeros consulta o /chat/check com o token da instância', async 
     assert.equal(c.metodo, 'POST');
     assert.equal(c.headers.token, 'tk');
     assert.deepEqual(c.corpo, { numbers: ['141562256314579@lid'] });
+});
+
+test('errosDoWebhook lê os últimos erros de entrega com o token da instância', async () => {
+    const { f, chamadas } = falso({ '/webhook/errors': [{ created: '2026-10-07T14:10:00Z', status_code: 401 }] });
+    const erros = await new Uazapi('https://uaz', 'admin', f).errosDoWebhook('tk');
+    assert.deepEqual(erros, [{ created: '2026-10-07T14:10:00Z', status_code: 401 }]);
+    assert.equal(chamadas[0].metodo, 'GET');
+    assert.equal(chamadas[0].headers.token, 'tk');
 });

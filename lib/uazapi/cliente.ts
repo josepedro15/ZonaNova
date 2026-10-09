@@ -13,6 +13,7 @@
  *      o que não for nosso. `listar()` também filtra — o resto do sistema
  *      nunca enxerga instância alheia.
  */
+import type { ErroWebhook, PaginaMensagens } from '../captura.ts';
 import type { ItemCheck } from '../lid.ts';
 
 export const SYSTEM_NAME = 'zonanova';
@@ -140,11 +141,31 @@ export class Uazapi {
         return { fileURL: r.fileURL, mimetype: r.mimetype };
     }
 
-    /** Pede até `count` mensagens anteriores; a resposta chega depois no webhook `history`. */
-    async sincronizarHistorico(token: string, jid: string, count = 50): Promise<void> {
+    /**
+     * Pede até `count` mensagens anteriores; a resposta chega depois no webhook
+     * `history`. Com `messageid`, busca para trás DESSA mensagem (a âncora);
+     * sem ele, da mais antiga que a instância conhece.
+     */
+    async sincronizarHistorico(token: string, jid: string, count = 50, messageid?: string): Promise<void> {
         await this.chamar('/message/history-sync', {
-            metodo: 'POST', token, corpo: { number: jid, mode: 'history', count: Math.min(Math.max(count, 1), 100) },
+            metodo: 'POST', token,
+            corpo: { number: jid, mode: 'history', count: Math.min(Math.max(count, 1), 100), ...(messageid ? { messageid } : {}) },
         });
+    }
+
+    /**
+     * Mensagens guardadas na instância, das mais recentes para trás. Sem
+     * `chatid`, de todas as conversas — é o que a recuperação de buraco usa
+     * (lib/captura.ts).
+     */
+    async buscarMensagens(token: string, filtro: { limit: number; offset: number; chatid?: string }): Promise<PaginaMensagens> {
+        return this.chamar<PaginaMensagens>('/message/find', { metodo: 'POST', token, corpo: filtro });
+    }
+
+    /** Os últimos 20 erros de entrega do webhook da instância. A UAZAPI os guarda em memória. */
+    async errosDoWebhook(token: string): Promise<ErroWebhook[]> {
+        const r = await this.chamar<ErroWebhook[] | null>('/webhook/errors', { token });
+        return Array.isArray(r) ? r : [];
     }
 
     /**

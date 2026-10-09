@@ -11,6 +11,7 @@ import { DESCARTADA, naturezaSuspeita } from '@/lib/natureza';
 import { comVendaPresencial } from '@/lib/presencial';
 import { semAtividadeDeSaida } from '@/lib/consolidacao';
 import { paginar } from '@/lib/paginar';
+import { capturaDoDia, type Buraco } from '@/lib/captura';
 import { numerosDoFechamento, respostasPorBloco, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
@@ -540,24 +541,36 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
         return copia;
     };
     const unidadeId = String(analises[0].unidade_id);
+    // Buraco de captura no expediente do dia (lib/captura.ts): o relatório é
+    // marcado e a IA é avisada, para o silêncio não virar abandono.
+    const { data: buracos, error: erroBuracos } = await supabase.from('buracos_captura').select('inicio,fim')
+        .eq('user_id', userId).lt('inicio', fim.toISOString()).or(`fim.is.null,fim.gt.${inicio.toISOString()}`)
+        .returns<Buraco[]>();
+    if (erroBuracos) throw erroBuracos;
+    const captura = capturaDoDia(buracos ?? [], dataRef, new Date());
+    const marcaCaptura = captura.incompleta
+        ? { captura_incompleta: true, payloadCaptura: { captura: { intervalos: captura.intervalos } } }
+        : { captura_incompleta: false, payloadCaptura: {} };
     // Nenhuma mensagem do vendedor saiu no dia: sem atendimento não há nota nem
     // treino, e a IA inventava um elogio. Os números de entrada continuam.
     if (semAtividadeDeSaida([...porConversa.values()].flat())) {
         const { error: erroRel } = await supabase.from('relatorios_diarios').upsert({
             user_id: userId, unidade_id: unidadeId, data_ref: dataRef, ...metricas, score_geral: null,
-            pontos_positivos: [], pontos_negativos: [], payload: { sem_atividade_saida: true },
+            captura_incompleta: marcaCaptura.captura_incompleta,
+            pontos_positivos: [], pontos_negativos: [], payload: { sem_atividade_saida: true, ...marcaCaptura.payloadCaptura },
             updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id,data_ref' });
         if (erroRel) throw erroRel;
         await consolidarAderenciaDiaria(supabase, userId, unidadeId, dataRef);
         return;
     }
-    const consolidado = await consolidarVendedor(baseCoaching.map((a) => semDetalhe(a.payload)), metricas, baseCoaching.map((a) => a.conversa_id as string));
+    const consolidado = await consolidarVendedor(baseCoaching.map((a) => semDetalhe(a.payload)), metricas, baseCoaching.map((a) => a.conversa_id as string), captura.incompleta ? captura : null);
     const { error: erroRel } = await supabase.from('relatorios_diarios').upsert({
         user_id: userId, unidade_id: unidadeId, data_ref: dataRef, ...metricas,
+        captura_incompleta: marcaCaptura.captura_incompleta,
         pontos_positivos: [consolidado.resultado.elogio, ...consolidado.resultado.padroes_sucesso].filter(Boolean),
         pontos_negativos: consolidado.resultado.melhorias,
-        payload: { ...consolidado.resultado, uso: { modelo: consolidado.modelo, entrada: consolidado.entrada, saida: consolidado.saida, custo: custoEstimado(consolidado.modelo, consolidado.entrada, consolidado.saida) } },
+        payload: { ...consolidado.resultado, ...marcaCaptura.payloadCaptura, uso: { modelo: consolidado.modelo, entrada: consolidado.entrada, saida: consolidado.saida, custo: custoEstimado(consolidado.modelo, consolidado.entrada, consolidado.saida) } },
         updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,data_ref' });
     if (erroRel) throw erroRel;

@@ -130,9 +130,13 @@ reset() {
 
 testar() {
     reset >/dev/null
-    echo "=== tests/rls.sql ==="
-    local saida; saida=$(psql -d $DB -f "$RAIZ/tests/rls.sql" 2>&1)
-    echo "$saida" | grep -oE '(PASSOU|FALHOU).*' || true
+    local saida="" t
+    for t in rls captura; do
+        echo "=== tests/$t.sql ==="
+        local parte; parte=$(psql -d $DB -f "$RAIZ/tests/$t.sql" 2>&1)
+        echo "$parte" | grep -oE '(PASSOU|FALHOU).*' || true
+        saida+="$parte"$'\n'
+    done
     local p f; p=$(grep -c PASSOU <<<"$saida" || true); f=$(grep -c FALHOU <<<"$saida" || true)
     echo "---"; echo "$p passaram, $f falharam"
     [ "$f" -eq 0 ] || { echo "RLS COM FALHA — não subir nada assim"; exit 1; }

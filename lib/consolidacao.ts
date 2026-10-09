@@ -105,22 +105,44 @@ export const INSTRUCOES_CONSOLIDACAO = [
     'objecoes_frequentes: só objeções levantadas pelo cliente (campo "objecoes") que se repetem em pelo menos duas análises diferentes; em "analises" vão os números delas. O que o vendedor informou não é objeção do cliente. Sem repetição, a lista fica vazia.',
     'padroes_sucesso: o que funcionou, tirado de "tecnicas_usadas" e "evidencias". elogio: uma frase, até 200 caracteres, sobre algo que de fato aconteceu. desafio: uma frase, até 200 caracteres, ligada ao erro mais repetido. resumo: até 2 frases curtas, no máximo 300 caracteres no total. Resumo e desafio seguem a regra da fonte: só criticam o que está em "erros_vendedor".',
     'Priorize negociações; suporte e conversa social não viram crítica de técnica comercial.',
+    'Se a entrada trouxer "captura", nos intervalos de "sem_registro" o sistema não registrou mensagem nenhuma por falha técnica: o silêncio ali não é abandono, demora nem falta de retorno ao cliente, e conversa que parece parada nesse intervalo não vira crítica.',
 ].join('\n');
 
 /**
  * A entrada da IA: as análises numeradas de 1 em diante, para a resposta
  * citar de onde tirou cada crítica.
  */
-export function entradaConsolidacao(analises: readonly Record<string, unknown>[], metricas: Record<string, number | null>): string {
-    return JSON.stringify({ metricas, analises: analises.map((a, i) => ({ analise: i + 1, ...a })) });
+export function entradaConsolidacao(analises: readonly Record<string, unknown>[], metricas: Record<string, number | null>, captura?: CapturaDoRelatorio | null): string {
+    return JSON.stringify({
+        metricas,
+        ...(captura?.intervalos.length ? { captura: {
+            aviso: 'Falha técnica: nestes intervalos nenhuma mensagem do vendedor foi registrada, nas duas direções.',
+            sem_registro: captura.intervalos.map((i) => ({ de: horaDoIntervalo(i.de, false), ate: horaDoIntervalo(i.ate, true) })),
+        } } : {}),
+        analises: analises.map((a, i) => ({ analise: i + 1, ...a })),
+    });
+}
+
+/** Os buracos de captura do dia (lib/captura.ts `capturaDoDia`), como o relatório os guarda. */
+export type CapturaDoRelatorio = { intervalos: readonly { de: string; ate: string; expediente_ms: number }[] };
+
+/** "07/10 10:56" em Brasília. O fim do dia sai "07/10 24:00", não "08/10 00:00". */
+function horaDoIntervalo(iso: string, fim: boolean): string {
+    const local = new Date(Date.parse(iso) - 3 * 60 * 60 * 1000);
+    const dois = (n: number) => String(n).padStart(2, '0');
+    const meiaNoite = fim && local.getUTCHours() === 0 && local.getUTCMinutes() === 0;
+    // A data é a do último instante do intervalo: meia-noite fecha o dia anterior.
+    const dia = meiaNoite ? new Date(local.getTime() - 1) : local;
+    const hora = meiaNoite ? '24:00' : `${dois(local.getUTCHours())}:${dois(local.getUTCMinutes())}`;
+    return `${dois(dia.getUTCDate())}/${dois(dia.getUTCMonth() + 1)} ${hora}`;
 }
 
 /** O corpo do pedido à OpenAI (Responses API), igual no worker e nos scripts. */
-export function pedidoConsolidacao(analises: readonly Record<string, unknown>[], metricas: Record<string, number | null>, modelo: string) {
+export function pedidoConsolidacao(analises: readonly Record<string, unknown>[], metricas: Record<string, number | null>, modelo: string, captura?: CapturaDoRelatorio | null) {
     return {
         model: modelo, temperature: 0, store: false,
         instructions: INSTRUCOES_CONSOLIDACAO,
-        input: [{ role: 'user', content: [{ type: 'input_text', text: entradaConsolidacao(analises, metricas) }] }],
+        input: [{ role: 'user', content: [{ type: 'input_text', text: entradaConsolidacao(analises, metricas, captura) }] }],
         text: { format: { type: 'json_schema', name: 'consolidado_vendedor', strict: true, schema: schemaJsonConsolidado } },
         // Uma consolidação real tem ~350 tokens (no máximo 431 até 06/10); o
         // lastro de cada item soma uns 30. Os textos não têm `maxLength`: o

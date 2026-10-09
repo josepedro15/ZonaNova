@@ -3,6 +3,7 @@ import { cronAutorizado } from '@/lib/cron';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi, ehNossa } from '@/lib/uazapi/cliente';
 import { mudancasDaChecagem } from '@/lib/conexao';
+import { vigiarCaptura, type BuracoAberto, type ConexaoVigiada } from '@/lib/uazapi/vigia-captura';
 
 export const maxDuration = 300;
 
@@ -20,6 +21,12 @@ const EM_PARALELO = 8;
  *
  * Só escreve quando o status MUDOU: assim o `ultimo_evento_em` continua
  * significando "quando algo aconteceu", e não "quando o cron passou".
+ *
+ * `connected` não prova que as mensagens chegam: em 07/10 o Vitor passou um
+ * dia conectado sem nada gravado. Por isso cada conexão no ar também tem a
+ * captura vigiada (lib/uazapi/vigia-captura.ts): silêncio de expediente
+ * enquanto a unidade conversa abre um buraco, alerta o gestor e dispara a
+ * recuperação pela UAZAPI.
  */
 export async function GET(req: Request) {
     if (!cronAutorizado(req)) {
@@ -35,17 +42,31 @@ export async function GET(req: Request) {
     const uaz = new Uazapi(url, admin);
     const supabase = criarClienteAdmin();
 
-    const { data: conexoes, error } = await supabase
-        .from('conexoes_whatsapp')
-        .select('id, status, instance_token, numero')
-        .not('instance_token', 'is', null)
-        .returns<{ id: string; status: string; instance_token: string; numero: string | null }[]>();
+    type Linha = ConexaoVigiada & { status: string; instance_token: string };
+    const [{ data: conexoes, error }, { data: abertos, error: erroAbertos }] = await Promise.all([
+        supabase.from('conexoes_whatsapp')
+            .select('id, user_id, unidade_id, status, instance_token, numero, ultima_mensagem_em')
+            .not('instance_token', 'is', null)
+            .returns<Linha[]>(),
+        supabase.from('buracos_captura').select('id, conexao_id, inicio, tentativas, encontradas, recuperadas')
+            .is('fim', null).returns<(BuracoAberto & { conexao_id: string })[]>(),
+    ]);
 
     if (error) return Response.json({ erro: error.message }, { status: 500 });
+    if (erroAbertos) return Response.json({ erro: erroAbertos.message }, { status: 500 });
+
+    const agora = new Date();
+    const buracoAberto = new Map((abertos ?? []).map((b) => [b.conexao_id, b]));
+    // A comparação é com a unidade inteira, conectada ou não: mensagem gravada
+    // de um colega é prova de que a loja estava conversando.
+    const outrasDaUnidade = (c: Linha) => (conexoes ?? [])
+        .filter((o) => o.unidade_id === c.unidade_id && o.id !== c.id)
+        .map((o) => (o.ultima_mensagem_em ? new Date(o.ultima_mensagem_em) : null));
 
     let conferidas = 0, corrigidas = 0, numerados = 0, ilegiveis = 0, alheias = 0;
+    const captura = { abertos: 0, recuperando: 0, fechados: 0 };
 
-    const conferir = async (c: { id: string; status: string; instance_token: string; numero: string | null }) => {
+    const conferir = async (c: Linha) => {
         let token: string;
         try {
             token = decifrar(Buffer.from(c.instance_token.replace(/^\\x/, ''), 'hex'));
@@ -77,6 +98,13 @@ export async function GET(req: Request) {
                 if (mudancas.status) corrigidas++;
                 if (mudancas.numero) numerados++;
             }
+
+            if (i.status === 'connected') {
+                const desfecho = await vigiarCaptura(supabase, uaz, token, c, outrasDaUnidade(c), buracoAberto.get(c.id), agora);
+                if (desfecho === 'aberto') captura.abertos++;
+                if (desfecho === 'recuperando') captura.recuperando++;
+                if (desfecho === 'fechado') captura.fechados++;
+            }
         } catch (e) {
             console.error(`checar-conexoes: ${c.id}`, e);
         }
@@ -88,6 +116,6 @@ export async function GET(req: Request) {
     }));
 
     return Response.json({
-        total: conexoes?.length ?? 0, conferidas, corrigidas, numerados, ilegiveis, alheias,
+        total: conexoes?.length ?? 0, conferidas, corrigidas, numerados, ilegiveis, alheias, captura,
     });
 }

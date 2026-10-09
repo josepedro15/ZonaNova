@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ResultadoComDetalhe } from '@/lib/analise';
 import type { ItemPlaybook } from '@/lib/mec';
 import { MODELO_PADRAO, pedidoAnalise } from '@/lib/pedido-analise';
-import { finalizarConsolidado, pedidoConsolidacao, schemaConsolidado, type ConsolidadoIa } from '@/lib/consolidacao';
+import { finalizarConsolidado, pedidoConsolidacao, schemaConsolidado, type CapturaDoRelatorio, type ConsolidadoIa } from '@/lib/consolidacao';
 
 type Uso = { input_tokens?: number; output_tokens?: number };
 
@@ -50,13 +50,13 @@ export async function analisarConversa({ transcript, doutrina, itens, midia = fa
  * O treino do dia do vendedor. `analises` são os payloads na ordem em que a IA
  * os numera; `conversaIds`, na mesma ordem, vão para o lastro gravado.
  */
-export async function consolidarVendedor(analises: Record<string, unknown>[], metricas: Record<string, number | null>, conversaIds: string[] = []): Promise<{ resultado: ConsolidadoIa; modelo: string; entrada: number; saida: number }> {
+export async function consolidarVendedor(analises: Record<string, unknown>[], metricas: Record<string, number | null>, conversaIds: string[] = [], captura: CapturaDoRelatorio | null = null): Promise<{ resultado: ConsolidadoIa; modelo: string; entrada: number; saida: number }> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY não configurada');
     const modelo = process.env.OPENAI_MODEL || MODELO_PADRAO;
     const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify(pedidoConsolidacao(analises, metricas, modelo)),
+        body: JSON.stringify(pedidoConsolidacao(analises, metricas, modelo, captura)),
     });
     const corpo = await response.json();
     if (!response.ok) throw new Error(`OpenAI ${response.status}: ${JSON.stringify(corpo).slice(0, 500)}`);

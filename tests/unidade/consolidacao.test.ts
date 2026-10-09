@@ -93,6 +93,21 @@ test('as análises chegam numeradas de 1 em diante e o pedido usa o schema estri
     assert.equal(pedido.text.format.schema, schemaJsonConsolidado);
 });
 
+test('dia com buraco de captura: a IA recebe os intervalos sem registro e a regra de não ler silêncio como abandono', () => {
+    const captura = { intervalos: [{ de: '2026-10-07T13:56:00.000Z', ate: '2026-10-08T03:00:00.000Z', expediente_ms: 25_440_000 }] };
+    const entrada = JSON.parse(entradaConsolidacao([{ resumo: 'a' }], {}, captura));
+    assert.deepEqual(entrada.captura, {
+        aviso: 'Falha técnica: nestes intervalos nenhuma mensagem do vendedor foi registrada, nas duas direções.',
+        sem_registro: [{ de: '07/10 10:56', ate: '07/10 24:00' }],
+    });
+    const pedido = pedidoConsolidacao([{ resumo: 'a' }], {}, 'm', captura);
+    assert.equal(JSON.parse(pedido.input[0].content[0].text).captura.sem_registro.length, 1);
+    assert.match(INSTRUCOES_CONSOLIDACAO, /"captura"/);
+    assert.match(INSTRUCOES_CONSOLIDACAO, /não é abandono, demora nem falta de retorno/);
+    // Sem buraco, a entrada não muda.
+    assert.equal('captura' in JSON.parse(entradaConsolidacao([], {})), false);
+});
+
 test('limparTexto tira a regra de formato copiada pelo modelo (casos de 07/10)', () => {
     const casos: [string, string][] = [
         ['Nunca deixe um texto pela metade.', ''],
