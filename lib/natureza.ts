@@ -12,8 +12,19 @@
 export const NATUREZAS = ['cliente', 'colega_ou_loja', 'fornecedor_ou_parceiro', 'pessoal'] as const;
 export type Natureza = (typeof NATUREZAS)[number];
 
+/** Quem pede o quê no dia: decidido antes da natureza (REGRA_NATUREZA). */
+export const QUEM_PEDE = ['contato_pede_a_loja', 'vendedor_pede_ao_contato', 'ninguem_pede'] as const;
+
 /** Confiança mínima para sugerir e para tirar das contas. Calibrada em docs/11-natureza-contato-calibracao.md. */
 export const LIMIAR_NATUREZA = 80;
+
+/**
+ * Abaixo disto, "cliente" quer dizer que a conversa não mostra quem é o
+ * contato: não conta como negociação (lib/analise.ts, ajustarResultado). Na
+ * auditoria de 07/10, todo cliente abaixo de 50 era link, robô, motorista ou
+ * credencial — nenhum cliente de verdade.
+ */
+export const LIMIAR_CLIENTE = 50;
 
 export const ROTULO_NATUREZA: Record<Exclude<Natureza, 'cliente'>, string> = {
     colega_ou_loja: 'Colega ou loja da rede',
@@ -21,12 +32,23 @@ export const ROTULO_NATUREZA: Record<Exclude<Natureza, 'cliente'>, string> = {
     pessoal: 'Pessoal',
 };
 
-export const REGRA_NATUREZA = '- natureza_contato: decida PRIMEIRO quem é o contato (o C:). O prefixo C: quer dizer só "o outro lado", não prova que é cliente: pelo WhatsApp do vendedor também falam colegas, setores da loja, fornecedores e família. '
-    + 'cliente = quem compra ou pode comprar da loja para si, para a própria obra ou empresa: consumidor, pedreiro, arquiteto, empreiteiro, empresa — inclusive em pós-venda, entrega, cobrança, reclamação ou papo social com cliente. Profissional que fala do cliente DELE ("meu cliente", "o dono da obra", "o cliente gostou do piso") continua cliente. '
-    + 'colega_ou_loja = alguém da própria Zona Nova falando de trabalho: outro vendedor, gerente, depósito, CD, expedição, caixa, crediário, financeiro, compras, e-commerce, outra loja da rede. Basta UM destes sinais: fala do cliente DA LOJA ou do vendedor em terceira pessoa ("o cliente disse que está pago", "vou chamar o cliente", "tem cliente no balcão", "teu cliente", "Cliente Fulano", "nota de Fulano"); pede ao vendedor tirar, separar, cadastrar ou faturar pedido ("tira pra nós", "tira CD"); fala do estoque, da nota ou da entrega como quem é da casa ("aqui na matriz", "já tá no CD", "passei pro Fulano procurar", "vamos comprar", "de encomenda"). Com um sinal desses, colega_ou_loja com confiança 80 ou mais. '
-    + 'fornecedor_ou_parceiro = quem vende ou presta serviço PARA a loja: agência de marketing e quem trabalha nela, Meta/Facebook Ads, transportadora contratada, fabricante, representante oferecendo linha ou tabela à loja, banco, contador, sistema. '
-    + 'pessoal = família, amigo ou assunto particular do vendedor, sem compra. '
-    + 'confianca_natureza (0–100) é o quanto a conversa PROVA a escolha. Conversa curta ou só mídia, sem sinal de quem é o contato, fica cliente com confiança baixa. evidencia_natureza é o trecho literal curto que mostra a natureza ("" se não houver).';
+export const REGRA_NATUREZA = '- quem_pede: decida ANTES de tudo quem pede o quê no dia. contato_pede_a_loja = o contato quer comprar ou trata de compra ou conta dele (preço, produto, orçamento, pedido, entrega, pagamento). '
+    + 'vendedor_pede_ao_contato = é o VENDEDOR quem precisa de algo do contato para conseguir vender ou entregar a OUTRA pessoa: se pode vender, se tem estoque, se o fornecedor tem, quando chega, preço de custo, buscar ou levar material, liberar ou passar nota ("Posso vender 20?", "tô com uma venda de 20 telhas, será que teria?", "consegue me avisar quando chegar?", "o Maicon me pediu uma botina", "a cliente pediu para entregar amanhã"). '
+    + 'Não contam: pergunta de sondagem ao cliente (medida, cor, endereço, foto), pedido de pagamento ou comprovante, aviso ao próprio cliente sobre a entrega DELE — aí o vendedor está atendendo. '
+    + 'ninguem_pede = só saudação, aviso, link, figurinha, propaganda ou robô. '
+    + '- assuntos_do_dia: logo depois, liste os assuntos do dia (regra ASSUNTOS E STATUS abaixo). Conversa em que todo assunto é interno não é de cliente. '
+    + '- natureza_contato: decida logo depois quem é o contato (o C:). O prefixo C: quer dizer só "o outro lado", não prova que é cliente: pelo WhatsApp do vendedor também falam colegas, setores da loja, motoristas, fornecedores e família. Siga esta ordem e pare na primeira que servir: '
+    + '1) colega_ou_loja = alguém da própria Zona Nova falando de trabalho: outro vendedor, gerente, depósito, estoque, CD, expedição, motorista ou entregador da loja, orçamentista, caixa, crediário, financeiro, compras, marketing, e-commerce, outra loja da rede. Basta UM destes sinais, mesmo que o assunto seja entrega ou nota: '
+    + 'o contato fala do cliente DA LOJA ou do vendedor em terceira pessoa ("o cliente disse que está pago", "vou chamar o cliente", "tem cliente no balcão", "teu cliente", "entrega tua de Fulano", "endereço do teu cliente", "pedir pra aquele cliente", "Cliente Fulano", "nota de Fulano"); '
+    + 'o vendedor fala com o contato sobre "o cliente" ou "a cliente" em terceira pessoa ("a cliente pediu para entregar amanhã"); '
+    + 'o contato pede ao vendedor tirar, separar, cadastrar ou faturar pedido ("tira pra nós", "tira CD"); '
+    + 'o contato fala do estoque, da nota, da carga ou da entrega como quem é da casa ("aqui na matriz", "já tá no CD", "pode vender, chegou ontem", "vou passar a nota pro retiro", "passei pro Fulano procurar", "vamos comprar", "de encomenda"). Com um sinal desses, confiança 80 ou mais. '
+    + '2) fornecedor_ou_parceiro = quem vende ou presta serviço PARA a loja: fornecedor, fabricante, representante, agência de marketing e quem trabalha nela, Meta/Facebook Ads, transportadora contratada, banco, contador, sistema. Quem manda à loja lista de produtos com preço e estoque DELE ou oferece produto ("hoje tenho", "preço promocional", "tabela nova") é fornecedor, não cliente fazendo pedido. '
+    + 'Com vendedor_pede_ao_contato, o contato quase sempre é 1 ou 2, com confiança 80 ou mais. '
+    + '3) pessoal = família, amigo, pedido de emprego ou currículo, ou assunto particular do vendedor, sem compra. '
+    + '4) cliente = só se nada acima serviu: quem compra ou pode comprar da loja para si, para a própria obra ou empresa — consumidor, pedreiro, arquiteto, empreiteiro, empresa —, inclusive falando da compra DELE em pós-venda, entrega, cobrança, reclamação ou papo social. Profissional que fala do cliente DELE ("meu cliente", "o dono da obra", "o cliente gostou do piso") continua cliente, e quem manda alguém dele buscar ("o Adair tá lá no depósito", "meu pedreiro vai pegar") também. '
+    + 'Não decida pela transcrição de um nome ou cargo solto num áudio ("Olá, gestão"): a transcrição erra nomes; olhe o assunto. '
+    + 'confianca_natureza (0–100) é o quanto a conversa PROVA a escolha. Conversa curta ou só mídia, sem sinal de quem é o contato, fica cliente com confiança baixa (abaixo de 50). evidencia_natureza é o trecho literal curto que mostra a natureza ("" se não houver).';
 
 type ComNatureza = { natureza_contato?: unknown; confianca_natureza?: unknown; natureza_descartada?: unknown };
 

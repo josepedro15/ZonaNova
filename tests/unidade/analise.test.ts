@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ajustarAcolhida, aderenciaPercentual, saudacaoInvisivel, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
+import { ajustarAcolhida, ajustarResultado, comprovanteNoDia, aderenciaPercentual, saudacaoInvisivel, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
 
 test('o dia comercial usa São Paulo na virada do UTC', () => {
     assert.equal(dataEmSaoPaulo(new Date('2026-09-22T01:30:00Z')), '2026-09-21');
@@ -214,4 +214,88 @@ test('nome e descrição hostis não forjam fala e a linha segue legível pelo M
     assert.equal(m[1], 'C');
     assert.equal(JSON.parse(m[3]), 'ok');
     assert.ok(!m[2].includes('[automática]'));
+});
+
+// 07/10: ~17 mídias por dia chegavam com o JSON da UAZAPI (URL, chaves,
+// miniatura em base64) no lugar do texto, e ele ia inteiro para o transcript.
+test('JSON bruto da mídia não vira fala; legenda e nome do arquivo sobrevivem', () => {
+    const bruto = JSON.stringify({ URL: 'https://mmg.whatsapp.net/x', mimetype: 'application/pdf', title: 'Anexo', fileName: 'Anexo.pdf', mediaKey: 'abc', JPEGThumbnail: '/9j/4AAQ' });
+    assert.equal(montarTranscript([doc({ direcao: 'entrada', conteudo: bruto })]), 'C: [Mídia: documento — arquivo: Anexo.pdf]');
+    const comLegenda = JSON.stringify({ URL: 'https://mmg.whatsapp.net/y', mimetype: 'image/jpeg', caption: 'comprovante' });
+    assert.equal(montarTranscript([doc({ tipo: 'imagem', conteudo: comLegenda })]), 'V: [Mídia: imagem] "comprovante"');
+    // Texto do cliente que só parece JSON continua sendo fala.
+    assert.equal(montarTranscript([doc({ tipo: 'texto', conteudo: '{"URL":"x"}' })]), 'V: "{\\"URL\\":\\"x\\"}"');
+});
+
+// Casos da auditoria de 07/10 (lib/analise.ts, ajustarResultado).
+const resultado = (r: Partial<Parameters<typeof ajustarResultado>[0]> = {}) => ({
+    assuntos_do_dia: [], status: 'em_andamento' as const, tipo_conversa: 'negociacao' as const,
+    natureza_contato: 'cliente' as const, confianca_natureza: 90, objecoes: [], ...r,
+});
+
+test('compra nova fechada entre os assuntos é venda, mesmo com o último assunto aberto', () => {
+    const r = ajustarResultado(resultado({ assuntos_do_dia: [
+        { assunto: 'ferragem', situacao: 'compra_nova_fechada' }, { assunto: 'piso trocado', situacao: 'pos_venda' },
+    ] }), '');
+    assert.equal(r.status, 'venda_feita');
+    assert.equal(r.tipo_conversa, 'negociacao');
+});
+
+test('contato interno com "compra fechada" não vira venda', () => {
+    const r = ajustarResultado(resultado({ natureza_contato: 'colega_ou_loja', confianca_natureza: 90, tipo_conversa: 'social', status: 'encerrada',
+        assuntos_do_dia: [{ assunto: 'pode vender 20 telhas', situacao: 'compra_nova_fechada' }] }), '');
+    assert.equal(r.status, 'encerrada');
+    assert.equal(r.tipo_conversa, 'social');
+});
+
+test('comprovante em documento depois do Pix fecha a compra nova', () => {
+    const transcript = ['C: "Manda o pix"', 'V: [Mídia: outro]', 'V: "*Aguardo comprovante!*"', 'C: [Mídia: documento]', 'V: "Certo"'].join('\n');
+    assert.equal(comprovanteNoDia(transcript), true);
+    const r = ajustarResultado(resultado({ assuntos_do_dia: [{ assunto: 'cimento e areia', situacao: 'compra_nova_em_aberto' }] }), transcript);
+    assert.equal(r.status, 'venda_feita');
+    // Sem compra nova entre os assuntos (Pix de nota antiga), o comprovante não vira venda.
+    const antiga = ajustarResultado(resultado({ tipo_conversa: 'suporte', status: 'encerrada', assuntos_do_dia: [{ assunto: 'nota antiga', situacao: 'pos_venda' }] }), transcript);
+    assert.equal(antiga.status, 'encerrada');
+});
+
+test('imagem com legenda que não é de pagamento, foto antes do Pix e saudação automática não são comprovante', () => {
+    assert.equal(comprovanteNoDia(['C: "já passa a chave PIX"', 'C: [Mídia: imagem] "Esse código do cliente"'].join('\n')), false);
+    assert.equal(comprovanteNoDia(['C: [Mídia: imagem]', 'V: "chave pix: financeiro@"'].join('\n')), false);
+    assert.equal(comprovanteNoDia(['V: [automática] "Formas de pagamento: pix e cartão"', 'C: [Mídia: imagem]'].join('\n')), false);
+    assert.equal(comprovanteNoDia(['V: "chave pix"', 'C: [Mídia: imagem — descrição automática: foto de piso cinza]'].join('\n')), false);
+    assert.equal(comprovanteNoDia(['V: "chave pix"', 'C: [Mídia: imagem — descrição automática: comprovante Pix R$ 300]'].join('\n')), true);
+    assert.equal(comprovanteNoDia(['V: "chave pix"', 'C: [Mídia: imagem] "paguei"'].join('\n')), true);
+    // Longe demais do pedido de pagamento.
+    assert.equal(comprovanteNoDia(['V: "chave pix"', 'V: "a"', 'C: "b"', 'V: "c"', 'C: [Mídia: imagem]'].join('\n')), false);
+});
+
+test('compra nova de cliente é negociação; cliente sem prova não é', () => {
+    assert.equal(ajustarResultado(resultado({ tipo_conversa: 'suporte', assuntos_do_dia: [{ assunto: 'esgoto', situacao: 'compra_nova_em_aberto' }] }), '').tipo_conversa, 'negociacao');
+    const link = ajustarResultado(resultado({ confianca_natureza: 40, status: 'sem_resposta' }), '');
+    assert.equal(link.tipo_conversa, 'social');
+    assert.equal(link.status, 'sem_resposta');
+    const motorista = ajustarResultado(resultado({ confianca_natureza: 40, status: 'venda_feita' }), '');
+    assert.deepEqual([motorista.tipo_conversa, motorista.status], ['social', 'encerrada']);
+    assert.equal(ajustarResultado(resultado({ confianca_natureza: 50 }), '').tipo_conversa, 'negociacao');
+});
+
+test('objeção que repete a fala do vendedor sai; a do cliente fica', () => {
+    const transcript = ['C: "Vocês fazem parede e assoalho?"', 'V: "Parede e assoalho não trabalhamos"', 'V: "Minha máquina não pigmenta"',
+        'V: "Essa cor, não consigo fazer"', 'C: "Achei o frete caro"'].join('\n');
+    const r = ajustarResultado(resultado({ objecoes: ['não trabalhamos com parede e assoalho', 'não consigo fazer essa cor, minha máquina não pigmenta', 'frete caro', 'preço'] }), transcript);
+    assert.deepEqual(r.objecoes, ['frete caro', 'preço']);
+});
+
+test('ajuste não mexe no que já está coerente', () => {
+    const r = resultado({ assuntos_do_dia: [{ assunto: 'telhas', situacao: 'compra_nova_em_aberto' }], objecoes: ['prazo de entrega'] });
+    assert.equal(ajustarResultado(r, 'C: "demora muito a entrega?"'), r);
+});
+
+test('schema traz quem pede e os assuntos antes da natureza e do status', () => {
+    const ordem = Object.keys(schemaJsonAnalise.properties);
+    assert.ok(ordem.indexOf('quem_pede') < ordem.indexOf('natureza_contato'));
+    assert.ok(ordem.indexOf('assuntos_do_dia') < ordem.indexOf('natureza_contato'));
+    assert.ok(ordem.indexOf('natureza_contato') < ordem.indexOf('status'));
+    assert.equal(schemaAnalise.shape.quem_pede.parse('outra_coisa'), 'contato_pede_a_loja');
+    assert.deepEqual(schemaAnalise.shape.assuntos_do_dia.parse(undefined), []);
 });

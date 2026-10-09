@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { schemaDetalhe, schemaJsonDetalhe, type DetalheMec, type ItemPlaybook } from './mec.ts';
-import { NATUREZAS } from './natureza.ts';
+import { LIMIAR_CLIENTE, LIMIAR_NATUREZA, NATUREZAS, QUEM_PEDE } from './natureza.ts';
 
 export type MensagemAnalise = {
     direcao: 'entrada' | 'saida';
@@ -15,7 +15,18 @@ export type MensagemAnalise = {
     midia_descricao?: string | null;
 };
 
+/**
+ * Cada assunto do dia e onde ele parou. Com um status só por conversa, o
+ * cliente com três pedidos liberados e uma troca pendente no fim saía
+ * em_andamento, e a entrega de compra antiga saía venda (auditoria de 07/10).
+ */
+export const SITUACOES_ASSUNTO = ['compra_nova_fechada', 'compra_nova_em_aberto', 'compra_nova_perdida', 'encaminhado', 'pos_venda', 'interno', 'social'] as const;
+
 export const schemaAnalise = z.object({
+    // Quem pede o quê, decidido antes da natureza: o vendedor pedindo ao
+    // estoque ou ao fornecedor ("Posso vender 20?") saía cliente com 80–90.
+    quem_pede: z.enum(QUEM_PEDE).catch('contato_pede_a_loja'),
+    assuntos_do_dia: z.array(z.object({ assunto: z.string(), situacao: z.enum(SITUACOES_ASSUNTO) })).catch([]),
     tipo_conversa: z.enum(['negociacao', 'suporte', 'social']),
     status: z.enum(['em_andamento', 'venda_feita', 'lead_frio', 'sem_resposta', 'perdida', 'encerrada']),
     sentiment: z.number().int().min(0).max(100),
@@ -58,10 +69,14 @@ export type ResultadoAnalise = z.infer<typeof schemaAnalise>;
 
 export const schemaJsonAnalise = {
     type: 'object', additionalProperties: false,
-    required: ['natureza_contato','confianca_natureza','evidencia_natureza','tipo_conversa','status','sentiment','score_atendimento','score_oportunidade','score_risco','estagio_funil','potencial_venda','urgencia','resumo','destaque','proxima_acao','script_sugerido','objecoes','tecnicas_usadas','erros_vendedor','tags','evidencias','mec','perfil_cliente','profissao_cliente'],
+    required: ['quem_pede','assuntos_do_dia','natureza_contato','confianca_natureza','evidencia_natureza','tipo_conversa','status','sentiment','score_atendimento','score_oportunidade','score_risco','estagio_funil','potencial_venda','urgencia','resumo','destaque','proxima_acao','script_sugerido','objecoes','tecnicas_usadas','erros_vendedor','tags','evidencias','mec','perfil_cliente','profissao_cliente'],
     // A natureza vem primeiro: o modelo escreve na ordem do schema, e decidir
-    // quem é o contato depois de avaliar a venda inteira dava "cliente" quase sempre.
+    // quem é o contato depois de avaliar a venda inteira dava "cliente" quase
+    // sempre. Pelo mesmo motivo, quem pede e os assuntos do dia vêm antes dela:
+    // conversa só de assunto interno não é de cliente.
     properties: {
+        quem_pede: { type: 'string', enum: [...QUEM_PEDE] },
+        assuntos_do_dia: { type: 'array', minItems: 1, maxItems: 6, items: { type: 'object', additionalProperties: false, required: ['assunto','situacao'], properties: { assunto: { type: 'string' }, situacao: { type: 'string', enum: [...SITUACOES_ASSUNTO] } } } },
         natureza_contato: { type: 'string', enum: [...NATUREZAS] },
         confianca_natureza: { type: 'integer', minimum: 0, maximum: 100 },
         evidencia_natureza: { type: 'string' },
@@ -89,6 +104,82 @@ export const schemaJsonAnalise = {
 } as const;
 
 export type ResultadoComDetalhe = ResultadoAnalise & { mec_detalhe?: DetalheMec | null };
+
+/** Minúsculas, sem acento nem pontuação: para comparar frases, não bytes. */
+const normalizar = (texto: string) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** O texto de cada fala de um lado (V ou C) do transcript de `montarTranscript`. */
+function falasDe(transcript: string, ator: 'V' | 'C'): string[] {
+    return transcript.split('\n').filter((l) => l.startsWith(`${ator}:`)).map((l) => {
+        const aspas = l.indexOf(' "');
+        if (aspas < 0) return '';
+        try { return normalizar(JSON.parse(l.slice(aspas + 1)) as string); } catch { return ''; }
+    }).filter(Boolean);
+}
+
+const PAGAMENTO = /\b(pix|comprovante|pagar|pagamento|paguei)\b/i;
+const MIDIA_DO_CONTATO = /^C: \[Mídia: (imagem|documento)(\]| — )/;
+
+/**
+ * Alguém fala de Pix, pagamento ou comprovante e, nas três falas seguintes, o
+ * contato manda imagem ou documento: é o comprovante. Mensagem automática
+ * ("formas de pagamento" da saudação) não conta. Mídia com legenda, ou com a
+ * descrição automática ligada (lib/midia.ts), só vale se ela também fala de
+ * pagamento: a foto do código do cliente não é comprovante.
+ */
+export function comprovanteNoDia(transcript: string): boolean {
+    const linhas = transcript.split('\n');
+    return linhas.some((linha, i) => /^(V|C):/.test(linha) && !linha.includes('[automática]') && PAGAMENTO.test(linha) && linhas.slice(i + 1, i + 4).some((m) =>
+        MIDIA_DO_CONTATO.test(m) && (!/descrição automática| "/.test(m) || /comprovante|pix|pag[oa]|paguei|transfer/i.test(m))));
+}
+
+/**
+ * Conferências que o modelo não fazia sozinho, nem com a regra no prompt
+ * (auditoria de 07/10):
+ *
+ * - O status tem de bater com os assuntos que a própria análise listou: com
+ *   uma compra nova fechada no dia, a conversa com cliente é venda, mesmo que
+ *   o último assunto tenha ficado aberto (três pedidos "Liberado ✅" saíam
+ *   em_andamento). Com contato interno, não: "pode vender" do estoque não é venda.
+ * - Comprovante em imagem ou documento depois do Pix, numa conversa em que a
+ *   própria análise viu compra nova, é venda: era a principal venda não
+ *   contada, e o modelo acertava uma vez sim, outra não.
+ * - Compra nova entre os assuntos de um cliente é negociação.
+ * - "Cliente" sem prova (confiança abaixo de LIMIAR_CLIENTE: só um link, um
+ *   "boa tarde", o robô de outra empresa, o motorista) não é negociação: entrava
+ *   com nota 10–20 e puxava a média do vendedor. Vira social, fora da nota e
+ *   das conversões; continua na conversa para o gestor ver.
+ * - Objeção que repete uma fala do vendedor e nenhuma do cliente ("Não temos
+ *   mais nada tratado") sai: virava "objeção frequente" no relatório.
+ */
+export function ajustarResultado<T extends Pick<ResultadoAnalise, 'assuntos_do_dia' | 'status' | 'tipo_conversa' | 'natureza_contato' | 'confianca_natureza' | 'objecoes'>>(r: T, transcript: string): T {
+    let ajustado = r;
+    const deCliente = r.natureza_contato === 'cliente' || r.confianca_natureza < LIMIAR_NATUREZA;
+    const compraNova = ajustado.assuntos_do_dia.some((a) => a.situacao.startsWith('compra_nova_'));
+    const fechou = ajustado.assuntos_do_dia.some((a) => a.situacao === 'compra_nova_fechada') || (compraNova && comprovanteNoDia(transcript));
+    if (deCliente && ajustado.status !== 'venda_feita' && fechou) ajustado = { ...ajustado, status: 'venda_feita', tipo_conversa: 'negociacao' };
+    if (deCliente && compraNova && ajustado.tipo_conversa !== 'negociacao') ajustado = { ...ajustado, tipo_conversa: 'negociacao' };
+    if (ajustado.natureza_contato === 'cliente' && ajustado.confianca_natureza < LIMIAR_CLIENTE && ajustado.tipo_conversa === 'negociacao') {
+        ajustado = { ...ajustado, tipo_conversa: 'social', status: ajustado.status === 'venda_feita' ? 'encerrada' : ajustado.status };
+    }
+    const doVendedor = falasDe(transcript, 'V');
+    const doContato = falasDe(transcript, 'C');
+    // Pelas palavras de 4+ letras, não pela frase: o modelo reescreve e junta
+    // falas ("Parede e assoalho não trabalhamos" vira "não trabalhamos com
+    // parede e assoalho"). Sai a que o vendedor disse mais que o cliente.
+    const vocabulario = (falas: string[]) => new Set(falas.flatMap((f) => f.split(' ')));
+    const doVendedorV = vocabulario(doVendedor);
+    const doContatoV = vocabulario(doContato);
+    const copiada = (objecao: string) => {
+        const palavras = [...new Set(normalizar(objecao).split(' ').filter((p) => p.length >= 4))];
+        if (palavras.length < 2) return false;
+        const parte = (v: Set<string>) => palavras.filter((p) => v.has(p)).length / palavras.length;
+        const doV = parte(doVendedorV);
+        return doV >= 0.8 && parte(doContatoV) < doV;
+    };
+    if (ajustado.objecoes.some(copiada)) ajustado = { ...ajustado, objecoes: ajustado.objecoes.filter((o) => !copiada(o)) };
+    return ajustado;
+}
 
 /**
  * O schema da análise para um playbook. Sem itens (sem playbook vigente, ou
@@ -225,6 +316,23 @@ export function textoDeMarca(texto: string, max: number): string {
 const cortar = (texto: string, max: number) => texto.length > max ? `${texto.slice(0, max)}…[cortado]` : texto;
 
 /**
+ * Mídia que chegou com o JSON da UAZAPI no lugar do texto (URL, chaves,
+ * miniatura em base64): fica só a legenda e o nome do arquivo. `null` quando
+ * o conteúdo não é esse JSON.
+ */
+function jsonDeMidia(conteudo: string): { legenda: string; nome: string | null } | null {
+    if (!conteudo.startsWith('{')) return null;
+    try {
+        const o = JSON.parse(conteudo) as Record<string, unknown>;
+        if (!o || typeof o !== 'object' || !('URL' in o || 'directPath' in o || 'mediaKey' in o)) return null;
+        const texto = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+        return { legenda: texto(o.caption), nome: texto(o.fileName) || null };
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Uma linha por fala: `V:`/`C:` fora de aspas e o conteúdo como string JSON.
  *
  * O conteúdo é texto de terceiros — e do próprio vendedor avaliado. Colado cru,
@@ -249,10 +357,12 @@ export function montarTranscript(mensagens: MensagemAnalise[]): string {
         // "outro" com conteúdo já traz a marca legível do webhook ("[figurinha]").
         } else if (m.tipo === 'outro' && fala) marcas.push('[Mídia]');
         else if (m.tipo !== 'texto') {
+            const bruto = jsonDeMidia(fala);
+            if (bruto) fala = bruto.legenda;
             // Nome e descrição vêm de fora (o arquivo, a IA que o leu): ficam
             // DENTRO da marca, limpos, e nunca viram fala de ninguém.
             const partes = [`Mídia: ${m.tipo}`];
-            const nome = m.midia_nome?.trim();
+            const nome = m.midia_nome?.trim() || bruto?.nome;
             if (nome) partes.push(`arquivo: ${textoDeMarca(nome, 120)}`);
             if (m.midia_descricao?.trim()) partes.push(`descrição automática: ${textoDeMarca(m.midia_descricao, MAX_CHARS_DESCRICAO)}`);
             marcas.push(`[${partes.join(' — ')}]`);

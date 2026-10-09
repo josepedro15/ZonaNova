@@ -14,7 +14,8 @@
     "promover": "node --env-file=.env.local scripts/promover.mjs",
     "tunel": "bash scripts/tunel.sh",
     "mec:calibracao": "node --env-file=.env.local scripts/mec-calibracao.mjs",
-    "natureza:calibracao": "node --env-file=.env.local scripts/natureza-calibracao.mjs"
+    "natureza:calibracao": "node --env-file=.env.local scripts/natureza-calibracao.mjs",
+    "analise:calibracao": "node --env-file=.env.local scripts/analise-calibracao.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
