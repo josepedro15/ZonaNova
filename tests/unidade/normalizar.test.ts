@@ -193,7 +193,65 @@ test('canal do WhatsApp é descartado', () => {
 
 // LID não é telefone: guardado com prefixo para a tela não inventar número.
 test('contato @lid vira lid:<dígitos>', () => {
-    assert.equal(ok(normalizarMensagem(base({ chatid: '123456789012345@lid' }))).clienteTelefone, 'lid:123456789012345');
+    const m = ok(normalizarMensagem(base({ chatid: '123456789012345@lid' })));
+    assert.equal(m.clienteTelefone, 'lid:123456789012345');
+    assert.equal(m.clienteLid, '123456789012345');
+});
+
+// Caso Lucas (Ana Paula, 07/10): o histórico trouxe o chat por LID e o ao vivo
+// pelo telefone — a mesma pessoa virou duas conversas e duas vendas. Quando a
+// UAZAPI diz o telefone, é ele que vale; o LID vai junto para unificar.
+test('chat @lid com o telefone resolvido do cliente vira o telefone', () => {
+    const m = ok(normalizarMensagem(base({
+        chatid: '141562256314579@lid', sender: '141562256314579@lid',
+        sender_pn: '555181009857@s.whatsapp.net', sender_lid: '141562256314579@lid',
+    })));
+    assert.equal(m.clienteTelefone, '555181009857');
+    assert.equal(m.clienteLid, '141562256314579');
+});
+
+// Na mensagem enviada, o remetente é o próprio vendedor: o `sender_pn` dela é
+// o número dele, não o do cliente.
+test('sender_pn de mensagem enviada não é o telefone do cliente', () => {
+    const m = ok(normalizarMensagem(base({
+        chatid: '141562256314579@lid', fromMe: true, sender_pn: '5551999990000@s.whatsapp.net',
+    })));
+    assert.equal(m.clienteTelefone, 'lid:141562256314579');
+});
+
+test('o chat que acompanha a mensagem resolve o LID, inclusive na enviada', () => {
+    const porJid = ok(normalizarMensagem({
+        ...base({ chatid: '141562256314579@lid', fromMe: true }),
+        chat: { wa_chatid: '555181009857@s.whatsapp.net', wa_chatlid: '141562256314579@lid' },
+    }));
+    assert.equal(porJid.clienteTelefone, '555181009857');
+    assert.equal(porJid.clienteLid, '141562256314579');
+    const porPhone = ok(normalizarMensagem({
+        ...base({ chatid: '141562256314579@lid' }),
+        chat: { wa_chatid: '141562256314579@lid', phone: '+55 51 8100-9857' },
+    }));
+    assert.equal(porPhone.clienteTelefone, '555181009857');
+});
+
+// O `history` documentado: `chatid` pelo número e o LID em `chatlid`.
+test('chat pelo telefone guarda o LID que vier junto', () => {
+    assert.equal(ok(normalizarMensagem(base({ chatlid: '141562256314579@lid' }))).clienteLid, '141562256314579');
+    assert.equal(ok(normalizarMensagem({
+        ...base(), chat: { wa_chatid: '5554999998888@s.whatsapp.net', wa_chatlid: '141562256314579@lid' },
+    })).clienteLid, '141562256314579');
+    assert.equal(ok(normalizarMensagem(base({ sender_lid: '141562256314579@lid' }))).clienteLid, '141562256314579');
+    // O LID do remetente numa enviada é o do vendedor.
+    assert.equal(ok(normalizarMensagem(base({ fromMe: true, sender_lid: '999999999999999@lid' }))).clienteLid, null);
+    assert.equal(ok(normalizarMensagem(base())).clienteLid, null);
+});
+
+// Um chat de outra pessoa colado na mensagem não pode trocar o cliente.
+test('chat de outro contato não resolve o LID', () => {
+    const m = ok(normalizarMensagem({
+        ...base({ chatid: '141562256314579@lid' }),
+        chat: { wa_chatid: '5554911112222@s.whatsapp.net', wa_chatlid: '888888888888888@lid' },
+    }));
+    assert.equal(m.clienteTelefone, 'lid:141562256314579');
 });
 
 // Na mídia, a UAZAPI manda em `content` o objeto da mensagem do WhatsApp. O

@@ -13,6 +13,8 @@
  *      o que não for nosso. `listar()` também filtra — o resto do sistema
  *      nunca enxerga instância alheia.
  */
+import type { ItemCheck } from '../lid.ts';
+
 export const SYSTEM_NAME = 'zonanova';
 
 export type Instancia = {
@@ -143,6 +145,15 @@ export class Uazapi {
         await this.chamar('/message/history-sync', {
             metodo: 'POST', token, corpo: { number: jid, mode: 'history', count: Math.min(Math.max(count, 1), 100) },
         });
+    }
+
+    /**
+     * Pergunta ao WhatsApp por números ou LIDs (`…@lid`). Para um LID, o `jid`
+     * da resposta é o número da pessoa, quando o WhatsApp o revela. Só leitura.
+     */
+    async verificarNumeros(token: string, numbers: string[]): Promise<ItemCheck[]> {
+        const r = await this.chamar<ItemCheck[]>('/chat/check', { metodo: 'POST', token, corpo: { numbers } });
+        return Array.isArray(r) ? r : [];
     }
 
     async conectar(token: string): Promise<Instancia> {

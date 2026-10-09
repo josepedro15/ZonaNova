@@ -14,6 +14,8 @@ export type EventoUazapi = {
     token?: string;
     message?: MensagemUazapi;
     messages?: MensagemUazapi[] | null;
+    /** Snapshot do chat, que acompanha a mensagem ao vivo. */
+    chat?: ChatUazapi | null;
     instance?: { status?: string; token?: string; name?: string };
     status?: string;
 };
@@ -22,7 +24,13 @@ export type MensagemUazapi = {
         id?: string;
         messageid?: string;
         chatid?: string;
+        /** LID do chat, quando o `chatid` vem pelo número (o `history` documentado). */
+        chatlid?: string | null;
         sender?: string;
+        /** Remetente pelo número (`…@s.whatsapp.net`), quando a UAZAPI o resolve. */
+        sender_pn?: string | null;
+        /** Remetente pelo LID (`…@lid`). */
+        sender_lid?: string | null;
         fromMe?: boolean;
         isGroup?: boolean;
         messageType?: string;
@@ -47,6 +55,14 @@ export type MensagemUazapi = {
         wasSentByApi?: boolean;
 };
 
+/** Os campos do chat que identificam o contato. */
+export type ChatUazapi = {
+    wa_chatid?: string;
+    wa_chatlid?: string | null;
+    /** Telefone formatado ("+55 11 99999-9999"), ou vazio. */
+    phone?: string;
+};
+
 /** Os campos da mídia que usamos, como o WhatsApp os nomeia. */
 export type ConteudoMidia = {
     fileName?: string;
@@ -57,7 +73,10 @@ export type ConteudoMidia = {
 
 export type MensagemNormalizada = {
     waMessageId: string;
+    /** Telefone (E.164 sem `+`) ou, sem telefone conhecido, `lid:<dígitos>`. */
     clienteTelefone: string;
+    /** Dígitos do LID do contato, quando se sabe: une a conversa `lid:` à do telefone. */
+    clienteLid: string | null;
     clienteNome: string | null;
     direcao: 'entrada' | 'saida';
     tipo: 'texto' | 'audio' | 'imagem' | 'documento' | 'video' | 'outro';
@@ -115,6 +134,46 @@ export function soDigitos(jid: string): string {
     return (jid.split('@')[0] ?? '').split(':')[0]!.replace(/\D/g, '');
 }
 
+const ehLid = (jid: string | null | undefined): jid is string => !!jid && jid.endsWith('@lid');
+const ehNumero = (jid: string | null | undefined): jid is string => !!jid && jid.endsWith('@s.whatsapp.net');
+
+/** Telefone plausível: E.164 sem `+`, de 10 a 15 dígitos. */
+function telefoneValido(bruto: string | null | undefined): string | null {
+    const d = (bruto ?? '').replace(/\D/g, '');
+    return d.length >= 10 && d.length <= 15 ? d : null;
+}
+
+/**
+ * Quem é o cliente da conversa: telefone e LID.
+ *
+ * `@lid` é o identificador de privacidade do WhatsApp: estável para a
+ * conversa, mas não é telefone. O histórico de 05–07/10 chegou com o chat por
+ * LID e o ao vivo pelo número, e a mesma pessoa virou duas conversas. Por isso
+ * o telefone vale sempre que a UAZAPI o disser — o `sender_pn` da mensagem do
+ * cliente (na enviada, o remetente é o vendedor) ou o chat que acompanha a
+ * mensagem, se for o mesmo chat — e o LID vai junto, para a ingestão unir a
+ * conversa `lid:` que já existir. Sem telefone, `lid:<dígitos>`: o prefixo
+ * impede a tela de formatá-lo como número e montar um wa.me que abre outra
+ * pessoa.
+ */
+export function contatoDoChat(m: MensagemUazapi, chat: ChatUazapi | null): { telefone: string; lid: string | null } | null {
+    const chatid = m.chatid ?? m.sender ?? '';
+    const digitos = soDigitos(chatid);
+    if (!digitos) return null;
+
+    if (ehLid(chatid)) {
+        const mesmoChat = !!chat && (chat.wa_chatid === chatid || (ehLid(chat.wa_chatlid) && soDigitos(chat.wa_chatlid) === digitos));
+        const telefone = (!m.fromMe && ehNumero(m.sender_pn) ? telefoneValido(soDigitos(m.sender_pn)) : null)
+            ?? (mesmoChat && ehNumero(chat!.wa_chatid) ? telefoneValido(soDigitos(chat!.wa_chatid)) : null)
+            ?? (mesmoChat ? telefoneValido(chat!.phone) : null);
+        return { telefone: telefone ?? `${PREFIXO_LID}${digitos}`, lid: digitos };
+    }
+
+    const mesmoChat = !!chat && chat.wa_chatid === chatid;
+    const lid = [m.chatlid, mesmoChat ? chat!.wa_chatlid : null, m.fromMe ? null : m.sender_lid].find(ehLid);
+    return { telefone: digitos, lid: lid ? soDigitos(lid) || null : null };
+}
+
 /**
  * O timestamp da UAZAPI vem em segundos nuns eventos e em milissegundos
  * noutros. Distinguir pela grandeza: segundos cabem em ~10 dígitos até 2286.
@@ -142,12 +201,8 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
     // Canal do WhatsApp: conteúdo publicado para seguidores, nunca um cliente.
     if (chat.endsWith('@newsletter')) return { descartar: true, motivo: 'canal' };
 
-    const digitos = soDigitos(chat);
-    if (!digitos) return { descartar: true, motivo: 'sem telefone identificável' };
-    // `@lid` é o identificador de privacidade do WhatsApp: estável para a
-    // conversa, mas não é telefone. Guardado com prefixo para a tela não o
-    // formatar como número nem montar um link wa.me que abre outra pessoa.
-    const telefone = chat.endsWith('@lid') ? `${PREFIXO_LID}${digitos}` : digitos;
+    const contato = contatoDoChat(m, ev.chat ?? null);
+    if (!contato) return { descartar: true, motivo: 'sem telefone identificável' };
 
     const bruto = (m.messageType ?? m.type ?? 'text').toLowerCase().replace(/[_\s-]/g, '');
     const tipo = TIPOS[bruto] ?? 'outro';
@@ -162,7 +217,8 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
 
     return {
         waMessageId: id,
-        clienteTelefone: telefone,
+        clienteTelefone: contato.telefone,
+        clienteLid: contato.lid,
         // Em mensagem enviada, `senderName`/`pushName` é o nome do próprio
         // vendedor. Gravá-lo sobrescreveria o nome do cliente na conversa.
         clienteNome: m.fromMe ? null : (m.senderName ?? m.pushName ?? null),

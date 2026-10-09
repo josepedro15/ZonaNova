@@ -3,7 +3,7 @@ import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { variantesTelefone } from '@/lib/painel';
 import { valeTranscrever } from '@/lib/transcricao';
 import { valeDescrever } from '@/lib/midia';
-import { mensagensDoEvento, normalizarMensagem, statusDeConexao, type EventoUazapi, type MensagemUazapi } from '@/lib/uazapi/normalizar';
+import { mensagensDoEvento, normalizarMensagem, statusDeConexao, type ChatUazapi, type EventoUazapi, type MensagemUazapi } from '@/lib/uazapi/normalizar';
 
 /**
  * O trabalho do webhook depois de autenticado (doc 3 §3.2). Fica fora da rota
@@ -39,7 +39,8 @@ export async function processar(evento: EventoUazapi, conexao: Conexao) {
     if (erroDono) throw erroDono;
     if (dono?.status !== 'ativo') return;
 
-    for (const mensagem of mensagens) await processarMensagem(mensagem, conexao);
+    // O chat que acompanha a mensagem ao vivo pode trazer o telefone de um chat @lid.
+    for (const mensagem of mensagens) await processarMensagem(mensagem, evento.message ? evento.chat ?? null : null, conexao);
     if (evento.EventType?.toLowerCase() === 'history') {
         await supabase.from('conexoes_whatsapp').update({
             historico_status: 'recebido', historico_ultimo_em: new Date().toISOString(), updated_at: new Date().toISOString(),
@@ -47,9 +48,9 @@ export async function processar(evento: EventoUazapi, conexao: Conexao) {
     }
 }
 
-async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
+async function processarMensagem(mensagem: MensagemUazapi, chat: ChatUazapi | null, conexao: Conexao) {
     const supabase = criarClienteAdmin();
-    const m = normalizarMensagem({ message: mensagem });
+    const m = normalizarMensagem({ message: mensagem, chat });
     if ('descartar' in m) return;
 
     // Contato fora da análise não é guardado: barrar aqui e não na análise
@@ -75,18 +76,7 @@ async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
     // junto, e é o gestor novo quem passa a vê-la. O histórico por dia não se
     // perde — cada análise e relatório guarda a unidade do dia em que foi
     // feito (doc 2, rollup histórico).
-    const { data: conversa, error: erroConversa } = await supabase.from('conversas')
-        .upsert({
-            user_id: conexao.user_id,
-            cliente_telefone: m.clienteTelefone,
-            unidade_id: conexao.unidade_id,
-            ...(m.clienteNome ? { cliente_nome: m.clienteNome } : {}),
-        }, { onConflict: 'user_id,cliente_telefone' })
-        .select('id').single<{ id: string }>();
-
-    if (erroConversa || !conversa) {
-        throw erroConversa ?? new Error('conversa não resolvida');
-    }
+    const conversa = await conversaDoContato(supabase, conexao, m);
 
     // Idempotência: reentrega da UAZAPI não pode duplicar mensagem. O UNIQUE
     // em wa_message_id é quem garante; aqui só se pede para não reclamar.
@@ -132,6 +122,41 @@ async function processarMensagem(mensagem: MensagemUazapi, conexao: Conexao) {
         }
     }
 }
+
+/**
+ * A conversa da mensagem. Com LID, quem decide é o banco
+ * (`zn_conversa_do_contato`, 0031): a conversa do telefone, unida à `lid:` do
+ * mesmo contato — ou, só com o LID, a que já tiver aquele LID. Sem LID, o
+ * upsert pelo telefone de sempre.
+ */
+async function conversaDoContato(
+    supabase: ReturnType<typeof criarClienteAdmin>, conexao: Conexao,
+    m: { clienteTelefone: string; clienteLid: string | null; clienteNome: string | null },
+): Promise<{ id: string }> {
+    if (m.clienteLid) {
+        const { data, error } = await supabase.rpc('zn_conversa_do_contato', {
+            p_user: conexao.user_id, p_unidade: conexao.unidade_id,
+            p_telefone: m.clienteTelefone, p_lid: m.clienteLid, p_nome: m.clienteNome,
+        });
+        if (!error && data) return { id: data as string };
+        // Sem a função (0031 ainda não aplicada), o caminho antigo: a mensagem
+        // não pode se perder por isso.
+        if (!error || !FUNCAO_AUSENTE.has(error.code)) throw error ?? new Error('conversa não resolvida');
+    }
+    const { data: conversa, error } = await supabase.from('conversas')
+        .upsert({
+            user_id: conexao.user_id,
+            cliente_telefone: m.clienteTelefone,
+            unidade_id: conexao.unidade_id,
+            ...(m.clienteNome ? { cliente_nome: m.clienteNome } : {}),
+        }, { onConflict: 'user_id,cliente_telefone' })
+        .select('id').single<{ id: string }>();
+    if (error || !conversa) throw error ?? new Error('conversa não resolvida');
+    return conversa;
+}
+
+/** 42883 vem do Postgres; PGRST202 é como o PostgREST diz o mesmo. */
+const FUNCAO_AUSENTE = new Set(['42883', 'PGRST202']);
 
 /** 42703 vem do Postgres; PGRST204 é como o PostgREST diz o mesmo. */
 const COLUNA_AUSENTE = new Set(['42703', 'PGRST204']);

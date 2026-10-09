@@ -670,3 +670,111 @@ begin
     then raise notice 'FALHOU  authenticated executa conversas_reativa_dispensada';
     else raise notice 'PASSOU  conversas_reativa_dispensada fora do cliente'; end if;
 end $$;
+
+-- 0031: a mesma pessoa numa conversa só (LID × telefone). Caso Lucas: a
+-- conversa `lid:` do histórico e a do telefone, ao vivo, com análise no mesmo
+-- dia nas duas. Tudo é desfeito no fim.
+do $$
+declare
+    v_user    constant uuid := '44444444-4444-4444-4444-444444444444';
+    v_unidade constant uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+    v_pb      constant uuid := 'dddddddd-0000-0000-0000-000000000001';
+    v_lid     constant uuid := 'cccccccc-0000-0000-0031-000000000001';
+    v_tel     constant uuid := 'cccccccc-0000-0000-0031-000000000002';
+    v_id uuid; v_n int; v_txt text;
+begin
+    insert into public.conversas (id, user_id, unidade_id, cliente_telefone, cliente_lid)
+    values (v_lid, v_user, v_unidade, 'lid:141562256314579', '141562256314579');
+    insert into public.conversas (id, user_id, unidade_id, cliente_telefone, cliente_nome)
+    values (v_tel, v_user, v_unidade, '555181009857', 'Lucas Vinicius');
+    insert into public.mensagens (conversa_id, wa_message_id, direcao, conteudo, enviada_em) values
+        (v_lid, 'teste-0031-1', 'entrada', 'quero o piso', '2026-10-07 14:10-03'),
+        (v_lid, 'teste-0031-2', 'saida',   'fechado',      '2026-10-07 14:37-03'),
+        (v_tel, 'teste-0031-3', 'entrada', 'paguei',       '2026-10-07 14:48-03');
+    insert into public.analises_conversa (conversa_id, user_id, unidade_id, data_ref, status, payload) values
+        (v_lid, v_user, v_unidade, '2026-10-07', 'venda_feita', '{}'),
+        (v_lid, v_user, v_unidade, '2026-10-06', 'em_negociacao', '{}'),
+        (v_tel, v_user, v_unidade, '2026-10-07', 'venda_feita', '{}');
+    insert into public.aderencia_conversa (id, conversa_id, user_id, unidade_id, data_ref, playbook_id, etapa, aplicavel, aplicado) values
+        ('eeeeeeee-0000-0000-0031-000000000001', v_lid, v_user, v_unidade, '2026-10-07', v_pb, 'acolhida', true, 'nao'),
+        ('eeeeeeee-0000-0000-0031-000000000002', v_tel, v_user, v_unidade, '2026-10-07', v_pb, 'acolhida', true, 'sim');
+    insert into public.aderencia_contestacoes (aderencia_id, contestado_por, motivo)
+    values ('eeeeeeee-0000-0000-0031-000000000001', v_user, 'acolhi sim');
+    insert into public.mec_observacoes (conversa_id, user_id, unidade_id, data_ref, playbook_id, etapa, sinal) values
+        (v_lid, v_user, v_unidade, '2026-10-07', v_pb, 'fechamento', 'fechamento'),
+        (v_lid, v_user, v_unidade, '2026-10-06', v_pb, 'sondagem', 'pergunta_aberta');
+    insert into public.fila_processamento (tipo, referencia_id, data_ref, status) values
+        ('analise_conversa', v_lid, '2026-10-07', 'concluido'),
+        ('analise_conversa', v_tel, '2026-10-07', 'concluido'),
+        ('analise_conversa', v_lid, '2026-10-06', 'concluido');
+    insert into public.envios_crm (telefone, modo, conversa_id, user_id, unidade_id, data_ref)
+    values ('lid:141562256314579', 'simulacao', v_lid, v_user, v_unidade, '2026-10-07');
+
+    v_id := public.zn_conversa_do_contato(v_user, v_unidade, '555181009857', '141562256314579', null);
+
+    if v_id = v_tel and not exists (select 1 from public.conversas where id = v_lid)
+    then raise notice 'PASSOU  mensagem com telefone e LID une a conversa lid: na do telefone';
+    else raise notice 'FALHOU  conversa lid: não foi unida (%)', v_id; end if;
+
+    select count(*) into v_n from public.mensagens where conversa_id = v_tel and wa_message_id like 'teste-0031-%';
+    if v_n = 3 and (select total_mensagens from public.conversas where id = v_tel) = 3
+       and (select ultima_mensagem_em from public.conversas where id = v_tel) = '2026-10-07 14:48-03'
+    then raise notice 'PASSOU  mensagens movidas e contadores recontados';
+    else raise notice 'FALHOU  mensagens/contadores depois da unificação (%)', v_n; end if;
+
+    select string_agg(data_ref || '=' || status, ',' order by data_ref) into v_txt
+      from public.analises_conversa where conversa_id = v_tel;
+    if v_txt = '2026-10-06=em_negociacao,2026-10-07=venda_feita'
+       and (select count(*) from public.analises_conversa where conversa_id = v_tel and data_ref = '2026-10-07') = 1
+    then raise notice 'PASSOU  dia analisado nos dois lados fica com uma análise só; o resto é movido';
+    else raise notice 'FALHOU  análises depois da unificação: %', v_txt; end if;
+
+    if (select count(*) from public.aderencia_conversa where conversa_id = v_tel) = 1
+       and (select aderencia_id from public.aderencia_contestacoes where motivo = 'acolhi sim') = 'eeeeeeee-0000-0000-0031-000000000002'
+    then raise notice 'PASSOU  aderência repetida sai e a contestação vai para a do destino';
+    else raise notice 'FALHOU  aderência/contestação depois da unificação'; end if;
+
+    if (select count(*) from public.mec_observacoes where conversa_id = v_tel) = 1
+       and (select data_ref from public.mec_observacoes where conversa_id = v_tel) = '2026-10-06'
+    then raise notice 'PASSOU  observações do MEC do dia repetido saem, as outras são movidas';
+    else raise notice 'FALHOU  observações do MEC depois da unificação'; end if;
+
+    if (select count(*) from public.fila_processamento where referencia_id = v_tel and tipo = 'analise_conversa') = 2
+       and not exists (select 1 from public.fila_processamento where referencia_id = v_lid)
+       and (select conversa_id from public.envios_crm where telefone = 'lid:141562256314579') = v_tel
+    then raise notice 'PASSOU  fila e envio ao CRM passam para o destino';
+    else raise notice 'FALHOU  fila/envio_crm depois da unificação'; end if;
+
+    if (select cliente_lid from public.conversas where id = v_tel) = '141562256314579'
+       and (select cliente_nome from public.conversas where id = v_tel) = 'Lucas Vinicius'
+    then raise notice 'PASSOU  destino guarda o LID e o nome';
+    else raise notice 'FALHOU  LID/nome do destino'; end if;
+
+    -- Depois de resolvido, a mensagem que vier só pelo LID cai na mesma conversa.
+    v_id := public.zn_conversa_do_contato(v_user, v_unidade, 'lid:141562256314579', '141562256314579', 'Lucas');
+    if v_id = v_tel and not exists (select 1 from public.conversas where cliente_telefone = 'lid:141562256314579')
+    then raise notice 'PASSOU  mensagem só com o LID cai na conversa do telefone';
+    else raise notice 'FALHOU  mensagem só com o LID criou outra conversa'; end if;
+
+    -- LID novo, sem telefone: conversa lid: com o LID guardado.
+    v_id := public.zn_conversa_do_contato(v_user, v_unidade, 'lid:999000111222333', '999000111222333', null);
+    if (select cliente_lid from public.conversas where id = v_id and cliente_telefone = 'lid:999000111222333') = '999000111222333'
+    then raise notice 'PASSOU  contato só com LID vira conversa lid: com cliente_lid';
+    else raise notice 'FALHOU  conversa lid: nova sem cliente_lid'; end if;
+
+    begin
+        perform public.zn_unificar_conversa(v_id, 'cccccccc-0000-0000-0000-000000000002');
+        raise notice 'FALHOU  uniu conversas de vendedores diferentes';
+    exception when raise_exception then
+        raise notice 'PASSOU  não une conversas de vendedores diferentes';
+    end;
+
+    delete from public.envios_crm where telefone = 'lid:141562256314579';
+    delete from public.fila_processamento where referencia_id in (v_tel, v_lid);
+    delete from public.conversas where id in (v_tel, v_id);
+
+    if has_function_privilege('authenticated', 'public.zn_unificar_conversa(uuid, uuid)', 'execute')
+       or has_function_privilege('authenticated', 'public.zn_conversa_do_contato(uuid, uuid, text, text, text)', 'execute')
+    then raise notice 'FALHOU  authenticated executa as funções de unificação';
+    else raise notice 'PASSOU  funções de unificação fora do cliente'; end if;
+end $$;

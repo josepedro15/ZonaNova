@@ -105,3 +105,14 @@ test('toda chamada sai com prazo', async () => {
     await new Uazapi('https://uaz', 'adm', buscar).listar();
     assert.ok(sinal instanceof AbortSignal);
 });
+
+test('verificarNumeros consulta o /chat/check com o token da instância', async () => {
+    const resposta = [{ query: '141562256314579@lid', jid: '555181009857@s.whatsapp.net', isInWhatsapp: true }];
+    const { f, chamadas } = falso({ '/chat/check': resposta });
+    const itens = await new Uazapi('https://uaz', 'admin', f).verificarNumeros('tk', ['141562256314579@lid']);
+    assert.deepEqual(itens, resposta);
+    const c = chamadas.find((x) => x.url === '/chat/check')!;
+    assert.equal(c.metodo, 'POST');
+    assert.equal(c.headers.token, 'tk');
+    assert.deepEqual(c.corpo, { numbers: ['141562256314579@lid'] });
+});
