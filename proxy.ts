@@ -13,7 +13,7 @@ const ROTAS_PUBLICAS = ['/login', '/cadastro', '/recuperar-senha', '/auth/callba
 // sem sessão, e passa antes das regras de pendente e de conexão: um vendedor
 // que esqueceu a senha ainda na fila de aprovação também precisa trocá-la.
 const ROTA_NOVA_SENHA = '/nova-senha';
-const ROTAS_DE_GESTAO = ['/equipe', '/aprovacoes'];
+const ROTAS_DE_GESTAO = ['/equipe', '/aprovacoes', '/objecoes'];
 const ROTAS_DE_REDE = ['/unidades', '/mec', '/descobertas'];
 const ROTAS_DE_ADMIN = ['/admin'];
 

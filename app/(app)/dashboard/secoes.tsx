@@ -20,8 +20,9 @@ export type ConversaComMensagens = {
     dispensada_em?: string | null;
     fechada_presencial_em?: string | null;
     mensagens: (Msg & { tipo: string; conteudo: string | null })[];
-    // Só as análises da própria conversa; a mais recente dá urgência e potencial.
-    analises_conversa?: { data_ref: string; urgencia: number | null; potencial_venda: string | null }[];
+    // Só as análises da própria conversa; a mais recente dá urgência e
+    // potencial, e o status dela pode tirar a conversa da fila.
+    analises_conversa?: { data_ref: string; urgencia: number | null; potencial_venda: string | null; status: string | null; updated_at: string }[];
 };
 
 export type RelatorioDiario = {

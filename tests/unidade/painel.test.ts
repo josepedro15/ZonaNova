@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, temposDeResposta, respostasPorBloco, msDeExpediente, TOLERANCIA_BLOCO_ABERTO_MS, ehSoConfirmacao, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, concluidaPelaAnalise, temposDeResposta, respostasPorBloco, msDeExpediente, TOLERANCIA_BLOCO_ABERTO_MS, ehSoConfirmacao, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -363,4 +363,46 @@ test('no computador, quem escolheu o app recebe whatsapp://; no celular nada mud
     assert.equal(linkWhatsapp('5554998124471', false, true), 'whatsapp://send?phone=5554998124471');
     assert.equal(linkWhatsapp('5554998124471', true, true), 'https://wa.me/5554998124471');
     assert.equal(linkWhatsapp('lid:123456789', false, true), null);
+});
+
+// --- "obrigado", reação e a análise que deu o atendimento por terminado -----
+
+const falou = (hhmm: string, conteudo: string, tipo = 'texto'): Msg => ({ ...cliente(hhmm), tipo, conteudo });
+
+// Caso LECO (Thamires, 08/10): venda paga, a vendedora agradeceu e o cliente
+// reagiu com ❤️. A reação não pede resposta.
+test('reação ou "obrigado" depois da resposta não põem o cliente na fila', () => {
+    assert.equal(esperaDoCliente([vendedor('10:55'), falou('10:59', '[reagiu com ❤️]', 'outro')], AGORA), null);
+    assert.equal(esperaDoCliente([vendedor('10:55'), falou('10:56', 'Obrigado'), falou('10:57', '👍🏻')], AGORA), null);
+});
+
+test('pergunta seguida de "obrigado" continua esperando desde a pergunta', () => {
+    assert.equal(esperaDoCliente([vendedor('10:00'), falou('15:00', 'Tem cimento?'), falou('15:01', 'Obrigado')], AGORA), 3 * 60 * 60 * 1000);
+});
+
+test('sem conteúdo lido, a fala do cliente conta como antes', () => {
+    assert.equal(esperaDoCliente([vendedor('10:00'), cliente('17:00')], AGORA), 60 * 60 * 1000);
+});
+
+const analise = (data_ref: string, status: string, updated_at: string) => ({ data_ref, status, updated_at });
+
+test('análise "encerrada" feita depois da última fala do cliente tira da fila', () => {
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], [analise('2026-09-21', 'encerrada', em('15:00'))]), true);
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], [analise('2026-09-21', 'venda_feita', em('15:00'))]), true);
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], [analise('2026-09-21', 'perdida', em('15:00'))]), true);
+});
+
+test('análise que não leu a última fala não tira da fila', () => {
+    // Das 12h, e o cliente escreveu às 14h.
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], [analise('2026-09-21', 'encerrada', em('12:00'))]), false);
+    // De ontem, refeita hoje à tarde: o dia dela não tem a fala de hoje.
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], [analise('2026-09-20', 'encerrada', em('15:00'))]), false);
+});
+
+test('análise em andamento ou sem resposta não tira da fila; vale a mais recente', () => {
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], [analise('2026-09-21', 'em_andamento', em('15:00'))]), false);
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], [analise('2026-09-21', 'sem_resposta', em('15:00'))]), false);
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], [analise('2026-09-20', 'encerrada', em('15:00')), analise('2026-09-21', 'em_andamento', em('15:00'))]), false);
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], []), false);
+    assert.equal(concluidaPelaAnalise([cliente('14:00')], null), false);
 });

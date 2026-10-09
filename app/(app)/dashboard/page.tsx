@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { cookies, headers } from 'next/headers';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { CabecalhoPagina, EstadoVazio, Icone, Pagina, RotuloSecao, Selo, Shell, type DiaSerie } from '@/components/ui';
-import { aparelhoDe, COOKIE_WHATSAPP_APP, desde, diasAte, esperaNaLista, marcadaDepoisDoCliente, primeiroNome, respostaMediaEmMinutos, respostasPorBloco, telefoneBonito, temposDeResposta } from '@/lib/painel';
+import { aparelhoDe, concluidaPelaAnalise, COOKIE_WHATSAPP_APP, desde, diasAte, esperaNaLista, marcadaDepoisDoCliente, primeiroNome, respostaMediaEmMinutos, respostasPorBloco, telefoneBonito, temposDeResposta } from '@/lib/painel';
 import { desfazerDispensa, desfazerFechadoPresencial } from '@/app/actions/conversa';
 import { AvisoMarca } from '@/components/aviso-marca';
 import { dataEmSaoPaulo } from '@/lib/analise';
@@ -39,7 +39,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         supabase.from('vw_conexoes_status').select('status, numero, ultimo_evento_em').eq('user_id', user!.id)
             .maybeSingle<{ status: string; numero: string | null; ultimo_evento_em: string | null }>(),
         supabase.from('conversas')
-            .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, dispensada_em, fechada_presencial_em, mensagens(direcao, automatica, enviada_em, tipo, conteudo), analises_conversa(data_ref, urgencia, potencial_venda)')
+            .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, dispensada_em, fechada_presencial_em, mensagens(direcao, automatica, enviada_em, tipo, conteudo), analises_conversa(data_ref, urgencia, potencial_venda, status, updated_at)')
             .gte('ultima_mensagem_em', janela.toISOString()).eq('bloqueada', false)
             .order('ultima_mensagem_em', { ascending: false }).returns<ConversaComMensagens[]>(),
         supabase.from('relatorios_diarios')
@@ -62,9 +62,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     const todas = conversas ?? [];
     const deHoje = todas.filter((c) => new Date(c.ultima_mensagem_em) >= comeco);
     // "Não é atendimento" e "Fechado presencialmente" tiram da fila até o
-    // cliente escrever de novo (app/actions/conversa.ts).
+    // cliente escrever de novo (app/actions/conversa.ts); a análise que deu o
+    // atendimento por terminado depois da última fala dele também.
     const esperando = todas
-        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em))
+        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em) && !concluidaPelaAnalise(c.mensagens, c.analises_conversa))
         .map((c) => ({ conversa: c, espera: esperaNaLista(c.mensagens, agora) }))
         .filter((e): e is { conversa: ConversaComMensagens; espera: number } => e.espera !== null)
         .sort((a, b) => b.espera - a.espera);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ajustarAcolhida, ajustarResultado, comprovanteNoDia, notaAntiga, aderenciaPercentual, saudacaoInvisivel, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
+import { ajustarAcolhida, ajustarResultado, comprovanteNoDia, notaAntiga, pagamentoComOSetor, aderenciaPercentual, saudacaoInvisivel, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
 
 test('o dia comercial usa São Paulo na virada do UTC', () => {
     assert.equal(dataEmSaoPaulo(new Date('2026-09-22T01:30:00Z')), '2026-09-21');
@@ -267,6 +267,28 @@ test('imagem com legenda que não é de pagamento, foto antes do Pix e saudaçã
     assert.equal(comprovanteNoDia(['V: "chave pix"', 'C: [Mídia: imagem] "paguei"'].join('\n')), true);
     // Longe demais do pedido de pagamento.
     assert.equal(comprovanteNoDia(['V: "chave pix"', 'V: "a"', 'C: "b"', 'V: "c"', 'C: [Mídia: imagem]'].join('\n')), false);
+});
+
+// Caso LECO (Thamires, 08/10; Silas, 09/10): o cliente topou, a vendedora
+// passou o link de pagamento para o crediário. Sem comprovante, é venda.
+test('pagamento passado ao crediário ou ao financeiro fecha a compra nova', () => {
+    const transcript = ['C: "Teria que ser por link, estou em Novo Hamburgo."', 'V: "Teu cpf e nome completo ?"',
+        'V: "vou pedir para a gerente de crediário lhe chamar para fazer o link de pagamento"', 'V: "qual endereço para entrega?"'].join('\n');
+    assert.equal(pagamentoComOSetor(transcript), true);
+    const r = ajustarResultado(resultado({ assuntos_do_dia: [{ assunto: 'telhas e cumieiras', situacao: 'compra_nova_em_aberto' }] }), transcript);
+    assert.deepEqual([r.status, r.assuntos_do_dia[0].situacao], ['venda_feita', 'compra_nova_fechada']);
+    // Com o próprio crediário (colega), o link é o trabalho dele.
+    const colega = ajustarResultado(resultado({ natureza_contato: 'colega_ou_loja', confianca_natureza: 95, tipo_conversa: 'suporte', status: 'encerrada',
+        assuntos_do_dia: [{ assunto: 'link do Régis', situacao: 'compra_nova_em_aberto' }] }), transcript);
+    assert.equal(colega.status, 'encerrada');
+});
+
+test('chave Pix do financeiro, link do cliente e mensagem automática não são o pagamento com o setor', () => {
+    assert.equal(pagamentoComOSetor(['V: "financeiro@zonanova.com.br"', 'V: "Nossa chave pix"'].join('\n')), false);
+    assert.equal(pagamentoComOSetor('V: "Chave pix - financeiro@zonanova.com.br"'), false);
+    assert.equal(pagamentoComOSetor('C: "o crediário me mandou o link"'), false);
+    assert.equal(pagamentoComOSetor('V: [automática] "Pagamento no cartão ou boleto pelo crediário"'), false);
+    assert.equal(pagamentoComOSetor('V: "O financeiro te manda o boleto"'), true);
 });
 
 test('compra nova de cliente é negociação; cliente sem prova não é', () => {

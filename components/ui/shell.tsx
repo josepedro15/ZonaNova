@@ -23,6 +23,8 @@ const ITENS: Record<Papel, Item[]> = {
     gestor: [
         { href: '/equipe', rotulo: 'Minha equipe', curto: 'Equipe', icone: 'equipe' },
         { href: '/equipe/mec', rotulo: 'Aderência ao MEC', curto: 'MEC', icone: 'mec' },
+        // No celular, Configurações cede o lugar: o Perfil está no topo da tela.
+        { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
         { href: '/conversas', rotulo: 'Conversas', icone: 'conversa' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
         { href: '/perfil', rotulo: 'Configurações', curto: 'Ajustes', icone: 'engrenagem' },
@@ -39,6 +41,7 @@ const ITENS: Record<Papel, Item[]> = {
         // cadastro de unidade que ainda não tem gestor.
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
         { href: '/descobertas', rotulo: 'Descobertas', icone: 'lampada' },
+        { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
         { href: '/perfil', rotulo: 'Perfil', icone: 'pessoa' },
     ],
     admin: [
@@ -47,6 +50,7 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/admin/conexoes', rotulo: 'Conexões', icone: 'wifi' },
         { href: '/admin/eventos', rotulo: 'Registro de ações', curto: 'Registro', icone: 'lista' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
         { href: '/perfil', rotulo: 'Perfil', icone: 'pessoa' },
     ],
 };

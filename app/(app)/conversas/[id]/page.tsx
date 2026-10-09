@@ -4,7 +4,7 @@ import {
     Avatar, Barra, Botao, BotaoCopiar, BotaoLink, CabecalhoPagina, Cartao, Numero, Pagina, SELO, Selo, Shell,
 } from '@/components/ui';
 import { contextoApp, dataCurta } from '@/lib/contexto-app';
-import { aparelhoDe, COOKIE_WHATSAPP_APP, esperaDoCliente, esperaEmTexto, linkResponder, telefoneBonito } from '@/lib/painel';
+import { aparelhoDe, concluidaPelaAnalise, COOKIE_WHATSAPP_APP, esperaDoCliente, esperaEmTexto, linkResponder, telefoneBonito, type AnaliseDaFila } from '@/lib/painel';
 import { aderenciaPercentual } from '@/lib/analise';
 import { grifarConversa, listaDeTextos, rotuloPerfilCliente, rotuloPotencial, STATUS_CONVERSA, TIPO_CONVERSA, tomEspera, urgenciaAlta, type Tom } from '@/lib/visual';
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
@@ -89,10 +89,11 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
     const erros = listaDeTextos(payload.erros_vendedor);
     const tags = listaDeTextos(payload.tags).slice(0, 8);
     const grifos = grifarConversa(mensagens.map(textoDaMensagem), evidencias.map((e) => e.trecho));
-    const espera = esperaDoCliente(
-        mensagens.map((m) => ({ direcao: m.direcao as 'entrada' | 'saida', automatica: m.automatica, enviada_em: m.enviada_em })),
-        new Date(),
-    );
+    // A mesma regra do "Esperando você": "obrigado" e reação não pedem
+    // resposta, e a análise que deu o atendimento por terminado depois da
+    // última fala do cliente vale.
+    const paraEspera = mensagens.map((m) => ({ direcao: m.direcao as 'entrada' | 'saida', automatica: m.automatica, enviada_em: m.enviada_em, tipo: m.tipo, conteudo: m.conteudo }));
+    const espera = concluidaPelaAnalise(paraEspera, analise ? [analise as AnaliseDaFila] : []) ? null : esperaDoCliente(paraEspera, new Date());
     const vendedor = conversa.profiles as unknown as { nome: string } | null;
     const nome = conversa.cliente_nome || telefoneBonito(conversa.cliente_telefone);
     const podeContestar = ['gestor', 'supervisor', 'admin'].includes(perfil.role);

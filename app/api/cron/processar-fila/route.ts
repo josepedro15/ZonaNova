@@ -1,7 +1,7 @@
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { cronAutorizado } from '@/lib/cron';
 import { aposFalha, aposFalhaDoItem } from '@/lib/fila';
-import { baixarMidiaSegura, hashDoAudio, transcrever } from '@/lib/transcricao';
+import { baixarMidiaSegura, hashDoAudio, promptDeTranscricao, transcrever } from '@/lib/transcricao';
 import { descreverMidia, formatoLegivel, MAX_BYTES_MIDIA, midiaLigada } from '@/lib/midia';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
 import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, saudacaoInvisivel, type MensagemAnalise } from '@/lib/analise';
@@ -266,9 +266,14 @@ async function transcreverMensagem(supabase: Admin, mensagemId: string, apiKey: 
         await supabase.from('mensagens').update({ midia_url: midiaUrl }).eq('id', msg.id);
     }
 
+    // Os nomes de quem fala vão na pista de vocabulário: nome próprio é o que
+    // a transcrição mais erra.
+    const { data: conversa } = await supabase.from('conversas').select('cliente_nome,profiles!conversas_user_id_fkey(nome)').eq('id', msg.conversa_id)
+        .maybeSingle<{ cliente_nome: string | null; profiles: { nome: string } | null }>();
     const { texto, hash } = await transcrever(midiaUrl, {
         apiKey,
         modelo: process.env.OPENAI_MODELO_AUDIO,
+        prompt: promptDeTranscricao({ vendedor: conversa?.profiles?.nome, contato: conversa?.cliente_nome }),
         procurarCache: async (h) => {
             const { data } = await supabase
                 .from('mensagens').select('transcricao')

@@ -5,7 +5,7 @@ import {
 } from '@/components/ui';
 import { dataHoje, type contextoApp } from '@/lib/contexto-app';
 import { paginar } from '@/lib/paginar';
-import { esperaNaLista, juntarPorDia, marcadaDepoisDoCliente, telefoneBonito, type LinhaDia, type Msg } from '@/lib/painel';
+import { concluidaPelaAnalise, esperaNaLista, juntarPorDia, marcadaDepoisDoCliente, telefoneBonito, type AnaliseDaFila, type LinhaDia, type Msg } from '@/lib/painel';
 import { comQuemFalar, contarObjecoes, diaMenos, diasDeVenda, variacaoSemanal, type NotaDia } from '@/lib/derivacoes';
 import { falaCurta, setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
 import { contarObjecoesPorCodigo, juntarObjecoes } from '@/lib/mec';
@@ -68,11 +68,13 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     // A fila da equipe (pedido do piloto, 07/10/2026): a mesma regra e a mesma
     // janela de sete dias do "Esperando você" de cada vendedor. A
     // mensagens(...) embutida também é filtrada pela janela — sem isso, cada
-    // conversa ativa trazia o histórico inteiro — e só com as três colunas da
-    // conta; o texto da última fala vem depois, só de quem está esperando.
+    // conversa ativa trazia o histórico inteiro — e só com as colunas da
+    // conta (`tipo` e `conteudo` reconhecem o "obrigado" e a reação, que não
+    // pedem resposta; as análises, quem a IA já deu por terminado). O texto da
+    // última fala vem depois, só de quem está esperando.
     // Acima de 500 conversas ativas na semana, a fila fica aproximada (só as
     // 500 mais recentes entram na conta).
-    let qConversas = supabase.from('conversas').select('id,user_id,cliente_nome,cliente_telefone,dispensada_em,fechada_presencial_em,mensagens(direcao,automatica,enviada_em)')
+    let qConversas = supabase.from('conversas').select('id,user_id,cliente_nome,cliente_telefone,dispensada_em,fechada_presencial_em,mensagens(direcao,automatica,enviada_em,tipo,conteudo),analises_conversa(data_ref,status,updated_at)')
         .gte('ultima_mensagem_em', janela).gte('mensagens.enviada_em', janela).eq('bloqueada', false)
         .order('ultima_mensagem_em', { ascending: false }).limit(500);
     if (unidadeIds) {
@@ -113,7 +115,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         supabase.from('relatorios_rede').select('data_ref,score_geral').order('data_ref', { ascending: false }).limit(1).maybeSingle<{ data_ref: string; score_geral: number | null }>(),
         qAderencia.returns<{ user_id: string; data_ref: string; por_etapa: Record<string, number | null> | null }[]>(),
         paginar<{ conversa_id: string; data_ref: string; user_id: string; tipo_conversa: string | null; payload: unknown }>(qAnalises),
-        qConversas.returns<{ id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string; dispensada_em: string | null; fechada_presencial_em: string | null; mensagens: Msg[] }[]>(),
+        qConversas.returns<{ id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string; dispensada_em: string | null; fechada_presencial_em: string | null; mensagens: Msg[]; analises_conversa: AnaliseDaFila[] }[]>(),
         paginar<{ conversa_id: string; data_ref: string; item_chave: string | null }>(qObjecoes),
         carregarPlaybook(supabase, null),
         qVendedores.returns<{ id: string }[]>(),
@@ -142,7 +144,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     // A mesma regra da lista "Esperando você": o alerta e a fila contam as
     // conversas que os vendedores veem lá, nem uma a mais.
     const esperando: Espera[] = (conversas ?? [])
-        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em))
+        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em) && !concluidaPelaAnalise(c.mensagens, c.analises_conversa))
         .map((c) => ({ id: c.id, user_id: c.user_id, cliente_nome: c.cliente_nome, cliente_telefone: c.cliente_telefone, espera: esperaNaLista(c.mensagens, agora) }))
         .filter((e): e is Espera => e.espera !== null)
         .sort((a, b) => b.espera - a.espera);

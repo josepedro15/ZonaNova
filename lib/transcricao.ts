@@ -25,6 +25,32 @@ export function hashDoAudio(bytes: ArrayBuffer | Uint8Array): string {
 
 export type ResultadoTranscricao = { texto: string; hash: string };
 
+/**
+ * Palavras do balcão que o modelo de transcrição não conhece e troca por
+ * outras parecidas: "a brita rachão número 4" saía "a Brita rachou o número 4"
+ * (Silas, 09/10/2026). O `prompt` da API é só uma pista de vocabulário e de
+ * grafia: não é instrução, e o modelo usa só o fim dele (~224 tokens).
+ */
+export const VOCABULARIO_DA_LOJA = 'Redemac Zona Nova, material de construção no litoral gaúcho: Xangri-Lá, Capão da Canoa, Capão Novo, Atlântida, Tramandaí, Arroio Teixeira. '
+    + 'Brita, pedra rachão, pó de brita, areia fina, areia média, saibro, cimento, cal, argamassa AC1, AC2, AC3, rejunte, porcelanato, cerâmica, '
+    + 'telha, cumieira, fibrocimento, tijolo, bloco, vergalhão, treliça, tela, caibro, ripa, sarrafo, compensado, MDF, drywall, gesso, forro de PVC, '
+    + 'cano, joelho, luva, tê, registro, caixa d\'água, cisterna, cuba, fio 2,5, disjuntor, tinta, massa corrida, selador, impermeabilizante, manta asfáltica. '
+    + 'Orçamento, pedido, Pix, boleto, crediário, link de pagamento, entrega, retirada, frete.';
+
+/** Nome de fora (do WhatsApp, do cadastro) limpo para a pista: só letras, espaço e hífen. */
+const nomeLimpo = (nome: string | null | undefined) =>
+    (nome ?? '').normalize('NFC').replace(/[^\p{L}\s'-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+
+/**
+ * A pista de vocabulário de um áudio: os nomes de quem fala vêm por último,
+ * porque é o fim do prompt que o modelo lê. Nome próprio é o que ele mais
+ * erra ("Jasson").
+ */
+export function promptDeTranscricao({ vendedor, contato }: { vendedor?: string | null; contato?: string | null }): string {
+    const nomes = [...new Set([nomeLimpo(vendedor), nomeLimpo(contato)].filter((n) => n.length >= 2))];
+    return nomes.length ? `${VOCABULARIO_DA_LOJA} Conversa entre ${nomes.join(' e ')}.` : VOCABULARIO_DA_LOJA;
+}
+
 /** O limite de arquivo da API de transcrição: acima disso ela recusa de todo jeito. */
 export const MAX_BYTES_AUDIO = 25 * 1024 * 1024;
 
@@ -140,6 +166,32 @@ export async function baixarMidiaSegura(
 }
 
 /**
+ * O modelo de transcrição. Em 09/10/2026, em 13 áudios reais da rede, o
+ * gpt-4o-mini-transcribe acertou o que o whisper-1 trocava ("a tovaca, o
+ * apetite" por "a troca", "Arrua e do Sal" por "Arroio do Sal", "torneiros"
+ * por "torneiras"), pela metade do preço por minuto. OPENAI_MODELO_AUDIO
+ * troca sem deploy.
+ */
+export const MODELO_AUDIO_PADRAO = 'gpt-4o-mini-transcribe';
+/** O de antes: aceita qualquer arquivo que o novo recuse. */
+const MODELO_AUDIO_RESERVA = 'whisper-1';
+
+/**
+ * O nome do arquivo pelo conteúdo. A UAZAPI entrega MP3, e ia como
+ * "audio.ogg": o whisper-1 adivinha o formato, os modelos gpt-4o recusam
+ * ("Audio file might be corrupted or unsupported").
+ */
+export function nomeDoAudio(bytes: Uint8Array): string {
+    const ascii = (de: number, ate: number) => String.fromCharCode(...bytes.subarray(de, ate));
+    if (ascii(0, 3) === 'ID3' || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) return 'audio.mp3';
+    if (ascii(0, 4) === 'OggS') return 'audio.ogg';
+    if (ascii(0, 4) === 'RIFF') return 'audio.wav';
+    if (ascii(4, 8) === 'ftyp') return 'audio.m4a';
+    if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return 'audio.webm';
+    return 'audio.ogg';
+}
+
+/**
  * Baixa o áudio, calcula o hash e transcreve. O `procurarCache` recebe o hash
  * e devolve o texto já transcrito, se houver — a chamada paga só acontece
  * quando o cache erra.
@@ -150,6 +202,8 @@ export async function transcrever(
         apiKey: string;
         modelo?: string;
         procurarCache: (hash: string) => Promise<string | null>;
+        /** Pista de vocabulário (`promptDeTranscricao`). */
+        prompt?: string;
         buscar?: typeof globalThis.fetch;
         /** Nome → IPs. Injetável para teste; o padrão é o DNS do sistema. */
         resolver?: Resolver;
@@ -164,18 +218,25 @@ export async function transcrever(
     const emCache = await opcoes.procurarCache(hash);
     if (emCache !== null) return { texto: emCache, hash };
 
-    const form = new FormData();
-    form.append('file', new Blob([bytes as BlobPart]), 'audio.ogg');
-    form.append('model', opcoes.modelo ?? 'whisper-1');
-    // O vendedor fala português; dizer isso evita o modelo "adivinhar" inglês
-    // num áudio curto e devolver ruído.
-    form.append('language', 'pt');
+    const pedir = (modelo: string) => {
+        const form = new FormData();
+        form.append('file', new Blob([bytes as BlobPart]), nomeDoAudio(bytes));
+        form.append('model', modelo);
+        // O vendedor fala português; dizer isso evita o modelo "adivinhar" inglês
+        // num áudio curto e devolver ruído.
+        form.append('language', 'pt');
+        if (opcoes.prompt) form.append('prompt', opcoes.prompt);
+        return buscar('https://api.openai.com/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: { authorization: `Bearer ${opcoes.apiKey}` },
+            body: form,
+        });
+    };
 
-    const t = await buscar('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${opcoes.apiKey}` },
-        body: form,
-    });
+    const modelo = opcoes.modelo || MODELO_AUDIO_PADRAO;
+    let t = await pedir(modelo);
+    // Arquivo que o modelo novo recusa (formato, duração) ainda tem o de antes.
+    if (t.status === 400 && modelo !== MODELO_AUDIO_RESERVA) t = await pedir(MODELO_AUDIO_RESERVA);
     if (!t.ok) throw new Error(`transcrição falhou: ${t.status} ${(await t.text()).slice(0, 200)}`);
 
     const { text } = (await t.json()) as { text?: string };

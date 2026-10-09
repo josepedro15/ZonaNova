@@ -133,6 +133,24 @@ export function comprovanteNoDia(transcript: string): boolean {
         MIDIA_DO_CONTATO.test(m) && (!/descrição automática| "/.test(m) || /comprovante|pix|pag[oa]|paguei|transfer/i.test(m))));
 }
 
+const SETOR_DE_PAGAMENTO = /\b(crediario|financeiro)\b/;
+const PAGAMENTO_PELO_SETOR = /\b(link|cartao|boleto|maquininha)\b/;
+
+/**
+ * O vendedor passa o pagamento do pedido para o crediário ou o financeiro
+ * fazer: "vou pedir para a gerente de crediário lhe chamar para fazer o link
+ * de pagamento" (Thamires, 08/10). Pix fica de fora: a chave do financeiro
+ * enviada sem comprovante continua em aberto (REGRA_STATUS), e o e-mail
+ * "financeiro@…" não é o setor falando.
+ */
+export function pagamentoComOSetor(transcript: string): boolean {
+    return transcript.split('\n').some((linha) => {
+        if (!linha.startsWith('V:') || linha.includes('[automática]')) return false;
+        const fala = normalizar(linha.replace(/\S+@\S+/g, ' '));
+        return SETOR_DE_PAGAMENTO.test(fala) && PAGAMENTO_PELO_SETOR.test(fala);
+    });
+}
+
 /** O contato fala de nota tirada antes: "Tiraram nota meses", "aquela nota", "a nota do mês passado". */
 export function notaAntiga(transcript: string): boolean {
     return falasDe(transcript, 'C').some((f) => /\bnotas?\b.*\b(meses|antiga|faz tempo|ano passado|mes passado)\b|\b(aquela|da outra) nota\b/.test(f));
@@ -159,6 +177,9 @@ export function notaAntiga(transcript: string): boolean {
  * - O contato fala de nota antiga ("Tiraram nota meses") e não há comprovante
  *   no dia: o Pix é dessa nota, pós-venda. A regra está no prompt, e o modelo
  *   ainda chamava de compra fechada uma rodada sim, outra não (09/10).
+ * - O vendedor passou o pagamento ao crediário ou ao financeiro
+ *   (`pagamentoComOSetor`): a compra nova em aberto está fechada. Com a regra
+ *   só no prompt, o modelo deixava em aberto três rodadas em três (09/10).
  */
 export function ajustarResultado<T extends Pick<ResultadoAnalise, 'assuntos_do_dia' | 'status' | 'tipo_conversa' | 'natureza_contato' | 'confianca_natureza' | 'objecoes'>>(r: T, transcript: string): T {
     let ajustado = r;
@@ -172,6 +193,11 @@ export function ajustarResultado<T extends Pick<ResultadoAnalise, 'assuntos_do_d
         };
     }
     const deCliente = r.natureza_contato === 'cliente' || r.confianca_natureza < LIMIAR_NATUREZA;
+    // Com o próprio crediário (colega), o "link" é o trabalho dele, não venda.
+    const emAberto = ajustado.assuntos_do_dia.findIndex((a) => a.situacao === 'compra_nova_em_aberto');
+    if (deCliente && emAberto >= 0 && !ajustado.assuntos_do_dia.some((a) => a.situacao === 'compra_nova_fechada') && pagamentoComOSetor(transcript)) {
+        ajustado = { ...ajustado, assuntos_do_dia: ajustado.assuntos_do_dia.map((a, i) => (i === emAberto ? { ...a, situacao: 'compra_nova_fechada' as const } : a)) };
+    }
     const compraNova = ajustado.assuntos_do_dia.some((a) => a.situacao.startsWith('compra_nova_'));
     const fechou = ajustado.assuntos_do_dia.some((a) => a.situacao === 'compra_nova_fechada') || (compraNova && comprovanteNoDia(transcript));
     if (deCliente && ajustado.status !== 'venda_feita' && fechou) ajustado = { ...ajustado, status: 'venda_feita', tipo_conversa: 'negociacao' };

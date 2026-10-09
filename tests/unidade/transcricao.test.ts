@@ -83,6 +83,61 @@ test('pede português — áudio curto sem idioma o modelo adivinha errado', asy
     assert.equal(corpo!.get('language'), 'pt');
 });
 
+/** fetch falso que guarda cada pedido à OpenAI e responde com `status` na ordem. */
+function openaiFalsa(audio: Uint8Array, ...status: number[]) {
+    const pedidos: FormData[] = [];
+    const f = (async (url: string | URL | Request, init?: RequestInit) => {
+        if (!String(url).includes('openai.com')) return new Response(audio as BodyInit, { status: 200 });
+        pedidos.push(init!.body as FormData);
+        const s = status[pedidos.length - 1] ?? 200;
+        return new Response(JSON.stringify(s === 200 ? { text: `pelo ${pedidos.at(-1)!.get('model')}` } : { error: {} }), { status: s });
+    }) as unknown as typeof globalThis.fetch;
+    return { f, pedidos };
+}
+const MP3 = new Uint8Array([0x49, 0x44, 0x33, 4, 0, 0]);
+
+// 09/10: a UAZAPI entrega MP3; como "audio.ogg", o gpt-4o-mini-transcribe recusava.
+test('o arquivo vai com o nome do formato real', async () => {
+    const { nomeDoAudio } = await import('../../lib/transcricao.ts');
+    assert.equal(nomeDoAudio(MP3), 'audio.mp3');
+    assert.equal(nomeDoAudio(new Uint8Array([0xff, 0xfb, 0x54, 0])), 'audio.mp3');
+    assert.equal(nomeDoAudio(new TextEncoder().encode('OggS....')), 'audio.ogg');
+    assert.equal(nomeDoAudio(new TextEncoder().encode('....ftypM4A ')), 'audio.m4a');
+    assert.equal(nomeDoAudio(AUDIO), 'audio.ogg');
+    const { f, pedidos } = openaiFalsa(MP3);
+    await transcrever('https://uaz/a', { apiKey: 'k', buscar: f, resolver: publico, procurarCache: async () => null });
+    assert.equal((pedidos[0].get('file') as File).name, 'audio.mp3');
+});
+
+test('usa o gpt-4o-mini-transcribe com a pista de vocabulário; o modelo da variável manda', async () => {
+    const { f, pedidos } = openaiFalsa(MP3);
+    const r = await transcrever('https://uaz/a', { apiKey: 'k', buscar: f, resolver: publico, procurarCache: async () => null, prompt: 'pedra rachão' });
+    assert.equal(r.texto, 'pelo gpt-4o-mini-transcribe');
+    assert.equal(pedidos[0].get('prompt'), 'pedra rachão');
+    const outro = openaiFalsa(MP3);
+    await transcrever('https://uaz/a', { apiKey: 'k', modelo: 'whisper-1', buscar: outro.f, resolver: publico, procurarCache: async () => null });
+    assert.equal(outro.pedidos[0].get('model'), 'whisper-1');
+    assert.equal(outro.pedidos[0].get('prompt'), null);
+});
+
+test('arquivo recusado pelo modelo novo vai para o whisper-1; outro erro não', async () => {
+    const recusado = openaiFalsa(MP3, 400);
+    const r = await transcrever('https://uaz/a', { apiKey: 'k', buscar: recusado.f, resolver: publico, procurarCache: async () => null });
+    assert.equal(r.texto, 'pelo whisper-1');
+    const fora = openaiFalsa(MP3, 500);
+    await assert.rejects(transcrever('https://uaz/a', { apiKey: 'k', buscar: fora.f, resolver: publico, procurarCache: async () => null }), /falhou: 500/);
+    assert.equal(fora.pedidos.length, 1);
+});
+
+test('a pista leva o vocabulário da loja e os nomes de quem fala, por último', async () => {
+    const { promptDeTranscricao, VOCABULARIO_DA_LOJA } = await import('../../lib/transcricao.ts');
+    assert.equal(promptDeTranscricao({}), VOCABULARIO_DA_LOJA);
+    assert.ok(VOCABULARIO_DA_LOJA.includes('rachão'));
+    const p = promptDeTranscricao({ vendedor: 'Rafael Muller', contato: 'Jasson 🔨 (obra)' });
+    assert.ok(p.endsWith('Conversa entre Rafael Muller e Jasson obra.'), p);
+    assert.equal(promptDeTranscricao({ vendedor: 'Ana', contato: 'Ana' }).endsWith('Conversa entre Ana.'), true);
+});
+
 // A URL vem do payload: se o token de uma rota vazasse, sem isto o servidor
 // buscaria o que o atacante pedisse.
 test('só https fora da rede interna', async () => {

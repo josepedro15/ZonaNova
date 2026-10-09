@@ -38,6 +38,11 @@ function emOrdem(msgs: Msg[]): Msg[] {
  * importa é há quanto tempo ele espera, não quando parou de escrever. Três
  * mensagens às 15h00, 15h02 e 15h05 são cinco minutos de espera adicional, não
  * um recomeço do relógio.
+ *
+ * "Obrigado", 👍 e reação não pedem resposta (`ehSoConfirmacao`), como na conta
+ * do tempo de resposta: a venda fechada que terminou com um ❤️ do cliente na
+ * mensagem da vendedora ficava na fila (Silas, 09/10/2026). Só confirmação
+ * quando a mensagem traz `conteudo`; sem ele, conta como antes.
  */
 export function esperaDoCliente(msgs: Msg[], agora: Date): number | null {
     const ordenadas = emOrdem(msgs);
@@ -45,7 +50,7 @@ export function esperaDoCliente(msgs: Msg[], agora: Date): number | null {
 
     // O bloco pendente é tudo que o cliente disse depois da última resposta
     // humana. Sem resposta nenhuma, é tudo que ele disse.
-    const pendentes = ordenadas.slice(ultimaResposta + 1).filter(ehCliente);
+    const pendentes = ordenadas.slice(ultimaResposta + 1).filter((m) => ehCliente(m) && !ehSoConfirmacao(m));
     if (pendentes.length === 0) return null;
 
     return agora.getTime() - new Date(pendentes[0].enviada_em).getTime();
@@ -84,6 +89,32 @@ export function marcadaDepoisDoCliente(msgs: Msg[], ...marcas: (string | null | 
     // que o `toISOString` do servidor escreve diferente.
     const fala = ultimaDoCliente ? Date.parse(ultimaDoCliente.enviada_em) : -Infinity;
     return marcas.some((marca) => !!marca && Date.parse(marca) >= fala);
+}
+
+/** Status da análise que dão o atendimento por terminado: venda feita, resolvido sem compra ou perdido. */
+export const STATUS_CONCLUIDO: readonly string[] = ['venda_feita', 'encerrada', 'perdida'];
+
+export type AnaliseDaFila = { data_ref: string; status: string | null; updated_at: string };
+
+const diaEmSaoPaulo = (iso: string) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(new Date(iso));
+
+/**
+ * A análise mais recente leu a última fala do cliente e deu o atendimento por
+ * terminado? Então ele não está esperando: a conversa que a IA marcou
+ * "Encerrado" continuava em "Esperando você" (Silas, 09/10/2026).
+ *
+ * Só vale a análise que viu aquela fala: do dia dela (ou depois) e gravada
+ * depois dela. A análise de ontem, refeita hoje, não leu o que o cliente
+ * escreveu hoje; a das 12h não leu o que ele escreveu às 14h.
+ */
+export function concluidaPelaAnalise(msgs: Msg[], analises: readonly AnaliseDaFila[] | null | undefined): boolean {
+    const ultimaDoCliente = emOrdem(msgs).filter(ehCliente).at(-1);
+    const analise = [...(analises ?? [])].sort((a, b) => b.data_ref.localeCompare(a.data_ref))[0];
+    if (!ultimaDoCliente || !analise?.status || !STATUS_CONCLUIDO.includes(analise.status)) return false;
+    return diaEmSaoPaulo(ultimaDoCliente.enviada_em) <= analise.data_ref
+        && Date.parse(analise.updated_at) >= Date.parse(ultimaDoCliente.enviada_em);
 }
 
 /**
