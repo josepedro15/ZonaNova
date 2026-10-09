@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    mensagensDoEvento, normalizarMensagem, statusDeConexao, soDigitos, paraData,
+    mensagensDoEvento, normalizarMensagem, statusDeConexao, soDigitos, paraData, ehRespostaAutomatica,
     type EventoUazapi, type MensagemNormalizada,
 } from '../../lib/uazapi/normalizar.ts';
 
@@ -105,6 +105,49 @@ test('texto comum não ganha marca', () => {
 test('mensagem disparada pela API é marcada automatica', () => {
     assert.equal(ok(normalizarMensagem(base({ fromMe: true, fromApi: true }))).automatica, true);
     assert.equal(ok(normalizarMensagem(base({ fromMe: true, wasSentByApi: true }))).automatica, true);
+});
+
+// Textos reais (07/10): a saudação e a ausência do WhatsApp Business saem do
+// aparelho, não da API — `fromApi` vem falso e só o texto as denuncia.
+const AUTOMATICAS = [
+    '*Olá!* Você entrou em contato com o televendas da Redemac Zona Nova - Capão da Canoa! 📲\n\nAgradecemos sua mensagem, assim que possível daremos retorno.',
+    'Agradecemos sua mensagem. Não estamos disponíveis no momento, mas responderemos assim que possível.',
+    'Agradecemos sua mensagem. Horário das nossas lojas 07:30 ao 12:00 / 13:00 ás 17:30 de Segunda a Sexta feira.',
+    'Prezado Condômino, Recebemos sua mensagem e retornaremos o mais breve possível! Horários de atendimento da administração',
+    'Olá! No momento estou fora do horário de atendimento. Assim que retornar, responderei sua mensagem. Obrigada pela compreensão.',
+    'O Crediário Redemac Zona Nova Xangri-lá agradece sua mensagem. Não estamos disponíveis no momento, mas responderemos assim que possível.',
+    'CKS Incorporações agradece seu contato. Retornaremos em breve.',
+    '📩 Olá! Agradecemos por entrar em contato com a Contamec. No momento, nossa equipe está em atendimento, mas em breve retornaremos a sua mensagem.',
+    'RB Garden recebeu sua mensagem! 🪴 Em breve retornaremos o contato.',
+    'Olá, seja bem-vindo a Haeser Engenharia! Retornaremos seu contato o mais breve possível.',
+    '✅ Atendimento concluído, mensagem automática! Favor não responder!',
+    '*Holme Barbearia agradece seu contato!* No momento estou ocupado. Envie sua mensagem que, assim que possível, retornarei.',
+];
+
+// O que gente escreve, inclusive com as mesmas palavras soltas.
+const HUMANAS = [
+    'Bom dia', '*Vitória*\nBoa tarde, tudo bem!?', 'Nós que agradecemos', 'nós que agradecemos!!',
+    'Agradecemos pela parceria e confiança ao longo deste ano.', 'O financeiro entrou em contato',
+    'Tu ja entrou em contato com o nosso crediario?', 'Segue o recibo da venda. Agradecemos!',
+    'Tranquilo, assim que ele tirar o material eu te envio quanto deu e o crediário automaticamente vai te enviar uma NF',
+    '⚠️ AVISO IMPORTANTE: Atualização Manual do Sistema ⚠️ Tivemos um pequeno problema técnico no nosso atualizador automático de sistema.',
+    'Desculpa eu não estava na loja ontem', 'Já te envio o orçamento.',
+];
+
+test('resposta automática do WhatsApp Business é reconhecida pelo texto', () => {
+    for (const texto of AUTOMATICAS) assert.equal(ehRespostaAutomatica(texto), true, texto);
+});
+
+test('o que gente escreve não vira automática', () => {
+    for (const texto of HUMANAS) assert.equal(ehRespostaAutomatica(texto), false, texto);
+    assert.equal(ehRespostaAutomatica(null), false);
+});
+
+test('a saudação do vendedor e a ausência do cliente chegam marcadas', () => {
+    const [saudacao, ausencia] = AUTOMATICAS;
+    assert.equal(ok(normalizarMensagem(base({ fromMe: true, text: saudacao }))).automatica, true);
+    assert.equal(ok(normalizarMensagem(base({ text: ausencia }))).automatica, true, 'do lado do cliente também');
+    assert.equal(ok(normalizarMensagem(base({ fromMe: true, text: 'Bom dia' }))).automatica, false);
 });
 
 test('extrai todas as mensagens de um lote de histórico', () => {

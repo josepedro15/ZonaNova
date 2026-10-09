@@ -17,10 +17,14 @@ export type Msg = {
     automatica: boolean;
     /** ISO 8601. */
     enviada_em: string;
+    /** Só a conta da resposta lê, para reconhecer o "obrigado" que não pede nada. */
+    tipo?: string;
+    conteudo?: string | null;
 };
 
 const ehResposta = (m: Msg) => m.direcao === 'saida' && !m.automatica;
-const ehCliente = (m: Msg) => m.direcao === 'entrada';
+// A ausência automática da empresa do cliente também não é ele falando.
+const ehCliente = (m: Msg) => m.direcao === 'entrada' && !m.automatica;
 
 /** Em ordem de envio, sem confiar na ordem que veio do banco. */
 function emOrdem(msgs: Msg[]): Msg[] {
@@ -83,46 +87,117 @@ export function marcadaDepoisDoCliente(msgs: Msg[], ...marcas: (string | null | 
 }
 
 /**
- * Um tempo de resposta (ms) por bloco do cliente que foi respondido.
- *
- * Medido da primeira mensagem do bloco até a resposta, pelo mesmo motivo
- * acima. Bloco ainda sem resposta fica de fora em vez de entrar como o tempo
- * decorrido até agora: ele ainda não terminou, e contá-lo faria a média piorar
- * sozinha com o passar do dia, sem ninguém ter feito nada.
+ * O expediente em que o relógio da resposta corre, por dia da semana (0 =
+ * domingo), em horas de Brasília: seg–sex 8h–18h, sábado 8h–12h. O almoço
+ * conta — não premia quem some nele. Decidido com o piloto em 08/10/2026.
+ * Feriado não está aqui.
  */
-export function temposDeResposta(msgs: Msg[]): number[] {
-    const tempos: number[] = [];
-    let inicioDoBloco: string | null = null;
+export const EXPEDIENTE: readonly ([number, number] | null)[] = [null, [8, 18], [8, 18], [8, 18], [8, 18], [8, 18], [8, 12]];
+
+/** Brasília é UTC−3 o ano todo desde 2019 (sem horário de verão). */
+const FUSO_MS = -3 * 60 * 60 * 1000;
+const HORA_MS = 60 * 60 * 1000;
+const DIA_MS = 24 * HORA_MS;
+
+/** Quantos ms de expediente há entre dois instantes. */
+export function msDeExpediente(de: Date, ate: Date): number {
+    const ini = de.getTime(), fim = ate.getTime();
+    if (!(fim > ini)) return 0;
+    let total = 0;
+    // Meia-noite de Brasília do dia de `de`, como instante.
+    for (let dia = Math.floor((ini + FUSO_MS) / DIA_MS) * DIA_MS - FUSO_MS; dia < fim; dia += DIA_MS) {
+        const horario = EXPEDIENTE[new Date(dia + FUSO_MS).getUTCDay()];
+        if (!horario) continue;
+        const abre = Math.max(ini, dia + horario[0] * HORA_MS);
+        const fecha = Math.min(fim, dia + horario[1] * HORA_MS);
+        if (fecha > abre) total += fecha - abre;
+    }
+    return total;
+}
+
+/** Palavras de quem só confirma ou agradece. Fora daqui, a fala pede algo. */
+const CONFIRMACAO = new Set(('ok okay okk blz beleza obrigado obrigada obrigadao obg brigado brigada grato grata valeu vlw ' +
+    'show top perfeito combinado certo certinho otimo isso isto sim ta to bom bem joia maravilha entendi fechado ' +
+    'de nada dinada muito pela atencao entao ah ahh e a').split(' '));
+
+/**
+ * A fala do cliente é só confirmação — "Obrigado", "Ok", 👍, reação,
+ * figurinha — e não pede resposta? Em 07/10, dois terços dos blocos "sem
+ * resposta" no fim do dia eram isso. Foto, áudio e documento sem texto podem
+ * ser pedido e continuam contando; sem conteúdo lido, também (como antes).
+ */
+export function ehSoConfirmacao(m: Msg): boolean {
+    const texto = m.conteudo?.trim();
+    if (!texto) return false;
+    if (/^\[(reagiu com .*|reação|figurinha)\]$/.test(texto)) return true;
+    if (m.tipo && m.tipo !== 'texto') return false;
+    const palavras = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
+    // Letra esticada ("obrigadaa", "bemm") sem estragar "isso". Só emoji ou
+    // pontuação ("👍🏻", ".") também é confirmação.
+    return palavras.every((p) => CONFIRMACAO.has(p) || CONFIRMACAO.has(p.replace(/([a-z])\1+/g, '$1')));
+}
+
+/**
+ * Abaixo disto de expediente, um bloco sem resposta ainda não diz nada: quem
+ * escreveu às 17:55 não foi ignorado, o dia acabou. Fica fora da conta.
+ */
+export const TOLERANCIA_BLOCO_ABERTO_MS = 15 * 60 * 1000;
+
+/** Um bloco de falas do cliente e o que aconteceu com ele. */
+type Bloco = { respondido: boolean; ms: number };
+
+/**
+ * Cada bloco do cliente, medido da PRIMEIRA mensagem do bloco (pelo mesmo
+ * motivo da espera) até a resposta humana, em ms de expediente.
+ *
+ * O bloco que fica sem resposta até `fim` conta como não respondido, com a
+ * espera até `fim`. Antes ele era descartado, e o vendedor que respondeu de
+ * manhã e largou a cliente das 14h saía com 100% e um minuto (Marco, 07/10).
+ * O relatório fechado passa o fim do dia; o painel, o "agora".
+ */
+function blocosDoCliente(msgs: Msg[], fim: Date): Bloco[] {
+    const blocos: Bloco[] = [];
+    let inicioDoBloco: Date | null = null;
 
     for (const m of emOrdem(msgs)) {
         if (ehCliente(m)) {
-            inicioDoBloco ??= m.enviada_em;
+            // "Obrigado" não abre bloco; dentro de um pedido, também não o fecha.
+            if (!ehSoConfirmacao(m)) inicioDoBloco ??= new Date(m.enviada_em);
             continue;
         }
         // Automática não fecha o bloco: o cliente continua esperando gente.
         if (ehResposta(m) && inicioDoBloco !== null) {
-            tempos.push(new Date(m.enviada_em).getTime() - new Date(inicioDoBloco).getTime());
+            blocos.push({ respondido: true, ms: msDeExpediente(inicioDoBloco, new Date(m.enviada_em)) });
             inicioDoBloco = null;
         }
     }
-
-    return tempos;
+    if (inicioDoBloco !== null) {
+        const ms = msDeExpediente(inicioDoBloco, fim);
+        if (ms >= TOLERANCIA_BLOCO_ABERTO_MS) blocos.push({ respondido: false, ms });
+    }
+    return blocos;
 }
 
 /**
- * A conversa foi respondida? `null` quando o cliente nunca falou.
- *
- * O `null` é o ponto: um disparo em massa que ninguém respondeu não é uma
- * falha de atendimento, é uma conversa que nunca começou. Somá-lo como não
- * respondida faria a taxa do vendedor despencar por causa de uma campanha que
- * ele nem escolheu mandar.
+ * Os tempos de resposta (ms de expediente), um por bloco. Bloco que não somou
+ * expediente nenhum (escreveu e foi respondido de madrugada) não tem tempo a
+ * medir: entrar como zero puxaria a média para baixo sem ninguém ter atendido
+ * mais rápido.
  */
-export function foiRespondido(msgs: Msg[]): boolean | null {
-    const ordenadas = emOrdem(msgs);
-    if (!ordenadas.some(ehCliente)) return null;
+export function temposDeResposta(msgs: Msg[], fim: Date): number[] {
+    return blocosDoCliente(msgs, fim).filter((b) => b.ms > 0).map((b) => b.ms);
+}
 
-    const primeiraFala = ordenadas.findIndex(ehCliente);
-    return ordenadas.slice(primeiraFala).some(ehResposta);
+/**
+ * Cada bloco do cliente foi respondido? A taxa é por bloco: a conversa em que
+ * o vendedor respondeu de manhã e largou a tarde não é "respondida".
+ *
+ * Sem fala do cliente não há bloco: um disparo em massa que ninguém respondeu
+ * não é uma falha de atendimento, é uma conversa que nunca começou.
+ */
+export function respostasPorBloco(msgs: Msg[], fim: Date): boolean[] {
+    return blocosDoCliente(msgs, fim).map((b) => b.respondido);
 }
 
 /**

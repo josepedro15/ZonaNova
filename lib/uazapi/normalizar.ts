@@ -171,10 +171,34 @@ export function normalizarMensagem(ev: EventoUazapi): MensagemNormalizada | Desc
         midiaNome: tipo === 'documento' ? nomeDoArquivo(m.fileName ?? m.filename ?? midia?.fileName ?? midia?.title) : null,
         // Mensagem disparada pela API é template/bot, não o vendedor digitando.
         // O doc 3 exige distinguir: disparo em massa não pode contar como
-        // atendimento.
-        automatica: m.fromApi === true || m.wasSentByApi === true,
+        // atendimento. A saudação e a ausência do WhatsApp Business saem do
+        // próprio aparelho, sem `fromApi`: só o texto as denuncia — dos dois
+        // lados, porque a ausência da empresa do cliente também não é ele falando.
+        automatica: m.fromApi === true || m.wasSentByApi === true || ehRespostaAutomatica(textoOriginal),
         enviadaEm: paraData(m.messageTimestamp ?? m.timestamp),
     };
+}
+
+/**
+ * Frases de resposta automática (saudação e ausência do WhatsApp Business, e
+ * as das empresas dos clientes). Cada regra é um "e" de padrões; basta uma
+ * regra casar. Palavra solta não basta: "nós que agradecemos" e "o financeiro
+ * entrou em contato" são gente. A migração 0028 repete estas regras em SQL
+ * para marcar o que já está no banco — mudou aqui, muda lá.
+ */
+const REGRAS_AUTOMATICA: RegExp[][] = [
+    [/n[aã]o estamos dispon[ií]ve(l|is)/i],
+    [/voc[eê] entrou em contato com/i],
+    [/(mensagem|resposta) autom[aá]tica/i],
+    [/fora d[oe] (nosso )?hor[aá]rio de atendimento/i],
+    [/agradece(mos)? (a |o )?(sua|seu|pela sua|pelo seu|por entrar em) (mensagem|contato)/i, /(retorn|respond|hor[aá]rio|em breve|assim que poss)/i],
+    [/receb(emos|eu) (a )?sua mensagem/i, /(retorn|respond|em breve)/i],
+    [/retornaremos (o |a )?(seu |sua )?(contato|mensagem|solicita)/i],
+];
+
+export function ehRespostaAutomatica(texto: string | null | undefined): boolean {
+    const t = (texto ?? '').replace(/\s+/g, ' ');
+    return !!t && REGRAS_AUTOMATICA.some((regra) => regra.every((r) => r.test(t)));
 }
 
 /** Teto do nome guardado: o resto de um nome de 300 caracteres não ajuda a análise. */

@@ -262,7 +262,7 @@ export function HojeAteAgora({ className = '', conversas, respostaMedia, respost
                                 ? <Comparacao delta={respostaMedia - respostaOntemMin} melhorQuando="menor">{comparaTempo(respostaMedia, respostaOntemMin, 'ontem')}</Comparacao>
                                 : 'ontem não teve relatório para comparar'} />
                 <NumeroHoje rotulo="Respondidos" valor={<Numero valor={taxa ?? '—'} unidade={taxa === null ? undefined : '%'} />}
-                            detalhe={escreveram > 0 ? `${respondidos} de ${escreveram} que escreveram` : undefined}>
+                            detalhe={escreveram > 0 ? `${respondidos} de ${escreveram} vezes que clientes escreveram` : undefined}>
                     {taxa !== null && <Barra pct={taxa} rotulo="Clientes respondidos" />}
                 </NumeroHoje>
             </div>

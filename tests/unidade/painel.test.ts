@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, temposDeResposta, foiRespondido, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, temposDeResposta, respostasPorBloco, msDeExpediente, TOLERANCIA_BLOCO_ABERTO_MS, ehSoConfirmacao, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -101,48 +101,115 @@ test('compara instantes, não a grafia da data', () => {
     assert.equal(marcadaDepoisDoCliente([cliente('14:00')], '2026-09-21T10:59:00-03:00'), false);
 });
 
-// --- tempo de resposta -------------------------------------------------------
+// --- tempo e taxa de resposta (por bloco, no expediente) --------------------
+
+// Horário de Brasília explícito: 21/09/2026 é segunda; 26/09, sábado; 27/09, domingo.
+const sp = (hhmm: string, dia = '21'): string => `2026-09-${dia}T${hhmm}:00-03:00`;
+const cli = (hhmm: string, dia?: string): Msg => ({ direcao: 'entrada', automatica: false, enviada_em: sp(hhmm, dia) });
+const ven = (hhmm: string, dia?: string): Msg => ({ direcao: 'saida', automatica: false, enviada_em: sp(hhmm, dia) });
+const bot = (hhmm: string, dia?: string): Msg => ({ direcao: 'saida', automatica: true, enviada_em: sp(hhmm, dia) });
+const FIM_DO_DIA = new Date(sp('23:59'));
+const MIN = 60_000;
+
+test('expediente: seg–sex 8h–18h, sábado 8h–12h, domingo fechado', () => {
+    assert.equal(msDeExpediente(new Date(sp('07:00')), new Date(sp('09:00'))), 60 * MIN);
+    assert.equal(msDeExpediente(new Date(sp('17:30')), new Date(sp('08:15', '22'))), 45 * MIN, 'a noite não conta');
+    assert.equal(msDeExpediente(new Date(sp('11:00', '26')), new Date(sp('09:00', '28'))), 2 * 60 * MIN, 'sábado até 12h, domingo nada');
+    assert.equal(msDeExpediente(new Date(sp('19:00')), new Date(sp('22:00'))), 0);
+    assert.equal(msDeExpediente(new Date(sp('10:00')), new Date(sp('09:00'))), 0, 'intervalo invertido');
+});
 
 test('um bloco do cliente respondido: um tempo', () => {
-    assert.deepEqual(temposDeResposta([cliente('14:00'), vendedor('14:10')]), [10 * 60 * 1000]);
+    assert.deepEqual(temposDeResposta([cli('11:00'), ven('11:10')], FIM_DO_DIA), [10 * MIN]);
 });
 
 test('dois blocos: um tempo cada, medidos da primeira mensagem do bloco', () => {
     assert.deepEqual(
-        temposDeResposta([cliente('09:00'), cliente('09:03'), vendedor('09:10'), cliente('11:00'), vendedor('11:05')]),
-        [10 * 60 * 1000, 5 * 60 * 1000],
+        temposDeResposta([cli('09:00'), cli('09:03'), ven('09:10'), cli('11:00'), ven('11:05')], FIM_DO_DIA),
+        [10 * MIN, 5 * MIN],
     );
 });
 
-test('bloco ainda sem resposta não entra na média', () => {
-    assert.deepEqual(temposDeResposta([cliente('09:00'), vendedor('09:10'), cliente('17:00')]), [10 * 60 * 1000]);
+// Caso Marco, 07/10: respondeu de manhã, a cliente escreveu às 14:01 e ninguém
+// mais respondeu. Antes: 100% e um minuto. O bloco aberto é não respondido e
+// entra com a espera até o fim do expediente.
+test('bloco aberto no fim do dia: não respondido, com a espera até as 18h', () => {
+    const msgs = [cli('08:44'), ven('08:45'), cli('14:01'), cli('14:53')];
+    assert.deepEqual(temposDeResposta(msgs, FIM_DO_DIA), [1 * MIN, (3 * 60 + 59) * MIN]);
+    assert.deepEqual(respostasPorBloco(msgs, FIM_DO_DIA), [true, false]);
+});
+
+test('bloco aberto mede só até o fim informado (o painel passa "agora")', () => {
+    const msgs = [cli('14:00')];
+    assert.deepEqual(temposDeResposta(msgs, new Date(sp('15:00'))), [60 * MIN]);
+    assert.deepEqual(respostasPorBloco(msgs, new Date(sp('15:00'))), [false]);
+});
+
+// Quem escreveu às 17:58 não foi ignorado: o dia acabou. Abaixo da tolerância,
+// o bloco aberto fica fora da conta, nem a favor nem contra.
+test('bloco aberto com menos que a tolerância não conta', () => {
+    assert.equal(TOLERANCIA_BLOCO_ABERTO_MS, 15 * MIN);
+    assert.deepEqual(respostasPorBloco([cli('17:50')], FIM_DO_DIA), []);
+    assert.deepEqual(temposDeResposta([cli('17:50')], FIM_DO_DIA), []);
+    assert.deepEqual(respostasPorBloco([cli('17:40')], FIM_DO_DIA), [false]);
+});
+
+test('fora do expediente o relógio não corre', () => {
+    assert.deepEqual(temposDeResposta([cli('06:30'), ven('08:05')], FIM_DO_DIA), [5 * MIN], 'antes de abrir: conta desde as 8h');
+    assert.deepEqual(respostasPorBloco([cli('19:00')], FIM_DO_DIA), [], 'depois de fechar e sem resposta: não pesa');
+    assert.deepEqual(respostasPorBloco([cli('10:00', '27')], new Date(sp('23:59', '27'))), [], 'domingo');
+});
+
+test('respondido fora do expediente: conta na taxa, sem tempo a medir', () => {
+    assert.deepEqual(respostasPorBloco([cli('20:00'), ven('20:05')], FIM_DO_DIA), [true]);
+    assert.deepEqual(temposDeResposta([cli('20:00'), ven('20:05')], FIM_DO_DIA), []);
 });
 
 test('a automática não conta como resposta, a humana seguinte sim', () => {
-    assert.deepEqual(
-        temposDeResposta([cliente('09:00'), robo('09:00'), vendedor('09:20')]),
-        [20 * 60 * 1000],
-    );
+    assert.deepEqual(temposDeResposta([cli('09:00'), bot('09:00'), ven('09:20')], FIM_DO_DIA), [20 * MIN]);
+    assert.deepEqual(respostasPorBloco([cli('09:00'), bot('09:00')], FIM_DO_DIA), [false]);
 });
 
 // Disparo em massa: o vendedor falou, o cliente nunca. Não há tempo de
 // resposta nenhum a medir — e incluir isso como 0 rebaixaria a média de todos.
-test('conversa sem fala do cliente não produz tempo', () => {
-    assert.deepEqual(temposDeResposta([vendedor('09:00'), vendedor('09:01')]), []);
+test('conversa sem fala do cliente não produz tempo nem bloco', () => {
+    assert.deepEqual(temposDeResposta([ven('09:00'), ven('09:01')], FIM_DO_DIA), []);
+    assert.deepEqual(respostasPorBloco([ven('09:00')], FIM_DO_DIA), []);
 });
 
-// --- taxa de resposta --------------------------------------------------------
+// Em 07/10, dois terços dos blocos "sem resposta" eram o cliente encerrando:
+// "Obrigado", "Ok", 👍. Isso não pede resposta e não pode virar horas de espera.
+const diz = (hhmm: string, conteudo: string | null, tipo = 'texto'): Msg => ({ ...cli(hhmm), conteudo, tipo });
 
-test('cliente falou e foi respondido', () => {
-    assert.equal(foiRespondido([cliente('09:00'), vendedor('09:10')]), true);
+test('confirmação do cliente não pede resposta', () => {
+    for (const t of ['Obrigado', 'obrigadaa', 'Ok, obrigada 🙏🏼', 'Tá bem', 'Ta bemm', 'Combinado 🤝', 'Blz', '👍🏻', 'Ótimo! Muito obg pela atenção', 'certo, obrigada', 'Isso', 'ahh ok entao', '.', 'Show', 'dinada'])
+        assert.equal(ehSoConfirmacao(diz('10:00', t)), true, t);
+    assert.equal(ehSoConfirmacao(diz('10:00', '[reagiu com 👍]', 'outro')), true);
+    assert.equal(ehSoConfirmacao(diz('10:00', '[figurinha]', 'outro')), true);
+    for (const t of ['Bom dia', 'Qual o valor?', 'obrigado, vou tentar outro fornecedor.', 'Aguardo orçamento', 'Não', 'Tem na Vonder', 'ok, e o frete?'])
+        assert.equal(ehSoConfirmacao(diz('10:00', t)), false, t);
+    assert.equal(ehSoConfirmacao(diz('10:00', null, 'imagem')), false, 'foto ou áudio pode ser pedido');
+    assert.equal(ehSoConfirmacao(cli('10:00')), false, 'sem conteúdo lido: conta como pedido, como antes');
 });
 
-test('cliente falou e só a automática respondeu: não conta', () => {
-    assert.equal(foiRespondido([cliente('09:00'), robo('09:00')]), false);
+test('o cliente que agradece no fim não deixa bloco aberto', () => {
+    const msgs = [cli('10:00'), ven('10:05'), diz('10:06', 'Obrigado!'), diz('10:07', '👍')];
+    assert.deepEqual(respostasPorBloco(msgs, FIM_DO_DIA), [true]);
+    assert.deepEqual(temposDeResposta(msgs, FIM_DO_DIA), [5 * MIN]);
 });
 
-test('cliente nunca falou: fora da conta', () => {
-    assert.equal(foiRespondido([vendedor('09:00')]), null);
+test('confirmação no meio de um pedido não o fecha nem o reabre', () => {
+    const msgs = [diz('10:00', 'ok'), diz('10:30', 'Qual o valor?'), diz('10:31', 'obrigado'), ven('10:40')];
+    assert.deepEqual(temposDeResposta(msgs, FIM_DO_DIA), [10 * MIN]);
+});
+
+// "Agradecemos sua mensagem. Não estamos disponíveis…" da empresa do cliente:
+// não é ele falando, e não pode virar espera nem cobrança da vendedora.
+test('ausência automática do cliente não é fala dele', () => {
+    const ausencia = (hhmm: string): Msg => ({ direcao: 'entrada', automatica: true, enviada_em: sp(hhmm) });
+    assert.deepEqual(respostasPorBloco([ven('09:00'), ausencia('09:00')], FIM_DO_DIA), []);
+    assert.deepEqual(temposDeResposta([ven('09:00'), ausencia('09:00'), cli('10:00'), ven('10:05')], FIM_DO_DIA), [5 * MIN]);
+    assert.equal(esperaDoCliente([ven('09:00'), ausencia('09:00')], AGORA), null);
 });
 
 // --- telefone na tela --------------------------------------------------------
@@ -167,10 +234,10 @@ test('o que não for brasileiro sai como veio', () => {
 // O cliente que escreveu antes do corte e foi respondido depois não pode virar
 // um "tempo de resposta de hoje" de horas: a espera começou em outro dia.
 test('desde() descarta o que veio antes do corte', () => {
-    const msgs = [cliente('07:00'), vendedor('09:00'), cliente('10:00'), vendedor('10:05')];
+    const msgs = [cliente('07:00'), vendedor('12:00'), cliente('13:00'), vendedor('13:05')];
     const hoje = desde(msgs, new Date(em('08:00')));
-    assert.deepEqual(hoje.map((m) => m.enviada_em), [em('09:00'), em('10:00'), em('10:05')]);
-    assert.deepEqual(temposDeResposta(hoje), [5 * 60_000]);
+    assert.deepEqual(hoje.map((m) => m.enviada_em), [em('12:00'), em('13:00'), em('13:05')]);
+    assert.deepEqual(temposDeResposta(hoje, AGORA), [5 * 60_000]);
 });
 
 test('desde() inclui a mensagem exatamente no corte', () => {

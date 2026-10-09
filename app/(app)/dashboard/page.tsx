@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { cookies, headers } from 'next/headers';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { CabecalhoPagina, EstadoVazio, Icone, Pagina, RotuloSecao, Selo, Shell, type DiaSerie } from '@/components/ui';
-import { aparelhoDe, COOKIE_WHATSAPP_APP, desde, diasAte, esperaNaLista, foiRespondido, marcadaDepoisDoCliente, primeiroNome, respostaMediaEmMinutos, telefoneBonito, temposDeResposta } from '@/lib/painel';
+import { aparelhoDe, COOKIE_WHATSAPP_APP, desde, diasAte, esperaNaLista, marcadaDepoisDoCliente, primeiroNome, respostaMediaEmMinutos, respostasPorBloco, telefoneBonito, temposDeResposta } from '@/lib/painel';
 import { desfazerDispensa, desfazerFechadoPresencial } from '@/app/actions/conversa';
 import { AvisoMarca } from '@/components/aviso-marca';
 import { dataEmSaoPaulo } from '@/lib/analise';
@@ -81,8 +81,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     const acoes = new Map((payloads ?? []).map((p) => [`${p.conversa_id}|${p.data_ref}`, p.payload ?? {}]));
 
     // A fila acima olha o histórico inteiro; as métricas do dia, não.
-    const respostaMedia = respostaMediaEmMinutos(deHoje.flatMap((c) => temposDeResposta(desde(c.mensagens, comeco))));
-    const comFala = deHoje.map((c) => foiRespondido(desde(c.mensagens, comeco))).filter((r): r is boolean => r !== null);
+    // Mesma conta do relatório fechado, com o bloco ainda aberto medido até agora.
+    const respostaMedia = respostaMediaEmMinutos(deHoje.flatMap((c) => temposDeResposta(desde(c.mensagens, comeco), agora)));
+    const comFala = deHoje.flatMap((c) => respostasPorBloco(desde(c.mensagens, comeco), agora));
     const respondidos = comFala.filter(Boolean).length;
     const taxa = comFala.length ? Math.round((respondidos / comFala.length) * 100) : null;
 

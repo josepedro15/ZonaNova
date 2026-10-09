@@ -11,7 +11,7 @@ import { DESCARTADA, naturezaSuspeita } from '@/lib/natureza';
 import { comVendaPresencial } from '@/lib/presencial';
 import { semAtividadeDeSaida } from '@/lib/consolidacao';
 import { paginar } from '@/lib/paginar';
-import { foiRespondido, numerosDoFechamento, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
+import { numerosDoFechamento, respostasPorBloco, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { drenarEntradas, expurgarEntradas } from '@/lib/uazapi/ingestao';
@@ -398,7 +398,8 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
         .order('enviada_em').returns<MensagemAnalise[]>();
     if (error) throw error;
     if (!mensagens?.length) throw new IgnorarItem('sem mensagens no dia');
-    if (!mensagens.some((m) => m.direcao === 'entrada')) throw new IgnorarItem('disparo sem resposta do cliente');
+    // A ausência automática da empresa do cliente não é resposta dele.
+    if (!mensagens.some((m) => m.direcao === 'entrada' && !m.automatica)) throw new IgnorarItem('disparo sem resposta do cliente');
     if (mensagens.some((m) => /feliz anivers[aá]rio|parab[eé]ns pelo seu dia/i.test(m.conteudo ?? '')))
         throw new IgnorarItem('conversa de aniversário');
 
@@ -504,7 +505,7 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
         const lote = conversaIds.slice(i, i + 100);
         for (let de = 0; ; de += 1000) {
             const { data: mensagens, error: erroMensagens } = await supabase.from('mensagens')
-                .select('conversa_id,direcao,automatica,enviada_em').in('conversa_id', lote)
+                .select('conversa_id,direcao,automatica,enviada_em,tipo,conteudo').in('conversa_id', lote)
                 .gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString())
                 .order('id').range(de, de + 999)
                 .returns<(Msg & { conversa_id: string })[]>();
@@ -513,14 +514,17 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
             if ((mensagens ?? []).length < 1000) break;
         }
     }
-    const tempos = [...porConversa.values()].flatMap(temposDeResposta);
-    const respostas = [...porConversa.values()].map(foiRespondido).filter((v): v is boolean => v !== null);
+    // Bloco sem resposta conta até o fim do expediente do dia — ou até agora,
+    // quando o relatório é parcial (o dia ainda não acabou).
+    const corte = new Date(Math.min(fim.getTime(), Date.now()));
+    const tempos = [...porConversa.values()].flatMap((msgs) => temposDeResposta(msgs, corte));
+    const respostas = [...porConversa.values()].flatMap((msgs) => respostasPorBloco(msgs, corte));
     const metricas = {
         score_geral: negociacoes.length ? negociacoes.reduce((s, a) => s + Number(a.score_atendimento ?? 0), 0) / negociacoes.length : null,
         leads_atendidos: porConversa.size,
         conversoes_confirmadas: negociacoes.filter((a) => a.status === 'venda_feita').length,
         oportunidades_perdidas: negociacoes.filter((a) => a.status === 'perdida' || a.status === 'lead_frio').length,
-        tempo_medio_resposta_s: respostaMediaEmMinutos(tempos) === null ? null : respostaMediaEmMinutos(tempos)! * 60,
+        tempo_medio_resposta_s: tempos.length ? Math.round(tempos.reduce((s, t) => s + t, 0) / tempos.length / 1000) : null,
         taxa_resposta: respostas.length ? respostas.filter(Boolean).length / respostas.length * 100 : null,
     };
     // O coaching comercial não pode punir o vendedor por suporte, conversa
