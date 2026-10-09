@@ -4,7 +4,7 @@ import {
     emSilencio, capturaDoDia, recuperarMensagens, ancorasDoHistorico, resumoErrosWebhook, LIMIAR_SILENCIO_MS,
 } from '../../lib/captura.ts';
 import { Uazapi } from '../../lib/uazapi/cliente.ts';
-import { estaFora } from '../../lib/exclusao.ts';
+import { comNomesConhecidos, estaFora } from '../../lib/exclusao.ts';
 import type { MensagemUazapi } from '../../lib/uazapi/normalizar.ts';
 
 /** Horário de Brasília (UTC−3) em 07/10/2026, uma quarta-feira. */
@@ -232,6 +232,29 @@ test('o caso do Marco: depois do buraco só há conversa fora da análise — a 
     assert.equal(banco.ingeridas.length, 0);
     // Rodar de novo dá o mesmo: nada se acumula como "recuperado".
     assert.deepEqual(await recuperar(), { encontradas: 0, recuperadas: 0, excluidas: 3, motivo: 'so_contatos_fora' });
+});
+
+// A /message/find também traz o Rafael só pelo LID (o chat/check deu
+// …2955 → …1025 e …6429 → …7768). Sem ligar o LID ao telefone, essas
+// "faltavam" e o buraco virava de verdade.
+test('o caso do Marco pelo LID: contato bloqueado pelo telefone continua fora', async () => {
+    const desde = brt('08', '17:40');
+    const { uaz } = uazapiFalsa([
+        achada('3EB0LID0002', brt('09', '15:05'), { chatid: '176800000006429@lid' }),
+        achada('3EB0LID0001', brt('09', '09:55'), { chatid: '168500000002955@lid', fromMe: false }),
+        achada('3EB0LID0000', desde),
+    ]);
+    const banco = bancoFalso([`${DONO}:3EB0LID0000`]);
+    const listas = comNomesConhecidos({ pessoais: [RAFAEL_CONECTADO, RAFAEL_PESSOAL], internos: [], colegas: [RAFAEL_CONECTADO] }, [
+        { telefone: RAFAEL_PESSOAL, lid: '168500000002955' },
+        { telefone: RAFAEL_CONECTADO, lid: '176800000006429' },
+    ]);
+    const r = await recuperarMensagens({
+        buscar: (offset, limite) => uaz.buscarMensagens('tok', { limit: limite, offset }),
+        idsGravados: banco.idsGravados, ingerir: banco.ingerir, desde, dono: DONO, fora: (t) => estaFora(t, listas),
+    });
+    assert.deepEqual(r, { encontradas: 0, recuperadas: 0, excluidas: 2, motivo: 'so_contatos_fora' });
+    assert.equal(banco.ingeridas.length, 0);
 });
 
 test('buraco de verdade com conversa fora da análise no meio: reinjeta só a do cliente', async () => {

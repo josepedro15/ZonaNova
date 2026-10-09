@@ -1,6 +1,7 @@
 import 'server-only';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
-import { variantesTelefone } from '@/lib/painel';
+import { PREFIXO_LID, variantesTelefone } from '@/lib/painel';
+import { contatosConhecidos, nomesDoContato } from '@/lib/exclusao';
 import { valeTranscrever } from '@/lib/transcricao';
 import { valeDescrever } from '@/lib/midia';
 import { mensagensDoEvento, normalizarMensagem, statusDeConexao, type ChatUazapi, type EventoUazapi, type MensagemUazapi } from '@/lib/uazapi/normalizar';
@@ -60,7 +61,11 @@ async function processarMensagem(mensagem: MensagemUazapi, chat: ChatUazapi | nu
     // - a interna da loja (Depósito, caixa), cadastrada pelo gestor;
     // - o número de outro vendedor conectado: conversa de trabalho.
     // Compara com e sem o nono dígito: o JID e o que foi digitado nem sempre concordam.
-    const variantes = variantesTelefone(m.clienteTelefone);
+    // E pelo LID: a mensagem que chega só como `lid:` é do mesmo contato que o
+    // telefone bloqueado, se uma conversa do vendedor já os liga (lib/exclusao.ts).
+    const nomes = [m.clienteTelefone, ...(m.clienteLid ? [`${PREFIXO_LID}${m.clienteLid}`] : [])];
+    const conhecidos = await contatosConhecidos(supabase, conexao.user_id, nomes);
+    const variantes = [...new Set(nomesDoContato({ telefone: m.clienteTelefone, lid: m.clienteLid }, conhecidos).flatMap(variantesTelefone))];
     const [pessoal, interno, colega] = await Promise.all([
         supabase.from('contatos_bloqueados').select('id').eq('user_id', conexao.user_id).in('telefone', variantes).limit(1),
         supabase.from('contatos_internos').select('id').eq('unidade_id', conexao.unidade_id).in('telefone', variantes).limit(1),

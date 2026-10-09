@@ -18,7 +18,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { decifrar } from '../lib/crypto.ts';
 import { recuperarMensagens, resumoErrosWebhook } from '../lib/captura.ts';
-import { estaFora } from '../lib/exclusao.ts';
+import { comNomesConhecidos, contatosConhecidos, estaFora } from '../lib/exclusao.ts';
 import { Uazapi } from '../lib/uazapi/cliente.ts';
 import type { MensagemUazapi } from '../lib/uazapi/normalizar.ts';
 
@@ -90,6 +90,8 @@ const listas = {
     internos: (internos.data ?? []).map((x) => x.telefone as string),
     colegas: (colegas.data ?? []).map((x) => x.numero as string),
 };
+const conhecidos = await contatosConhecidos(db, conexao.user_id, [...listas.pessoais, ...listas.internos, ...listas.colegas]);
+const comLids = comNomesConhecidos(listas, conhecidos);
 
 let faltam: MensagemUazapi[] = [];
 const r = await recuperarMensagens({
@@ -98,7 +100,7 @@ const r = await recuperarMensagens({
     ingerir: async (mensagens) => { faltam = mensagens; },
     desde: inicio,
     dono: conexao.numero,
-    fora: (telefone) => estaFora(telefone, listas),
+    fora: (telefone) => estaFora(telefone, comLids),
     maxPaginas: 10,
 });
 const noIntervalo = (m: MensagemUazapi) => {

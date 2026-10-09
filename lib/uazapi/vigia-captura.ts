@@ -2,7 +2,7 @@ import 'server-only';
 import type { criarClienteAdmin } from '@/lib/supabase/admin';
 import { msDeExpediente } from '@/lib/painel';
 import { ancorasDoHistorico, emSilencio, LIMIAR_SILENCIO_MS, recuperarMensagens, resumoErrosWebhook, type ErroWebhookResumido, type ResultadoRecuperacao } from '@/lib/captura';
-import { estaFora } from '@/lib/exclusao';
+import { comNomesConhecidos, contatosConhecidos, estaFora } from '@/lib/exclusao';
 import type { Uazapi } from '@/lib/uazapi/cliente';
 import type { MensagemUazapi } from '@/lib/uazapi/normalizar';
 
@@ -52,7 +52,8 @@ async function idsGravados(supabase: Admin, ids: string[]): Promise<Set<string>>
 
 /**
  * As listas que a ingestão usa para descartar (lib/uazapi/ingestao.ts): a
- * pessoal do vendedor, a interna da unidade e os números dos colegas conectados.
+ * pessoal do vendedor, a interna da unidade e os números dos colegas
+ * conectados — com o LID de cada um, como lá.
  */
 async function regraDeExclusao(supabase: Admin, c: ConexaoVigiada): Promise<(telefone: string) => boolean> {
     const [pessoais, internos, colegas] = await Promise.all([
@@ -66,7 +67,11 @@ async function regraDeExclusao(supabase: Admin, c: ConexaoVigiada): Promise<(tel
         internos: (internos.data ?? []).map((x) => x.telefone),
         colegas: (colegas.data ?? []).map((x) => x.numero),
     };
-    return (telefone) => estaFora(telefone, listas);
+    // A /message/find traz o contato só como `lid:` quando não sabe o número:
+    // as listas ganham o LID que as conversas do vendedor ligam a cada telefone.
+    const conhecidos = await contatosConhecidos(supabase, c.user_id, [...listas.pessoais, ...listas.internos, ...listas.colegas]);
+    const comLids = comNomesConhecidos(listas, conhecidos);
+    return (telefone) => estaFora(telefone, comLids);
 }
 
 async function recuperar(supabase: Admin, uaz: Uazapi, token: string, c: ConexaoVigiada, desde: Date): Promise<ResultadoRecuperacao> {
