@@ -9,6 +9,7 @@ import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoe
 import { doutrinaMec } from '@/lib/pedido-analise';
 import { DESCARTADA, naturezaSuspeita } from '@/lib/natureza';
 import { comVendaPresencial } from '@/lib/presencial';
+import { semAtividadeDeSaida } from '@/lib/consolidacao';
 import { paginar } from '@/lib/paginar';
 import { foiRespondido, numerosDoFechamento, respostaMediaEmMinutos, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
@@ -526,20 +527,31 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
     // social ou testes técnicos. Esses itens continuam nas métricas de resposta,
     // mas o treino usa negociações quando houver ao menos uma.
     const baseCoaching = negociacoes.length ? negociacoes : analises;
-    // O detalhe do MEC não entra no coaching: é o único campo retirado. As
-    // instruções da consolidação são as de antes, mas a entrada não: o resto do
-    // payload segue inteiro, e perfil_cliente/profissao_cliente chegam à
-    // consolidação como mais dois campos de cada análise.
-    const semDetalhe = (payload: unknown) => {
+    // O detalhe do MEC não entra no coaching: é o único campo retirado. O resto
+    // do payload segue inteiro (perfil_cliente/profissao_cliente inclusive), e
+    // erros_vendedor/evidencias são o lastro que lib/consolidacao.ts confere.
+    const semDetalhe = (payload: unknown): Record<string, unknown> => {
         const copia = { ...(payload as Record<string, unknown>) };
         delete copia.mec_detalhe;
         return copia;
     };
-    const consolidado = await consolidarVendedor(baseCoaching.map((a) => semDetalhe(a.payload)), metricas);
     const unidadeId = String(analises[0].unidade_id);
+    // Nenhuma mensagem do vendedor saiu no dia: sem atendimento não há nota nem
+    // treino, e a IA inventava um elogio. Os números de entrada continuam.
+    if (semAtividadeDeSaida([...porConversa.values()].flat())) {
+        const { error: erroRel } = await supabase.from('relatorios_diarios').upsert({
+            user_id: userId, unidade_id: unidadeId, data_ref: dataRef, ...metricas, score_geral: null,
+            pontos_positivos: [], pontos_negativos: [], payload: { sem_atividade_saida: true },
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,data_ref' });
+        if (erroRel) throw erroRel;
+        await consolidarAderenciaDiaria(supabase, userId, unidadeId, dataRef);
+        return;
+    }
+    const consolidado = await consolidarVendedor(baseCoaching.map((a) => semDetalhe(a.payload)), metricas, baseCoaching.map((a) => a.conversa_id as string));
     const { error: erroRel } = await supabase.from('relatorios_diarios').upsert({
         user_id: userId, unidade_id: unidadeId, data_ref: dataRef, ...metricas,
-        pontos_positivos: [consolidado.resultado.elogio, ...consolidado.resultado.padroes_sucesso],
+        pontos_positivos: [consolidado.resultado.elogio, ...consolidado.resultado.padroes_sucesso].filter(Boolean),
         pontos_negativos: consolidado.resultado.melhorias,
         payload: { ...consolidado.resultado, uso: { modelo: consolidado.modelo, entrada: consolidado.entrada, saida: consolidado.saida, custo: custoEstimado(consolidado.modelo, consolidado.entrada, consolidado.saida) } },
         updated_at: new Date().toISOString(),

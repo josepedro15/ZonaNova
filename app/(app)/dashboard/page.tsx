@@ -163,7 +163,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                                                 mediaRespostaMin={media(anteriores.map((r) => (r.tempo_medio_resposta_s == null ? null : Number(r.tempo_medio_resposta_s) / 60)))} />
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_300px]">
                                     {temTreino && <Treino coaching={coaching} />}
-                                    <MecResumo className={temTreino ? '' : 'lg:col-span-2 xl:col-span-1 2xl:col-span-2'} aderencia={aderencia ?? null} />
+                                    {coaching.sem_atividade_saida && (
+                                        <EstadoVazio titulo="Sem atividade de saída">
+                                            Nenhuma mensagem sua saiu neste dia: o relatório fica sem nota e sem treino.
+                                        </EstadoVazio>
+                                    )}
+                                    <MecResumo className={temTreino || coaching.sem_atividade_saida ? '' : 'lg:col-span-2 xl:col-span-1 2xl:col-span-2'} aderencia={aderencia ?? null} />
                                 </div>
                             </>
                         ) : (

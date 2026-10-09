@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ResultadoComDetalhe } from '@/lib/analise';
 import type { ItemPlaybook } from '@/lib/mec';
 import { MODELO_PADRAO, pedidoAnalise } from '@/lib/pedido-analise';
-import { INSTRUCOES_CONSOLIDACAO, schemaConsolidado, schemaJsonConsolidado, type ConsolidadoIa } from '@/lib/consolidacao';
+import { finalizarConsolidado, pedidoConsolidacao, schemaConsolidado, type ConsolidadoIa } from '@/lib/consolidacao';
 
 type Uso = { input_tokens?: number; output_tokens?: number };
 
@@ -46,27 +46,23 @@ export async function analisarConversa({ transcript, doutrina, itens, midia = fa
     };
 }
 
-export async function consolidarVendedor(analises: unknown[], metricas: Record<string, number | null>): Promise<{ resultado: ConsolidadoIa; modelo: string; entrada: number; saida: number }> {
+/**
+ * O treino do dia do vendedor. `analises` são os payloads na ordem em que a IA
+ * os numera; `conversaIds`, na mesma ordem, vão para o lastro gravado.
+ */
+export async function consolidarVendedor(analises: Record<string, unknown>[], metricas: Record<string, number | null>, conversaIds: string[] = []): Promise<{ resultado: ConsolidadoIa; modelo: string; entrada: number; saida: number }> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY não configurada');
-    const modelo = process.env.OPENAI_MODEL || 'gpt-4.1-mini-2025-04-14';
+    const modelo = process.env.OPENAI_MODEL || MODELO_PADRAO;
     const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-            model: modelo, temperature: 0, store: false,
-            instructions: INSTRUCOES_CONSOLIDACAO,
-            input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ metricas, analises }) }] }],
-            text: { format: { type: 'json_schema', name: 'consolidado_vendedor', strict: true, schema: schemaJsonConsolidado } },
-            // Uma consolidação real tem ~350 tokens (no máximo 431 até 06/10). Os
-            // textos não têm mais `maxLength`: o teto é o que segura uma resposta
-            // degenerada.
-            max_output_tokens: 2000,
-        }),
+        body: JSON.stringify(pedidoConsolidacao(analises, metricas, modelo)),
     });
     const corpo = await response.json();
     if (!response.ok) throw new Error(`OpenAI ${response.status}: ${JSON.stringify(corpo).slice(0, 500)}`);
     const uso = (corpo as { usage?: Uso }).usage;
-    return { resultado: schemaConsolidado.parse(JSON.parse(textoDaResposta(corpo))), modelo, entrada: uso?.input_tokens ?? 0, saida: uso?.output_tokens ?? 0 };
+    const resposta = schemaConsolidado.parse(JSON.parse(textoDaResposta(corpo)));
+    return { resultado: finalizarConsolidado(resposta, analises, conversaIds), modelo, entrada: uso?.input_tokens ?? 0, saida: uso?.output_tokens ?? 0 };
 }
 
 const schemaDescobertas = z.object({ descobertas: z.array(z.object({

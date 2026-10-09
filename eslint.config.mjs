@@ -5,7 +5,8 @@ import typescript from 'eslint-config-next/typescript';
 const config = [
     ...coreWebVitals,
     ...typescript,
-    { ignores: ['.next/**', 'node_modules/**', 'supabase/**', 'design/**'] },
+    // .claude/worktrees: cópias do repo de outras sessões, cada uma com o seu .next.
+    { ignores: ['.next/**', 'node_modules/**', 'supabase/**', 'design/**', '.claude/**'] },
 ];
 
 export default config;

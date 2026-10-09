@@ -40,6 +40,8 @@ export type Coaching = {
     resumo?: string; melhorias?: string[]; elogio?: string; desafio?: string;
     // Também saem do fechamento diário e não apareciam em tela nenhuma.
     padroes_sucesso?: unknown; padroes_falha?: unknown; objecoes_frequentes?: unknown; alertas?: unknown;
+    /** Nenhuma mensagem do vendedor saiu no dia: o relatório não tem nota nem treino. */
+    sem_atividade_saida?: boolean;
 };
 
 /** Há algo para mostrar no treino? Evita cartão vazio. */
