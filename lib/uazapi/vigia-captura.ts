@@ -1,7 +1,7 @@
 import 'server-only';
 import type { criarClienteAdmin } from '@/lib/supabase/admin';
 import { msDeExpediente } from '@/lib/painel';
-import { ancorasDoHistorico, emSilencio, LIMIAR_SILENCIO_MS, recuperarMensagens, resumoErrosWebhook, type ErroWebhookResumido, type ResultadoRecuperacao } from '@/lib/captura';
+import { ancorasDoHistorico, emSilencio, falhaDoBuraco, LIMIAR_SILENCIO_MS, recuperarMensagens, resumoErrosWebhook, type ErroWebhookResumido, type ResultadoRecuperacao } from '@/lib/captura';
 import { comNomesConhecidos, contatosConhecidos, estaFora } from '@/lib/exclusao';
 import type { Uazapi } from '@/lib/uazapi/cliente';
 import type { MensagemUazapi } from '@/lib/uazapi/normalizar';
@@ -18,6 +18,15 @@ export type ConexaoVigiada = {
 };
 
 export type BuracoAberto = { id: string; inicio: string; tentativas: number; encontradas: number; recuperadas: number };
+
+/**
+ * O alerta do gestor (`silencio_desde`) acompanha o indício de falha do buraco
+ * (lib/captura.ts `falhaDoBuraco`), recalculado a cada rodada: aparece quando a
+ * UAZAPI tem o que o banco não tem ou quando o silêncio fica longo.
+ */
+async function marcarAlerta(supabase: Admin, c: ConexaoVigiada, inicio: string | null) {
+    await supabase.from('conexoes_whatsapp').update({ silencio_desde: inicio }).eq('id', c.id);
+}
 
 /** Mensagens por linha de `webhook_entrada`: um lote que o worker processa folgado no tempo dele. */
 const POR_ENTRADA = 50;
@@ -150,8 +159,11 @@ export type DesfechoVigia = 'aberto' | 'recuperando' | 'fechado' | 'descartado' 
  * - buraco aberto e a mensagem voltou: fecha-o na primeira mensagem de depois
  *   e, se nada tinha sido recuperado, pede o histórico ao celular;
  * - buraco aberto e ainda em silêncio: tenta de novo a /message/find;
- * - sem buraco e em silêncio (lib/captura.ts `emSilencio`): abre um, marca o
- *   alerta do gestor (`silencio_desde`) e já tenta recuperar;
+ * - sem buraco e em silêncio (lib/captura.ts `emSilencio`): abre um e já tenta
+ *   recuperar;
+ * - nos dois últimos, o alerta do gestor (`silencio_desde`) só fica marcado
+ *   com indício de falha (`falhaDoBuraco`): UAZAPI vazia e silêncio curto é
+ *   vendedor que não conversou;
  * - nos dois últimos, se a UAZAPI só tem conversa fora da análise depois do
  *   início, não era buraco: descarta (ver `descartar`).
  */
@@ -185,14 +197,17 @@ export async function vigiarCaptura(supabase: Admin, uaz: Uazapi, token: string,
             await descartar(supabase, c, aberto.id);
             return 'descartado';
         }
+        // Máximo, não soma: o que uma rodada reinjeta e não chega ao banco
+        // volta a faltar na seguinte e seria contado de novo.
+        const encontradas = Math.max(aberto.encontradas, r.encontradas);
+        const recuperadas = Math.max(aberto.recuperadas, r.recuperadas);
         await supabase.from('buracos_captura').update({
-            // Máximo, não soma: o que uma rodada reinjeta e não chega ao banco
-            // volta a faltar na seguinte e seria contado de novo.
-            tentativas: aberto.tentativas + 1, encontradas: Math.max(aberto.encontradas, r.encontradas),
-            recuperadas: Math.max(aberto.recuperadas, r.recuperadas), motivo: r.motivo, updated_at: carimbo,
+            tentativas: aberto.tentativas + 1, encontradas, recuperadas, motivo: r.motivo, updated_at: carimbo,
             // Só substitui quando há o que mostrar: um reinício da UAZAPI zera a lista dela.
             ...(erros?.length ? { erros_webhook: erros } : {}),
         }).eq('id', aberto.id);
+        const falha = falhaDoBuraco({ inicio: aberto.inicio, fim: null, encontradas, recuperadas, motivo: r.motivo }, agora);
+        await marcarAlerta(supabase, c, falha ? aberto.inicio : null);
         return 'recuperando';
     }
 
@@ -203,7 +218,6 @@ export async function vigiarCaptura(supabase: Admin, uaz: Uazapi, token: string,
     }).select('id').single<{ id: string }>();
     // Outra rodada abriu o mesmo buraco no meio tempo (índice único do aberto).
     if (error) return null;
-    await supabase.from('conexoes_whatsapp').update({ silencio_desde: ultima!.toISOString() }).eq('id', c.id);
     const erros = await errosDoBuraco(uaz, token, ultima!);
     const r = await recuperar(supabase, uaz, token, c, ultima!);
     if (r.motivo === 'so_contatos_fora') {
@@ -214,5 +228,7 @@ export async function vigiarCaptura(supabase: Admin, uaz: Uazapi, token: string,
         tentativas: 1, encontradas: r.encontradas, recuperadas: r.recuperadas, motivo: r.motivo, updated_at: carimbo,
         erros_webhook: erros,
     }).eq('id', novo.id);
+    const falha = falhaDoBuraco({ inicio: ultima!.toISOString(), fim: null, encontradas: r.encontradas, recuperadas: r.recuperadas, motivo: r.motivo }, agora);
+    if (falha) await marcarAlerta(supabase, c, ultima!.toISOString());
     return 'aberto';
 }

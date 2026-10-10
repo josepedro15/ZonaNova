@@ -10,6 +10,7 @@ import { comQuemFalar, contarObjecoes, diaMenos, diasDeVenda, variacaoSemanal, t
 import { falaCurta, setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
 import { contarObjecoesPorCodigo, juntarObjecoes } from '@/lib/mec';
 import { carregarPlaybook } from '@/lib/mec-dados';
+import { alertaDeCaptura, type FalhaDeCaptura } from '@/lib/captura';
 import { ObjecoesDaSemana } from './objecoes-da-semana';
 import { horaBrasilia, dataCurtaBrasilia, inicioDoDia } from '../dashboard/formato';
 
@@ -20,6 +21,22 @@ type ConexaoDaEquipe = { user_id: string; status: string; ultimo_evento_em: stri
 
 /** "desde 10h56" hoje; "desde 7 de out." quando começou antes. */
 const desdeQuando = (iso: string, agora: Date) => (Date.parse(iso) >= inicioDoDia(agora).getTime() ? horaBrasilia(iso) : dataCurtaBrasilia(iso));
+
+/**
+ * O que o alerta de captura diz, pelo indício (lib/captura.ts). Silêncio longo
+ * não prova falha — pode ser só falta de conversa —, então o texto pede
+ * conferência em vez de afirmar que nada chega.
+ */
+const SOBRE_A_CAPTURA: Record<FalhaDeCaptura, { resumo: string; texto: string }> = {
+    silencio_longo: {
+        resumo: 'sem nenhuma mensagem desde',
+        texto: 'Conectado, mas mais de 6 horas de expediente sem nenhuma mensagem, nem de cliente. Pode ser só falta de conversa; vale conferir se o WhatsApp está aberto e com internet no celular. O intervalo não conta contra o vendedor.',
+    },
+    uazapi_tem_mensagens: {
+        resumo: 'mensagens não chegaram ao sistema desde',
+        texto: 'O WhatsApp recebeu mensagens que não entraram no sistema. Ele está recuperando; o intervalo não conta contra o vendedor.',
+    },
+};
 
 const DUAS_HORAS = 2 * 60 * 60 * 1000;
 /** A fila da equipe na tela: uma lista maior que isso ninguém percorre. */
@@ -152,9 +169,13 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     const ultimaFala = await ultimasFalas(supabase, esperando.slice(0, MAX_FILA).map((e) => e.id), janela);
     const nomeDoVendedor = new Map(equipe.map((p) => [p.id, p.nome]));
     const foraDoAr = equipe.filter((p) => conexao.get(p.id)?.status !== 'conectada');
-    // Conectado e em silêncio enquanto a loja conversa (lib/captura.ts): o
-    // número está no ar, mas as mensagens não estão chegando.
-    const semCaptura = equipe.filter((p) => conexao.get(p.id)?.status === 'conectada' && !!conexao.get(p.id)?.silencio_desde);
+    // Conectado e com indício de falha na captura (lib/captura.ts
+    // `falhaDoBuraco`): o checar-conexoes só grava `silencio_desde` assim.
+    const semCaptura = equipe.flatMap((p) => {
+        const cx = conexao.get(p.id);
+        if (cx?.status !== 'conectada' || !cx.silencio_desde) return [];
+        return [{ nome: p.nome.split(' ')[0], desde: desdeQuando(cx.silencio_desde, agora), falha: alertaDeCaptura(cx.silencio_desde, agora) }];
+    });
     const sugestoes = comQuemFalar(equipe, notas, etapas);
     // Pelo código do catálogo nas conversas que já o têm; nas outras (outras
     // lojas, fora do piloto), pelo texto livre de antes. Uma conversa entra
@@ -211,9 +232,11 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                     {semCaptura.length > 0 && (
                         <Alerta tom="atencao" icone="alerta"
                                 titulo={semCaptura.length === 1
-                                    ? `${semCaptura[0].nome.split(' ')[0]}: conectado, sem mensagens desde ${desdeQuando(conexao.get(semCaptura[0].id)!.silencio_desde!, agora)}`
-                                    : `${semCaptura.length} números conectados sem receber mensagens`}>
-                            A loja segue conversando e nada chega deste número. O sistema está tentando recuperar as mensagens; o silêncio não conta contra o vendedor.
+                                    ? `${semCaptura[0].nome}: ${SOBRE_A_CAPTURA[semCaptura[0].falha].resumo} ${semCaptura[0].desde}`
+                                    : `${semCaptura.length} números com a captura a conferir`}>
+                            {semCaptura.length === 1
+                                ? SOBRE_A_CAPTURA[semCaptura[0].falha].texto
+                                : semCaptura.map((s) => `${s.nome}: ${SOBRE_A_CAPTURA[s.falha].resumo} ${s.desde}`).join(' · ')}
                         </Alerta>
                     )}
                     {esperas.length > 0 && (
@@ -292,7 +315,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                                 const respTom = resp === null ? null : tomResposta(resp);
                                 const atrasado = r && ultimo && r.data_ref !== ultimo.data_ref;
                                 const mudo = ligado && !!cx?.silencio_desde;
-                                const seloConexao = <Selo tom={mudo ? 'atencao' : ligado ? 'bom' : 'risco'} ponto>{mudo ? 'Sem captura' : ligado ? 'Conectado' : 'Fora do ar'}</Selo>;
+                                const seloConexao = <Selo tom={mudo ? 'atencao' : ligado ? 'bom' : 'risco'} ponto>{mudo ? (alertaDeCaptura(cx.silencio_desde!, agora) === 'silencio_longo' ? 'Sem mensagens' : 'Sem captura') : ligado ? 'Conectado' : 'Fora do ar'}</Selo>;
                                 return {
                                     chave: p.id,
                                     href: `/equipe/${p.id}`,

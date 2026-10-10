@@ -552,9 +552,10 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
         return copia;
     };
     const unidadeId = String(analises[0].unidade_id);
-    // Buraco de captura no expediente do dia (lib/captura.ts): o relatório é
-    // marcado e a IA é avisada, para o silêncio não virar abandono.
-    const { data: buracos, error: erroBuracos } = await supabase.from('buracos_captura').select('inicio,fim')
+    // Buraco de captura no expediente do dia (lib/captura.ts): com falha de
+    // fato, o relatório é marcado e a IA é avisada, para o silêncio não virar
+    // abandono. Buraco sem indício é vendedor que não conversou e não marca.
+    const { data: buracos, error: erroBuracos } = await supabase.from('buracos_captura').select('inicio,fim,encontradas,recuperadas,motivo')
         .eq('user_id', userId).lt('inicio', fim.toISOString()).or(`fim.is.null,fim.gt.${inicio.toISOString()}`)
         .returns<Buraco[]>();
     if (erroBuracos) throw erroBuracos;

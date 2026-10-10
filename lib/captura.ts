@@ -19,10 +19,23 @@ import { normalizarMensagem, paraData, type MensagemUazapi } from './uazapi/norm
 
 /**
  * Horas de expediente sem mensagem nenhuma, nas duas direções, para a conexão
- * ser tratada como "em silêncio". O cron roda de 2 em 2 horas: com este
- * limiar, o buraco do Vitor seria visto às 13h, e não no relatório do dia.
+ * ser tratada como "em silêncio" e o buraco ser aberto: a partir daí o
+ * checar-conexoes procura na UAZAPI o que falta. Abrir o buraco não é alertar
+ * o gestor — isso só com indício de falha (`falhaDoBuraco`).
  */
 export const LIMIAR_SILENCIO_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Silêncio de expediente que, mesmo com a UAZAPI vazia, já é indício de falha.
+ *
+ * A UAZAPI vazia não separa as duas coisas: o vendedor que não conversou e a
+ * sessão que parou de receber (o Vitor, 07/10) dão a mesma resposta. O que
+ * separa é a duração. Dos buracos de 09–10/10 que se fecharam sozinhos quando
+ * o vendedor voltou a conversar, o mais longo teve 3h35 de expediente (a
+ * Priscila, de 09/10 14:42 a 10/10 08:18); o do Vitor, 7h04. Seis horas fica
+ * entre os dois e ainda pega o Vitor no mesmo dia, na rodada das 17h.
+ */
+export const LIMIAR_SILENCIO_LONGO_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Abaixo disto de expediente dentro do dia, o buraco não marca o relatório:
@@ -50,8 +63,65 @@ export function emSilencio({ ultima, agora, outrasDaUnidade }: {
     return outrasDaUnidade.some((outra) => !!outra && msDeExpediente(ultima, outra) >= LIMIAR_SILENCIO_MS);
 }
 
-/** Um buraco gravado: `inicio` é a última mensagem antes dele; `fim`, a primeira depois (null enquanto aberto). */
-export type Buraco = { inicio: string; fim: string | null };
+/**
+ * Um buraco gravado: `inicio` é a última mensagem antes dele; `fim`, a primeira
+ * depois (null enquanto aberto); `encontradas`, `recuperadas` e `motivo`, o que
+ * a /message/find achou desde o início (ver `ResultadoRecuperacao`).
+ */
+export type Buraco = { inicio: string; fim: string | null; encontradas: number; recuperadas: number; motivo: string | null };
+
+/**
+ * O indício de que a captura falhou de fato:
+ * - `uazapi_tem_mensagens`: a UAZAPI tem mensagens de cliente que o banco não
+ *   tinha. O webhook não entregou;
+ * - `silencio_longo`: `LIMIAR_SILENCIO_LONGO_MS` de expediente sem nada.
+ */
+export type FalhaDeCaptura = 'uazapi_tem_mensagens' | 'silencio_longo';
+
+/**
+ * A UAZAPI tem mensagens depois do início que não deu para reinjetar: o id não
+ * pôde ser conferido no banco. `encontradas` sozinho não serve de indício: conta
+ * também a que o banco já gravou (o vendedor que voltou a conversar no meio da
+ * rodada do cron).
+ */
+const irrecuperavel = (b: Buraco) => b.encontradas > 0 && (b.motivo === 'sem_ancora' || b.motivo === 'formato_id_divergente');
+
+const silencioLongo = (b: Buraco, agora: Date) =>
+    msDeExpediente(new Date(b.inicio), b.fim ? new Date(b.fim) : agora) >= LIMIAR_SILENCIO_LONGO_MS;
+
+/**
+ * O buraco é falha ou só um vendedor que não conversou?
+ *
+ * Em 09–10/10, 8 dos 10 buracos tinham a UAZAPI tão vazia quanto o banco e se
+ * fecharam sozinhos quando o vendedor voltou a conversar (o Bruno três vezes,
+ * a Priscila duas); o histórico pedido ao celular depois também não trouxe
+ * nada. O alerta "nada chega deste número" afirmava uma falha que não havia.
+ * Sem indício, o buraco segue gravado e a recuperação segue tentando, mas o
+ * gestor não é alertado e o relatório não é marcado.
+ */
+export function falhaDoBuraco(b: Buraco, agora: Date): FalhaDeCaptura | null {
+    // `recuperadas` só conta o que faltava no banco, conferido pelo id.
+    if (b.recuperadas > 0 || irrecuperavel(b)) return 'uazapi_tem_mensagens';
+    return silencioLongo(b, agora) ? 'silencio_longo' : null;
+}
+
+/**
+ * Falta mensagem no relatório por causa do buraco? É a falha sem o que a
+ * recuperação já devolveu ao banco: se o que a UAZAPI tinha foi reinjetado, o
+ * dia está completo.
+ */
+export function faltaNoRelatorio(b: Buraco, agora: Date): boolean {
+    return irrecuperavel(b) || silencioLongo(b, agora);
+}
+
+/**
+ * Qual alerta mostrar ao gestor para um `silencio_desde` (que o checar-conexoes
+ * só grava com `falhaDoBuraco`). Abaixo do silêncio longo, o único indício que
+ * abre o alerta é a UAZAPI ter o que o banco não tem.
+ */
+export function alertaDeCaptura(silencioDesde: string, agora: Date): FalhaDeCaptura {
+    return msDeExpediente(new Date(silencioDesde), agora) >= LIMIAR_SILENCIO_LONGO_MS ? 'silencio_longo' : 'uazapi_tem_mensagens';
+}
 
 export type IntervaloSemCaptura = { de: string; ate: string; expediente_ms: number };
 
@@ -64,12 +134,15 @@ const janela = (dataRef: string) => ({
 /**
  * Os buracos que tocam o expediente do dia, cortados nele. O relatório do
  * vendedor fica com `captura_incompleta` quando sobra algum: a IA e o gestor
- * não podem ler o silêncio desse intervalo como abandono do cliente.
+ * não podem ler o silêncio desse intervalo como abandono do cliente. Só conta
+ * buraco em que falta mensagem (`faltaNoRelatorio`): o silêncio de quem não
+ * conversou é do vendedor, não da captura.
  */
 export function capturaDoDia(buracos: readonly Buraco[], dataRef: string, agora: Date): { incompleta: boolean; intervalos: IntervaloSemCaptura[] } {
     const dia = janela(dataRef);
     const intervalos: IntervaloSemCaptura[] = [];
     for (const b of buracos) {
+        if (!faltaNoRelatorio(b, agora)) continue;
         const de = new Date(Math.max(Date.parse(b.inicio), dia.inicio.getTime()));
         const ate = new Date(Math.min(b.fim ? Date.parse(b.fim) : agora.getTime(), dia.fim.getTime()));
         const expediente = msDeExpediente(de, ate);
@@ -96,8 +169,9 @@ export type ResultadoRecuperacao = {
     excluidas: number;
     /**
      * Por que nada foi reinjetado, quando é o caso:
-     * - `uazapi_sem_mensagens`: a UAZAPI também não tem nada depois do buraco —
-     *   a sessão é que parou de receber, não o webhook que deixou de entregar;
+     * - `uazapi_sem_mensagens`: a UAZAPI também não tem nada depois do buraco.
+     *   O webhook não perdeu nada: ou o vendedor não conversou, ou a sessão
+     *   parou de receber — só a duração separa os dois (`falhaDoBuraco`);
      * - `so_contatos_fora`: a UAZAPI recebeu, mas só de contatos fora da
      *   análise. A captura está em dia; quem ficou quieto foram os clientes;
      * - `sem_ancora`: não deu para achar, entre as que o banco já tem, uma

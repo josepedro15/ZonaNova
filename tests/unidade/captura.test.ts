@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     emSilencio, capturaDoDia, recuperarMensagens, ancorasDoHistorico, resumoErrosWebhook, LIMIAR_SILENCIO_MS,
+    falhaDoBuraco, faltaNoRelatorio, alertaDeCaptura, LIMIAR_SILENCIO_LONGO_MS, type Buraco,
 } from '../../lib/captura.ts';
 import { Uazapi } from '../../lib/uazapi/cliente.ts';
 import { comNomesConhecidos, estaFora } from '../../lib/exclusao.ts';
@@ -53,7 +54,13 @@ test('o limiar é de duas horas de expediente', () => {
 
 // --- o buraco no relatório do dia ---------------------------------------------
 
-const buracoVitor = { inicio: brt('07', '10:56').toISOString(), fim: brt('08', '07:35').toISOString() };
+/** Um buraco como o checar-conexoes grava; por padrão, com a UAZAPI tão vazia quanto o banco. */
+const buraco = (inicio: Date, fim: Date | null, extra: Partial<Buraco> = {}): Buraco => ({
+    inicio: inicio.toISOString(), fim: fim?.toISOString() ?? null, encontradas: 0, recuperadas: 0, motivo: 'uazapi_sem_mensagens', ...extra,
+});
+
+// 10:56 → 18:00 de quarta: 7h04 de expediente, acima do silêncio longo.
+const buracoVitor = buraco(brt('07', '10:56'), brt('08', '07:35'));
 
 test('o dia do buraco fica com captura incompleta, cortado no fim do dia', () => {
     const c = capturaDoDia([buracoVitor], '2026-10-07', brt('09', '00:00'));
@@ -73,15 +80,89 @@ test('o dia seguinte não herda o buraco que só tocou a madrugada', () => {
 });
 
 test('buraco ainda aberto vale até agora', () => {
-    const c = capturaDoDia([{ inicio: buracoVitor.inicio, fim: null }], '2026-10-07', brt('07', '15:00'));
+    const c = capturaDoDia([buraco(brt('07', '10:56'), null)], '2026-10-07', brt('07', '17:30'));
     assert.equal(c.incompleta, true);
-    assert.equal(c.intervalos[0].ate, brt('07', '15:00').toISOString());
-    assert.equal(c.intervalos[0].expediente_ms, 4 * HORA + 4 * 60_000);
+    assert.equal(c.intervalos[0].ate, brt('07', '17:30').toISOString());
+    assert.equal(c.intervalos[0].expediente_ms, 6 * HORA + 34 * 60_000);
 });
 
 test('buraco que encolheu com a recuperação e ficou curto no dia não marca', () => {
-    const c = capturaDoDia([{ inicio: brt('07', '10:56').toISOString(), fim: brt('07', '11:10').toISOString() }], '2026-10-07', brt('09', '00:00'));
+    const c = capturaDoDia([buraco(brt('07', '10:56'), brt('07', '11:10'), { encontradas: 4, recuperadas: 4, motivo: null })], '2026-10-07', brt('09', '00:00'));
     assert.equal(c.incompleta, false);
+});
+
+test('a Priscila em 09/10: 3h35 de silêncio com a UAZAPI vazia não marca o dia', () => {
+    const b = buraco(brt('09', '14:42'), brt('10', '08:18'));
+    assert.equal(capturaDoDia([b], '2026-10-09', brt('11', '00:00')).incompleta, false);
+    assert.equal(capturaDoDia([b], '2026-10-10', brt('11', '00:00')).incompleta, false);
+});
+
+test('buraco longo que atravessa o dia marca os dois lados que somam expediente', () => {
+    // Quinta 14h → sexta 11h: 4h + 3h = 7h. A falha é do buraco inteiro.
+    const b = buraco(brt('08', '14:00'), brt('09', '11:00'));
+    assert.equal(capturaDoDia([b], '2026-10-08', brt('10', '00:00')).incompleta, true);
+    assert.equal(capturaDoDia([b], '2026-10-09', brt('10', '00:00')).incompleta, true);
+});
+
+test('a UAZAPI tem o que não deu para reinjetar: o dia fica incompleto mesmo com silêncio curto', () => {
+    const b = buraco(brt('07', '10:56'), brt('07', '13:30'), { encontradas: 12, motivo: 'formato_id_divergente' });
+    assert.equal(capturaDoDia([b], '2026-10-07', brt('08', '00:00')).incompleta, true);
+});
+
+// --- falha de fato × vendedor que não conversou --------------------------------
+
+test('silêncio curto com a UAZAPI vazia não é falha: o vendedor só não conversou', () => {
+    // O Bruno em 09/10: 10:36 → 13:03, fechou sozinho quando ele voltou.
+    assert.equal(falhaDoBuraco(buraco(brt('09', '10:36'), brt('09', '13:03')), brt('09', '13:05')), null);
+    // Aberto, ainda curto.
+    assert.equal(falhaDoBuraco(buraco(brt('10', '09:50'), null), brt('10', '12:00')), null);
+});
+
+test('o limiar do silêncio longo é de seis horas de expediente', () => {
+    assert.equal(LIMIAR_SILENCIO_LONGO_MS, 6 * HORA);
+    const b = buraco(brt('07', '10:00'), null);
+    assert.equal(falhaDoBuraco(b, brt('07', '15:59')), null);
+    assert.equal(falhaDoBuraco(b, brt('07', '16:00')), 'silencio_longo');
+});
+
+test('a noite e o domingo não contam: sábado 11h → segunda 9h é 2h', () => {
+    assert.equal(falhaDoBuraco(buraco(brt('10', '11:00'), null), brt('12', '09:00')), null);
+});
+
+test('o Guilherme e a Tainá: quinta 16:40 → sábado 12h são 5h20, segunda às 8h40 vira silêncio longo', () => {
+    const b = buraco(brt('09', '16:40'), null);
+    assert.equal(falhaDoBuraco(b, brt('10', '13:56')), null);
+    assert.equal(falhaDoBuraco(b, brt('12', '08:39')), null);
+    assert.equal(falhaDoBuraco(b, brt('12', '08:40')), 'silencio_longo');
+});
+
+test('o Vitor em 07/10 seria alertado no mesmo dia, na rodada das 17h', () => {
+    assert.equal(falhaDoBuraco(buraco(brt('07', '10:56'), null), brt('07', '17:00')), 'silencio_longo');
+});
+
+test('a UAZAPI tinha o que o banco não tinha: falha mesmo com silêncio curto', () => {
+    const b = buraco(brt('07', '10:56'), null, { encontradas: 5, recuperadas: 5, motivo: null });
+    assert.equal(falhaDoBuraco(b, brt('07', '13:00')), 'uazapi_tem_mensagens');
+    // Reinjetado tudo: o relatório não perde nada.
+    assert.equal(faltaNoRelatorio(b, brt('07', '13:00')), false);
+});
+
+test('encontradas que o banco já tinha não são falha (o vendedor voltou no meio da rodada)', () => {
+    const b = buraco(brt('07', '10:56'), null, { encontradas: 3, recuperadas: 0, motivo: null });
+    assert.equal(falhaDoBuraco(b, brt('07', '13:00')), null);
+});
+
+test('sem âncora ou com id divergente, o que a UAZAPI tem não pôde ser conferido nem reinjetado', () => {
+    for (const motivo of ['sem_ancora', 'formato_id_divergente']) {
+        const b = buraco(brt('07', '10:56'), null, { encontradas: 8, motivo });
+        assert.equal(falhaDoBuraco(b, brt('07', '13:00')), 'uazapi_tem_mensagens');
+        assert.equal(faltaNoRelatorio(b, brt('07', '13:00')), true);
+    }
+});
+
+test('o alerta da tela diz o indício: silêncio longo pede conferência, curto só aparece por falha do webhook', () => {
+    assert.equal(alertaDeCaptura(brt('07', '10:56').toISOString(), brt('07', '17:00')), 'silencio_longo');
+    assert.equal(alertaDeCaptura(brt('07', '10:56').toISOString(), brt('07', '13:00')), 'uazapi_tem_mensagens');
 });
 
 // --- recuperação pela /message/find (simulada) --------------------------------
@@ -179,7 +260,7 @@ test('o banco guarda o messageid puro: a conferência descobre e usa esse format
     assert.deepEqual(banco.ingeridas.flat().map((m) => m.id), ['3EB0AAA0001']);
 });
 
-test('a UAZAPI também não tem nada depois do buraco: a sessão é que caiu', async () => {
+test('a UAZAPI também não tem nada depois do buraco: nada a reinjetar', async () => {
     const desde = brt('07', '10:56');
     const { uaz } = uazapiFalsa([achada('3EB0AAA0000', desde)]);
     const banco = bancoFalso([`${DONO}:3EB0AAA0000`]);
