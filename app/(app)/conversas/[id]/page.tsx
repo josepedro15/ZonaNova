@@ -4,13 +4,14 @@ import {
     Avatar, Barra, Botao, BotaoCopiar, BotaoLink, CabecalhoPagina, Cartao, Numero, Pagina, SELO, Selo, Shell,
 } from '@/components/ui';
 import { contextoApp, dataCurta } from '@/lib/contexto-app';
-import { aparelhoDe, concluidaPelaAnalise, COOKIE_WHATSAPP_APP, esperaDoCliente, esperaEmTexto, linkResponder, telefoneBonito, type AnaliseDaFila } from '@/lib/painel';
+import { aparelhoDe, concluidaPelaAnalise, COOKIE_WHATSAPP_APP, esperaDoCliente, esperaEmTexto, linkResponder, telefoneBonito, voltouAEscrever, type AnaliseDaFila } from '@/lib/painel';
 import { aderenciaPercentual } from '@/lib/analise';
 import { grifarConversa, listaDeTextos, rotuloPerfilCliente, rotuloPotencial, STATUS_CONVERSA, TIPO_CONVERSA, tomEspera, urgenciaAlta, type Tom } from '@/lib/visual';
 import { NOMES_ETAPA, type Etapa } from '@/lib/derivacoes';
 import { contestarAderencia } from '@/app/actions/gestao';
 import { bloquearContato } from '@/app/actions/conexao';
-import { desfazerDispensa, desfazerFechadoPresencial, dispensarConversa, marcarFechadoPresencial } from '@/app/actions/conversa';
+import { desfazerDispensa, desfazerFechadoPresencial, desfazerResolvida, dispensarConversa, marcarFechadoPresencial, marcarResolvida } from '@/app/actions/conversa';
+import { marcaDeDesfecho } from '@/lib/presencial';
 import { AvisoMarca } from '@/components/aviso-marca';
 import { carregarPlaybook } from '@/lib/mec-dados';
 import { Transcricao, textoDaMensagem, type Mensagem } from './transcricao';
@@ -54,7 +55,7 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
     const { id } = await params;
     const { supabase, perfil } = await contextoApp();
     const { data: conversa } = await supabase.from('conversas')
-        .select('id,cliente_nome,cliente_telefone,user_id,ultima_mensagem_em,dispensada_em,fechada_presencial_em,profiles!conversas_user_id_fkey(nome),dispensou:profiles!conversas_dispensada_por_fkey(nome),fechou:profiles!conversas_fechada_presencial_por_fkey(nome),mensagens(id,direcao,tipo,conteudo,transcricao,automatica,enviada_em)')
+        .select('id,cliente_nome,cliente_telefone,user_id,ultima_mensagem_em,dispensada_em,fechada_presencial_em,resolvida_em,profiles!conversas_user_id_fkey(nome),dispensou:profiles!conversas_dispensada_por_fkey(nome),fechou:profiles!conversas_fechada_presencial_por_fkey(nome),resolveu:profiles!conversas_resolvida_por_fkey(nome),mensagens(id,direcao,tipo,conteudo,transcricao,automatica,enviada_em)')
         .eq('id', id).eq('bloqueada', false).maybeSingle();
     // Bloqueada some para todo mundo, inclusive por link direto.
     if (!conversa) notFound();
@@ -102,6 +103,11 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
     const podeMarcar = conversa.user_id === perfil.id || perfil.role !== 'vendedor';
     const dispensadaEm = conversa.dispensada_em as string | null;
     const fechadaEm = conversa.fechada_presencial_em as string | null;
+    const resolvidaEm = conversa.resolvida_em as string | null;
+    // Suporte não vira venda: a marca dele é "Resolvido" (Silas, 14/10/2026).
+    const resolver = marcaDeDesfecho(analise?.tipo_conversa as string | null) === 'resolvida';
+    const voltouDepois = (marca: string | null) => voltouAEscrever(paraEspera, marca)
+        ? ' O cliente voltou a escrever depois da marca, e a conversa voltou para o “Esperando você”.' : '';
     const quem = (p: unknown) => {
         const nome = (p as { nome?: string } | null)?.nome;
         return nome ? ` por ${nome.split(' ')[0]}` : '';
@@ -118,10 +124,10 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                     titulo={<span className="flex items-center gap-3.5"><Avatar nome={conversa.cliente_nome} tamanho={48} />{nome}</span>}
                     sobre={[telefoneBonito(conversa.cliente_telefone), rotuloPerfilCliente(payload.perfil_cliente, payload.profissao_cliente), vendedor?.nome && `atendida por ${vendedor.nome}`, dataCurta(conversa.ultima_mensagem_em as string)].filter(Boolean).join(' · ')}
                     acoes={<>
-                        {podeMarcar && !fechadaEm && (
-                            <form action={marcarFechadoPresencial}>
+                        {podeMarcar && !fechadaEm && !resolvidaEm && (
+                            <form action={resolver ? marcarResolvida : marcarFechadoPresencial}>
                                 <input type="hidden" name="conversaId" value={conversa.id} />
-                                <Botao variante="secundario" type="submit">Fechado presencialmente</Botao>
+                                <Botao variante="secundario" type="submit">{resolver ? 'Resolvido' : 'Fechado presencialmente'}</Botao>
                             </form>
                         )}
                         {podeMarcar && !dispensadaEm && (
@@ -136,7 +142,13 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                 {fechadaEm && (
                     <AvisoMarca tom="bom" titulo={`Fechada presencialmente — marcada${quem(conversa.fechou)} em ${dataCurta(fechadaEm)}`}
                                 desfazer={podeMarcar ? { acao: desfazerFechadoPresencial, conversaId: conversa.id } : undefined}>
-                        Conta como venda feita no relatório do vendedor e aparece no filtro &ldquo;Fechada presencialmente&rdquo; das conversas.
+                        Conta como venda feita no relatório do vendedor e aparece no filtro &ldquo;Fechada presencialmente&rdquo; das conversas.{voltouDepois(fechadaEm)}
+                    </AvisoMarca>
+                )}
+                {resolvidaEm && (
+                    <AvisoMarca tom="bom" titulo={`Resolvida — marcada${quem(conversa.resolveu)} em ${dataCurta(resolvidaEm)}`}
+                                desfazer={podeMarcar ? { acao: desfazerResolvida, conversaId: conversa.id } : undefined}>
+                        Conta como atendimento encerrado, sem venda, e sai do &ldquo;Esperando você&rdquo; até o cliente escrever de novo.{voltouDepois(resolvidaEm)}
                     </AvisoMarca>
                 )}
                 {dispensadaEm && (

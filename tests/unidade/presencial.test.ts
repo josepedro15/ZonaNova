@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { comVendaPresencial, diaDaVendaPresencial, MARCA_PRESENCIAL, semVendaPresencial } from '../../lib/presencial.ts';
+import {
+    comResolvida, comVendaPresencial, diaDaVendaPresencial, MARCA_PRESENCIAL, MARCA_RESOLVIDA, marcaDeDesfecho, semResolvida, semVendaPresencial, ultimaMarca,
+} from '../../lib/presencial.ts';
 
 const daIa = { tipo_conversa: 'negociacao', status: 'em_andamento', payload: { resumo: 'pediu orçamento' } };
 
@@ -53,4 +55,42 @@ test('cliente que escreveu depois da última análise leva a venda para o dia de
 
 test('sem análise nem fala do cliente, conta hoje', () => {
     assert.equal(diaDaVendaPresencial(null, null, '2026-10-08'), '2026-10-08');
+});
+
+// --- "Resolvido": o pós-venda sem venda (Silas, 14/10) -----------------------
+
+const suporte = { tipo_conversa: 'suporte', status: 'em_andamento', payload: { resumo: 'entrega atrasou' } };
+
+test('resolver o suporte deixa a análise encerrada, sem venda', () => {
+    const marcada = comResolvida(suporte);
+    assert.equal(marcada.tipo_conversa, 'suporte');
+    assert.equal(marcada.status, 'encerrada');
+    assert.equal(marcada.payload[MARCA_RESOLVIDA], true);
+    assert.equal(marcada.payload.resumo, 'entrega atrasou');
+});
+
+test('resolver não apaga a venda que a IA viu no mesmo dia', () => {
+    assert.equal(comResolvida({ ...suporte, tipo_conversa: 'negociacao', status: 'venda_feita' }).status, 'venda_feita');
+});
+
+test('desfazer o resolvido devolve o que a IA disse, mesmo marcado duas vezes', () => {
+    assert.deepEqual(semResolvida(comResolvida(comResolvida(suporte))), suporte);
+});
+
+test('as duas marcas não se misturam', () => {
+    const presencial = comVendaPresencial(suporte);
+    assert.deepEqual(semResolvida(presencial), presencial);
+});
+
+test('suporte oferece Resolvido; o resto, Fechado presencialmente', () => {
+    assert.equal(marcaDeDesfecho('suporte'), 'resolvida');
+    assert.equal(marcaDeDesfecho('negociacao'), 'presencial');
+    assert.equal(marcaDeDesfecho('social'), 'presencial');
+    assert.equal(marcaDeDesfecho(null), 'presencial');
+});
+
+test('a marca mais recente é a que a tela mostra', () => {
+    assert.equal(ultimaMarca({}), null);
+    assert.deepEqual(ultimaMarca({ fechada_presencial_em: '2026-10-09T13:54:37Z' }), { rotulo: 'Fechada presencialmente', em: '2026-10-09T13:54:37Z' });
+    assert.equal(ultimaMarca({ fechada_presencial_em: '2026-10-09T13:54:37Z', resolvida_em: '2026-10-14T10:00:00Z' })?.rotulo, 'Resolvida');
 });

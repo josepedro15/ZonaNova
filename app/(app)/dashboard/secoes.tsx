@@ -8,7 +8,8 @@ import { comparaTempo, falaCurta, listaDeTextos, rotuloPerfilCliente, setaDoTom,
 import { ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
 import { esperaDoCliente, esperaEmTexto, linkResponder, type Aparelho, telefoneBonito, type Msg } from '@/lib/painel';
 import { DIAS_PARA_RETOMAR, type ItemRetomar } from '@/lib/retomar';
-import { marcarFechadoPresencial } from '@/app/actions/conversa';
+import { marcarFechadoPresencial, marcarResolvida } from '@/app/actions/conversa';
+import { marcaDeDesfecho, ultimaMarca } from '@/lib/presencial';
 import { dataCurtaBrasilia, horaBrasilia } from './formato';
 
 export type ConversaComMensagens = {
@@ -16,13 +17,14 @@ export type ConversaComMensagens = {
     cliente_nome: string | null;
     cliente_telefone: string;
     ultima_mensagem_em: string;
-    // Marcas da conversa (0027): tiram da fila "Esperando você".
+    // Marcas da conversa (0027, 0032): tiram da fila "Esperando você".
     dispensada_em?: string | null;
     fechada_presencial_em?: string | null;
+    resolvida_em?: string | null;
     mensagens: (Msg & { tipo: string; conteudo: string | null })[];
     // Só as análises da própria conversa; a mais recente dá urgência e
     // potencial, e o status dela pode tirar a conversa da fila.
-    analises_conversa?: { data_ref: string; urgencia: number | null; potencial_venda: string | null; status: string | null; updated_at: string }[];
+    analises_conversa?: { data_ref: string; tipo_conversa?: string | null; urgencia: number | null; potencial_venda: string | null; status: string | null; updated_at: string }[];
 };
 
 export type RelatorioDiario = {
@@ -104,6 +106,9 @@ function ItemEspera({ conversa, espera, aparelho }: { conversa: ConversaComMensa
     const analise = [...(conversa.analises_conversa ?? [])].sort((a, b) => b.data_ref.localeCompare(a.data_ref))[0];
     const urgente = urgenciaAlta(analise?.urgencia);
     const potencialAlto = analise?.potencial_venda === 'alto';
+    // Está na fila com marca: o cliente escreveu depois dela.
+    const marcaAntiga = ultimaMarca(conversa);
+    const resolver = marcaDeDesfecho(analise?.tipo_conversa) === 'resolvida';
     return (
         <li className="flex items-center gap-2 border-t border-linha-2">
             <a {...destino} className="flex min-h-11 min-w-0 grow items-center gap-3.5 py-3 text-tinta">
@@ -115,6 +120,7 @@ function ItemEspera({ conversa, espera, aparelho }: { conversa: ConversaComMensa
                         {potencialAlto && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${SELO.azul}`}>Potencial alto</span>}
                     </span>
                     <span className="truncate text-[13px] text-tinta-3">{ultimaFalaDoCliente(conversa)}</span>
+                    {marcaAntiga && <span className="truncate text-[12px] text-tinta-3">{marcaAntiga.rotulo} em {dataCurtaBrasilia(marcaAntiga.em)} · voltou a escrever</span>}
                 </span>
                 <TempoEspera ms={espera} />
                 <span className="hidden items-center gap-1.5 rounded-ctl border border-linha px-3 py-2 text-[12.5px] font-semibold text-azul sm:inline-flex">
@@ -122,13 +128,15 @@ function ItemEspera({ conversa, espera, aparelho }: { conversa: ConversaComMensa
                 </span>
             </a>
             {/* Fora do link: formulário dentro de <a> não é HTML válido. Nos Pisos a
-                venda fecha na loja e o cliente não volta a escrever (piloto, 08/10). */}
-            <form action={marcarFechadoPresencial} className="shrink-0">
+                venda fecha na loja e o cliente não volta a escrever (piloto, 08/10);
+                o suporte não é venda e tem o "Resolvido" (Silas, 14/10). */}
+            <form action={resolver ? marcarResolvida : marcarFechadoPresencial} className="shrink-0">
                 <input type="hidden" name="conversaId" value={conversa.id} />
                 <input type="hidden" name="voltar" value="dashboard" />
-                <button type="submit" title="Fechado presencialmente" aria-label={`${nomeDaConversa(conversa)}: fechado presencialmente`}
+                <button type="submit" title={resolver ? 'Resolvido' : 'Fechado presencialmente'}
+                        aria-label={`${nomeDaConversa(conversa)}: ${resolver ? 'resolvido' : 'fechado presencialmente'}`}
                         className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-ctl border border-linha px-2.5 text-[12.5px] font-semibold text-bom-texto hover:bg-superficie-2">
-                    <Icone nome="check" tamanho={14} />{/* Na coluna estreita do xl só o ícone; o título e o aria-label dizem o resto. */}<span className="hidden sm:inline xl:hidden 2xl:inline">Fechou presencial</span>
+                    <Icone nome="check" tamanho={14} />{/* Na coluna estreita do xl só o ícone; o título e o aria-label dizem o resto. */}<span className="hidden sm:inline xl:hidden 2xl:inline">{resolver ? 'Resolvido' : 'Fechou presencial'}</span>
                 </button>
             </form>
         </li>

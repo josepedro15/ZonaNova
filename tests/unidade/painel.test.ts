@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, concluidaPelaAnalise, temposDeResposta, respostasPorBloco, msDeExpediente, TOLERANCIA_BLOCO_ABERTO_MS, ehSoConfirmacao, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, voltouAEscrever, concluidaPelaAnalise, temposDeResposta, respostasPorBloco, msDeExpediente, TOLERANCIA_BLOCO_ABERTO_MS, ehSoConfirmacao, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -93,6 +93,14 @@ test('sem marca nenhuma, nada sai da fila', () => {
 
 test('basta uma das marcas ser posterior', () => {
     assert.equal(marcadaDepoisDoCliente([cliente('14:00')], em('13:00'), em('14:30')), true);
+});
+
+// Taís Gomes, 14/10: fechada presencialmente em 09/10, pediu outra lâmpada em
+// 13/10 e voltou para a fila — a tela tem que dizer que ela voltou.
+test('cliente que escreveu depois da marca voltou a escrever', () => {
+    assert.equal(voltouAEscrever([cliente('14:00'), cliente('16:00')], em('15:00')), true);
+    assert.equal(voltouAEscrever([cliente('14:00')], em('15:00')), false);
+    assert.equal(voltouAEscrever([cliente('14:00')], null), false);
 });
 
 // O banco devolve "+00:00" e milissegundos; o servidor grava com "Z".

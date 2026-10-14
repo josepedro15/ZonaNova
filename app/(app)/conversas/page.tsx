@@ -2,7 +2,8 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import AppShell from '@/components/app-shell';
 import { contextoApp, horaCurta } from '@/lib/contexto-app';
-import { telefoneBonito } from '@/lib/painel';
+import { telefoneBonito, voltouAEscrever, type Msg } from '@/lib/painel';
+import { ultimaMarca } from '@/lib/presencial';
 import { FECHADA_PRESENCIAL, NAO_ANALISADA, passaNoFiltro, STATUS_CONVERSA, TIPO_CONVERSA } from '@/lib/visual';
 
 /** A lista mostra no máximo isto, das mais recentes que batem com a busca e os filtros. */
@@ -27,7 +28,7 @@ export default async function ConversasPage({ searchParams }: { searchParams: Pr
     const naoAnalisada = filtro.status === NAO_ANALISADA;
     const embed = naoAnalisada ? ',analises_conversa(id)' : daAnalise.tipo || daAnalise.status ? ',analises_conversa!inner(id)' : '';
     let consulta = supabase.from('conversas')
-        .select(`id,user_id,cliente_nome,cliente_telefone,ultima_mensagem_em,total_mensagens,dispensada_em,fechada_presencial_em,profiles!conversas_user_id_fkey(nome)${embed}` as string)
+        .select(`id,user_id,cliente_nome,cliente_telefone,ultima_mensagem_em,total_mensagens,dispensada_em,fechada_presencial_em,resolvida_em,profiles!conversas_user_id_fkey(nome)${embed}` as string)
         .eq('bloqueada', false)
         .order('ultima_mensagem_em', { ascending: false }).limit(JANELA);
     if (naoAnalisada) consulta = consulta.is('analises_conversa', null);
@@ -48,7 +49,7 @@ export default async function ConversasPage({ searchParams }: { searchParams: Pr
     const { data: conversas } = await consulta.returns<{
         id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string;
         ultima_mensagem_em: string; total_mensagens: number; profiles: { nome: string } | null;
-        dispensada_em: string | null; fechada_presencial_em: string | null;
+        dispensada_em: string | null; fechada_presencial_em: string | null; resolvida_em: string | null;
     }[]>();
     const ids = (conversas ?? []).map((c) => c.id as string);
     const { data: analises } = ids.length ? await supabase.from('analises_conversa')
@@ -57,6 +58,19 @@ export default async function ConversasPage({ searchParams }: { searchParams: Pr
     const ultima = new Map<string, Record<string, unknown>>();
     for (const a of analises ?? []) if (!ultima.has(a.conversa_id as string)) ultima.set(a.conversa_id as string, a as Record<string, unknown>);
     const filtradas = (conversas ?? []).filter((c) => passaNoFiltro(ultima.get(c.id as string), daAnalise));
+    // Marcada e o cliente escreveu depois: a conversa voltou para a fila, e a
+    // lista diz, senão "Fechada presencialmente" esperando resposta parecia
+    // erro (Silas, 14/10/2026). Só as falas do cliente depois da marca mais antiga.
+    const marcadas = filtradas.flatMap((c) => { const m = ultimaMarca(c); return m ? [{ id: c.id, em: m.em }] : []; });
+    const { data: falasDepois } = marcadas.length ? await supabase.from('mensagens')
+        .select('conversa_id,direcao,automatica,enviada_em').in('conversa_id', marcadas.map((m) => m.id)).eq('direcao', 'entrada')
+        .gt('enviada_em', marcadas.map((m) => m.em).sort()[0]).returns<(Msg & { conversa_id: string })[]>() : { data: [] };
+    const voltou = new Set(marcadas.filter((m) => voltouAEscrever((falasDepois ?? []).filter((f) => f.conversa_id === m.id), m.em)).map((m) => m.id));
+    const situacao = (c: (typeof filtradas)[number], a: Record<string, unknown> | undefined) => {
+        const marca = ultimaMarca(c);
+        if (marca) return voltou.has(c.id) ? `${marca.rotulo} · voltou a escrever` : marca.rotulo;
+        return c.dispensada_em ? 'Não é atendimento' : STATUS_CONVERSA[a?.status as string]?.rotulo ?? '—';
+    };
     // Bateu no corte: há mais conversas que estas, e a tela diz.
     const cortou = (conversas ?? []).length === JANELA;
     const campo = 'min-h-11 rounded-[10px] border border-linha-campo bg-superficie px-3 text-sm';
@@ -75,7 +89,7 @@ export default async function ConversasPage({ searchParams }: { searchParams: Pr
                     {filtradas.map((c) => { const a = ultima.get(c.id as string); const vendedor = c.profiles as unknown as { nome: string } | null; return (
                         <Link key={c.id as string} href={`/conversas/${c.id}` as Route} className="grid gap-2 border-b border-linha px-4 py-4 last:border-0 hover:bg-papel-2 sm:grid-cols-[minmax(0,1fr)_120px_120px_70px] sm:items-center">
                             <div className="min-w-0"><p className="text-sm font-semibold">{c.cliente_nome || telefoneBonito(c.cliente_telefone as string)}</p><p className="mt-0.5 text-[11.5px] text-tinta-3">{vendedor?.nome && perfil.role !== 'vendedor' ? `${vendedor.nome} · ` : ''}{c.total_mensagens} mensagens</p>{typeof (a?.payload as { destaque?: unknown } | undefined)?.destaque === 'string' && <p className="mt-1 truncate text-xs text-tinta-2">{(a!.payload as { destaque: string }).destaque}</p>}</div>
-                            <span className="text-xs text-tinta-2">{a ? TIPO_CONVERSA[a.tipo_conversa as string] ?? '—' : 'Não analisada'}</span><span className="text-xs text-tinta-2">{c.fechada_presencial_em ? 'Fechada presencialmente' : c.dispensada_em ? 'Não é atendimento' : STATUS_CONVERSA[a?.status as string]?.rotulo ?? '—'}</span><div className="text-right"><span className="display text-lg font-semibold">{a?.score_atendimento == null ? '—' : String(a.score_atendimento)}</span><p className="text-[10px] text-tinta-3">{horaCurta(c.ultima_mensagem_em as string)}</p></div>
+                            <span className="text-xs text-tinta-2">{a ? TIPO_CONVERSA[a.tipo_conversa as string] ?? '—' : 'Não analisada'}</span><span className="text-xs text-tinta-2">{situacao(c, a)}</span><div className="text-right"><span className="display text-lg font-semibold">{a?.score_atendimento == null ? '—' : String(a.score_atendimento)}</span><p className="text-[10px] text-tinta-3">{horaCurta(c.ultima_mensagem_em as string)}</p></div>
                         </Link>
                     ); })}
                     {!filtradas.length && <p className="p-8 text-center text-sm text-tinta-3">Nenhuma conversa encontrada.</p>}

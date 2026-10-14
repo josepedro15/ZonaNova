@@ -8,7 +8,7 @@ import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTr
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao } from '@/lib/mec';
 import { doutrinaMec } from '@/lib/pedido-analise';
 import { cadastrosNaRede, DESCARTADA, naturezaSuspeita, sinalDoContato } from '@/lib/natureza';
-import { comVendaPresencial } from '@/lib/presencial';
+import { comResolvida, comVendaPresencial } from '@/lib/presencial';
 import { semAtividadeDeSaida } from '@/lib/consolidacao';
 import { paginar } from '@/lib/paginar';
 import { capturaDoDia, type Buraco } from '@/lib/captura';
@@ -383,8 +383,8 @@ async function gravarObservacoes(
  */
 async function analisarItem(supabase: Admin, conversaId: string, dataRef: string): Promise<boolean> {
     const { inicio, fim } = janelaDoDia(dataRef);
-    const { data: conversa } = await supabase.from('conversas').select('id,user_id,unidade_id,dispensada_em,fechada_presencial_ref,cliente_telefone,cliente_nome')
-        .eq('id', conversaId).maybeSingle<{ id: string; user_id: string; unidade_id: string; dispensada_em: string | null; fechada_presencial_ref: string | null; cliente_telefone: string; cliente_nome: string | null }>();
+    const { data: conversa } = await supabase.from('conversas').select('id,user_id,unidade_id,dispensada_em,fechada_presencial_ref,resolvida_ref,cliente_telefone,cliente_nome')
+        .eq('id', conversaId).maybeSingle<{ id: string; user_id: string; unidade_id: string; dispensada_em: string | null; fechada_presencial_ref: string | null; resolvida_ref: string | null; cliente_telefone: string; cliente_nome: string | null }>();
     if (!conversa) throw new IgnorarItem('conversa não existe mais');
     // "Não é atendimento" (0027): a marca some sozinha quando o cliente escreve
     // de novo, e aí a conversa volta a ser analisada.
@@ -464,11 +464,13 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
         .eq('conversa_id', conversaId).eq(`payload->>${DESCARTADA}`, 'true').limit(1);
     if (erroDescartada) throw erroDescartada;
     const comDescarte = descartada?.length ? { ...resultado, [DESCARTADA]: true } : resultado;
-    // Venda fechada na loja (lib/presencial.ts): a análise nova do dia marcado
-    // continua contando como venda, e guarda o que a IA disse agora.
-    const marca = conversa.fechada_presencial_ref === dataRef
-        ? comVendaPresencial({ tipo_conversa: resultado.tipo_conversa, status: resultado.status, payload: comDescarte })
-        : { tipo_conversa: resultado.tipo_conversa, status: resultado.status, payload: comDescarte };
+    // Venda fechada na loja e pós-venda resolvido (lib/presencial.ts): a
+    // análise nova do dia marcado continua com a marca, e guarda o que a IA
+    // disse agora.
+    const daIa = { tipo_conversa: resultado.tipo_conversa, status: resultado.status, payload: comDescarte };
+    const marca = conversa.fechada_presencial_ref === dataRef ? comVendaPresencial(daIa)
+        : conversa.resolvida_ref === dataRef ? comResolvida(daIa)
+        : daIa;
     const payload = marca.payload;
     const { error: erroAnalise } = await supabase.from('analises_conversa').upsert({
         conversa_id: conversaId, user_id: conversa.user_id, unidade_id: unidadeId, data_ref: dataRef,

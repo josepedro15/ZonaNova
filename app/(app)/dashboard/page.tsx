@@ -3,7 +3,7 @@ import { cookies, headers } from 'next/headers';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { CabecalhoPagina, EstadoVazio, Icone, Pagina, RotuloSecao, Selo, Shell, type DiaSerie } from '@/components/ui';
 import { aparelhoDe, concluidaPelaAnalise, COOKIE_WHATSAPP_APP, desde, diasAte, esperaNaLista, marcadaDepoisDoCliente, primeiroNome, respostaMediaEmMinutos, respostasPorBloco, telefoneBonito, temposDeResposta } from '@/lib/painel';
-import { desfazerDispensa, desfazerFechadoPresencial } from '@/app/actions/conversa';
+import { desfazerDispensa, desfazerFechadoPresencial, desfazerResolvida } from '@/app/actions/conversa';
 import { AvisoMarca } from '@/components/aviso-marca';
 import { dataEmSaoPaulo } from '@/lib/analise';
 import { media } from '@/lib/visual';
@@ -39,7 +39,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         supabase.from('vw_conexoes_status').select('status, numero, ultimo_evento_em').eq('user_id', user!.id)
             .maybeSingle<{ status: string; numero: string | null; ultimo_evento_em: string | null }>(),
         supabase.from('conversas')
-            .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, dispensada_em, fechada_presencial_em, mensagens(direcao, automatica, enviada_em, tipo, conteudo), analises_conversa(data_ref, urgencia, potencial_venda, status, updated_at)')
+            .select('id, cliente_nome, cliente_telefone, ultima_mensagem_em, dispensada_em, fechada_presencial_em, resolvida_em, mensagens(direcao, automatica, enviada_em, tipo, conteudo), analises_conversa(data_ref, tipo_conversa, urgencia, potencial_venda, status, updated_at)')
             .gte('ultima_mensagem_em', janela.toISOString()).eq('bloqueada', false)
             .order('ultima_mensagem_em', { ascending: false }).returns<ConversaComMensagens[]>(),
         supabase.from('relatorios_diarios')
@@ -61,11 +61,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
     const todas = conversas ?? [];
     const deHoje = todas.filter((c) => new Date(c.ultima_mensagem_em) >= comeco);
-    // "Não é atendimento" e "Fechado presencialmente" tiram da fila até o
-    // cliente escrever de novo (app/actions/conversa.ts); a análise que deu o
-    // atendimento por terminado depois da última fala dele também.
+    // "Não é atendimento", "Fechado presencialmente" e "Resolvido" tiram da
+    // fila até o cliente escrever de novo (app/actions/conversa.ts); a análise
+    // que deu o atendimento por terminado depois da última fala dele também.
     const esperando = todas
-        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em) && !concluidaPelaAnalise(c.mensagens, c.analises_conversa))
+        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em, c.resolvida_em) && !concluidaPelaAnalise(c.mensagens, c.analises_conversa))
         .map((c) => ({ conversa: c, espera: esperaNaLista(c.mensagens, agora) }))
         .filter((e): e is { conversa: ConversaComMensagens; espera: number } => e.espera !== null)
         .sort((a, b) => b.espera - a.espera);
@@ -109,7 +109,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     const respostaOntem = porDia.get(ontem)?.tempo_medio_resposta_s;
     const coaching = (relatorio?.payload ?? {}) as Coaching;
     // O aviso só fala de conversa que está na lista desta pessoa (RLS).
-    const doAviso = (aviso === 'presencial' || aviso === 'dispensada') ? todas.find((c) => c.id === conversaDoAviso) : undefined;
+    const doAviso = (aviso === 'presencial' || aviso === 'dispensada' || aviso === 'resolvida') ? todas.find((c) => c.id === conversaDoAviso) : undefined;
     const nomeDoAviso = doAviso ? doAviso.cliente_nome ?? telefoneBonito(doAviso.cliente_telefone) : '';
     const temTreino = temConteudoDeTreino(coaching);
 
@@ -129,6 +129,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     <AvisoMarca tom="bom" titulo={`${nomeDoAviso}: fechada presencialmente`}
                                 desfazer={{ acao: desfazerFechadoPresencial, conversaId: doAviso.id, voltar: 'dashboard' }}>
                         Conta como venda feita no seu relatório e saiu do &ldquo;Esperando você&rdquo;.
+                    </AvisoMarca>
+                )}
+                {doAviso && aviso === 'resolvida' && (
+                    <AvisoMarca tom="bom" titulo={`${nomeDoAviso}: resolvida`}
+                                desfazer={{ acao: desfazerResolvida, conversaId: doAviso.id, voltar: 'dashboard' }}>
+                        Saiu do &ldquo;Esperando você&rdquo; e conta como atendimento encerrado, sem venda. Se o cliente escrever de novo, ela volta.
                     </AvisoMarca>
                 )}
                 {doAviso && aviso === 'dispensada' && (

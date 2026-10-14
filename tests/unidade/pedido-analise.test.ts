@@ -24,6 +24,14 @@ test('as regras cobrem os erros da auditoria de 07/10', () => {
     assert.match(instrucoes(), /Áudio transcrito numa linha V: é fala do vendedor/);
 });
 
+// Silas, 14/10: atraso de entrega com nova data aceita pelo cliente ficava
+// em andamento, e a vendedora fechava "presencialmente" para tirar da fila.
+test('pós-venda com solução aceita é encerrada, não venda', () => {
+    assert.match(REGRA_STATUS, /nova data e o cliente aceita ou agradece, mesmo que a entrega ainda vá acontecer/);
+    assert.match(REGRA_STATUS, /= encerrada, não em_andamento nem venda_feita/);
+    assert.match(REGRA_STATUS, /Pós-venda nunca é venda_feita/);
+});
+
 test('a resposta sai conferida contra a conversa (ajustarResultado)', () => {
     const { schema } = pedidoAnalise({ transcript: 'C: "separa no nome"\nV: "Já está no pacote"', doutrina: 'MEC', itens: null, modelo: 'gpt-4.1-mini' });
     const resposta = {

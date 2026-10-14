@@ -91,6 +91,15 @@ export function marcadaDepoisDoCliente(msgs: Msg[], ...marcas: (string | null | 
     return marcas.some((marca) => !!marca && Date.parse(marca) >= fala);
 }
 
+/**
+ * O cliente escreveu depois da marca? A conversa volta para a fila, e a tela
+ * precisa dizer por quê: com o selo antigo sozinho, "fechada" esperando
+ * resposta parecia erro (Silas, 14/10/2026).
+ */
+export function voltouAEscrever(msgs: Msg[], marca: string | null | undefined): boolean {
+    return !!marca && !marcadaDepoisDoCliente(msgs, marca);
+}
+
 /** Status da análise que dão o atendimento por terminado: venda feita, resolvido sem compra ou perdido. */
 export const STATUS_CONCLUIDO: readonly string[] = ['venda_feita', 'encerrada', 'perdida'];
 

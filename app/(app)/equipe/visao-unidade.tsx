@@ -3,9 +3,10 @@ import type { Route } from 'next';
 import {
     Alerta, Avatar, Barra, CabecalhoPagina, Cartao, Comparacao, Kpi, Pagina, Selo, Tabela, TempoEspera, TEXTO,
 } from '@/components/ui';
-import { dataHoje, type contextoApp } from '@/lib/contexto-app';
+import { dataCurta, dataHoje, type contextoApp } from '@/lib/contexto-app';
 import { paginar } from '@/lib/paginar';
 import { concluidaPelaAnalise, esperaNaLista, juntarPorDia, marcadaDepoisDoCliente, telefoneBonito, type AnaliseDaFila, type LinhaDia, type Msg } from '@/lib/painel';
+import { ultimaMarca } from '@/lib/presencial';
 import { comQuemFalar, contarObjecoes, diaMenos, diasDeVenda, variacaoSemanal, type NotaDia } from '@/lib/derivacoes';
 import { falaCurta, setaDoTom, tomDelta, tomFaixa, tomResposta } from '@/lib/visual';
 import { contarObjecoesPorCodigo, juntarObjecoes } from '@/lib/mec';
@@ -15,7 +16,7 @@ import { ObjecoesDaSemana } from './objecoes-da-semana';
 import { horaBrasilia, dataCurtaBrasilia, inicioDoDia } from '../dashboard/formato';
 
 type Supabase = Awaited<ReturnType<typeof contextoApp>>['supabase'];
-type Espera = { id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string; espera: number };
+type Espera = { id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string; espera: number; marca: { rotulo: string; em: string } | null };
 type Diario = NotaDia & { user_id: string; leads_atendidos: number; conversoes_confirmadas: number; tempo_medio_resposta_s: number | null; captura_incompleta: boolean | null };
 type ConexaoDaEquipe = { user_id: string; status: string; ultimo_evento_em: string | null; silencio_desde: string | null };
 
@@ -91,7 +92,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     // última fala vem depois, só de quem está esperando.
     // Acima de 500 conversas ativas na semana, a fila fica aproximada (só as
     // 500 mais recentes entram na conta).
-    let qConversas = supabase.from('conversas').select('id,user_id,cliente_nome,cliente_telefone,dispensada_em,fechada_presencial_em,mensagens(direcao,automatica,enviada_em,tipo,conteudo),analises_conversa(data_ref,status,updated_at)')
+    let qConversas = supabase.from('conversas').select('id,user_id,cliente_nome,cliente_telefone,dispensada_em,fechada_presencial_em,resolvida_em,mensagens(direcao,automatica,enviada_em,tipo,conteudo),analises_conversa(data_ref,status,updated_at)')
         .gte('ultima_mensagem_em', janela).gte('mensagens.enviada_em', janela).eq('bloqueada', false)
         .order('ultima_mensagem_em', { ascending: false }).limit(500);
     if (unidadeIds) {
@@ -132,7 +133,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
         supabase.from('relatorios_rede').select('data_ref,score_geral').order('data_ref', { ascending: false }).limit(1).maybeSingle<{ data_ref: string; score_geral: number | null }>(),
         qAderencia.returns<{ user_id: string; data_ref: string; por_etapa: Record<string, number | null> | null }[]>(),
         paginar<{ conversa_id: string; data_ref: string; user_id: string; tipo_conversa: string | null; payload: unknown }>(qAnalises),
-        qConversas.returns<{ id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string; dispensada_em: string | null; fechada_presencial_em: string | null; mensagens: Msg[]; analises_conversa: AnaliseDaFila[] }[]>(),
+        qConversas.returns<{ id: string; user_id: string; cliente_nome: string | null; cliente_telefone: string; dispensada_em: string | null; fechada_presencial_em: string | null; resolvida_em: string | null; mensagens: Msg[]; analises_conversa: AnaliseDaFila[] }[]>(),
         paginar<{ conversa_id: string; data_ref: string; item_chave: string | null }>(qObjecoes),
         carregarPlaybook(supabase, null),
         qVendedores.returns<{ id: string }[]>(),
@@ -161,8 +162,9 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     // A mesma regra da lista "Esperando você": o alerta e a fila contam as
     // conversas que os vendedores veem lá, nem uma a mais.
     const esperando: Espera[] = (conversas ?? [])
-        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em) && !concluidaPelaAnalise(c.mensagens, c.analises_conversa))
-        .map((c) => ({ id: c.id, user_id: c.user_id, cliente_nome: c.cliente_nome, cliente_telefone: c.cliente_telefone, espera: esperaNaLista(c.mensagens, agora) }))
+        .filter((c) => !marcadaDepoisDoCliente(c.mensagens, c.dispensada_em, c.fechada_presencial_em, c.resolvida_em) && !concluidaPelaAnalise(c.mensagens, c.analises_conversa))
+        // Marca de quem está na fila: o cliente escreveu depois dela.
+        .map((c) => ({ id: c.id, user_id: c.user_id, cliente_nome: c.cliente_nome, cliente_telefone: c.cliente_telefone, espera: esperaNaLista(c.mensagens, agora), marca: ultimaMarca(c) }))
         .filter((e): e is Espera => e.espera !== null)
         .sort((a, b) => b.espera - a.espera);
     const esperas = esperando.map((e) => e.espera);
@@ -277,11 +279,13 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                                 const cliente = e.cliente_nome ?? telefoneBonito(e.cliente_telefone);
                                 const vendedor = nomeDoVendedor.get(e.user_id) ?? '—';
                                 const fala = ultimaFala.get(e.id) ?? '';
+                                const voltou = e.marca ? `${e.marca.rotulo} em ${dataCurta(e.marca.em)} · voltou a escrever` : null;
                                 return {
                                     chave: e.id,
                                     href: `/conversas/${e.id}`,
                                     celulas: [
-                                        <span key="c" className="flex min-w-0 items-center gap-2.5"><Avatar nome={e.cliente_nome} tamanho={32} /><span className="truncate font-semibold">{cliente}</span></span>,
+                                        <span key="c" className="flex min-w-0 items-center gap-2.5"><Avatar nome={e.cliente_nome} tamanho={32} /><span className="flex min-w-0 flex-col"><span className="truncate font-semibold">{cliente}</span>
+                                            {voltou && <span className="truncate text-xs text-tinta-3">{voltou}</span>}</span></span>,
                                         <span key="v" className="flex min-w-0 flex-col"><span className="truncate">{vendedor}</span>
                                             {multiplas && <span className="truncate text-xs text-tinta-3">{lojaDoVendedor.get(e.user_id) ?? '—'}</span>}</span>,
                                         <span key="t"><TempoEspera ms={e.espera} /></span>,
@@ -293,6 +297,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
                                             <span className="flex min-w-0 grow flex-col">
                                                 <span className="truncate text-sm font-semibold">{cliente}</span>
                                                 <span className="truncate text-xs text-tinta-3">{vendedor}{fala && ` · ${fala}`}</span>
+                                                {voltou && <span className="truncate text-xs text-tinta-3">{voltou}</span>}
                                             </span>
                                             <TempoEspera ms={e.espera} />
                                         </span>
