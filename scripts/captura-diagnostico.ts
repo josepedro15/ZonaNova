@@ -11,7 +11,9 @@
  *                   Para mensagem que sumiu sem buraco (o PDF do Rafael ao Xexéu,
  *                   08/10): a varredura geral para na primeira página com âncora e
  *                   não chega a dias atrás. `--chat todos` varre a instância inteira,
- *                   para achar mensagem que a UAZAPI guardou noutro chat.
+ *                   para achar mensagem que a UAZAPI guardou noutro chat. A coluna
+ *                   "webhook" diz o que a ingestão fez de cada uma (0033): "não
+ *                   chegou" = a UAZAPI tem e o webhook nunca entregou.
  *
  * Caso de origem: Vitor, de 07/10/2026 10:56 até 08/10 07:35
  *   --desde 2026-10-07T10:56:00-03:00 --ate 2026-10-08T07:35:00-03:00
@@ -91,13 +93,17 @@ if (chat) {
         .in('wa_message_id', janela.map((m) => (m.id ?? m.messageid) as string).filter(Boolean));
     if (erroGravadas) { console.error(erroGravadas.message); process.exit(1); }
     const tipoGravado = new Map((gravadas ?? []).map((g) => [g.wa_message_id as string, g.tipo as string]));
+    // O que o webhook fez de cada uma (0033). Sem a tabela, "?": não prova nada.
+    const { data: registro, error: erroRegistro } = await db.from('webhook_registro').select('wa_message_id,destino,motivo')
+        .in('wa_message_id', janela.map((m) => (m.id ?? m.messageid) as string).filter(Boolean));
+    const doWebhook = new Map((registro ?? []).map((r) => [r.wa_message_id as string, r.motivo ? `${r.destino} (${r.motivo})` : r.destino as string]));
     console.log(`== chat ${chat}: ${doChat.length} mensagens lidas na UAZAPI, ${janela.length} no intervalo`);
     for (const m of janela) {
         const id = (m.id ?? m.messageid) as string;
         const n = normalizarMensagem({ message: m });
         const ingestao = 'descartar' in n ? `descarta: ${n.motivo}` : n.tipo;
         const hora = new Date(paraMs(m)).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        console.log(`${hora}  ${m.fromMe ? 'saída  ' : 'entrada'}  ${String(m.messageType ?? m.type ?? '-').padEnd(26)}  banco: ${tipoGravado.get(id) ?? 'FALTA'}  ingestão: ${ingestao}${todos ? `  ${m.chatid ?? m.sender ?? '-'}` : ''}${m.fileName ? `  ${m.fileName}` : ''}`);
+        console.log(`${hora}  ${m.fromMe ? 'saída  ' : 'entrada'}  ${String(m.messageType ?? m.type ?? '-').padEnd(26)}  banco: ${tipoGravado.get(id) ?? 'FALTA'}  webhook: ${erroRegistro ? '?' : doWebhook.get(id) ?? 'não chegou'}  ingestão: ${ingestao}${todos ? `  ${m.chatid ?? m.sender ?? '-'}` : ''}${m.fileName ? `  ${m.fileName}` : ''}`);
     }
     process.exit(0);
 }

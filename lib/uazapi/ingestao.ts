@@ -5,6 +5,7 @@ import { contatosConhecidos, nomesDoContato } from '@/lib/exclusao';
 import { valeTranscrever } from '@/lib/transcricao';
 import { valeDescrever } from '@/lib/midia';
 import { mensagensDoEvento, normalizarMensagem, statusDeConexao, type ChatUazapi, type EventoUazapi, type MensagemUazapi } from '@/lib/uazapi/normalizar';
+import { linhaDoRegistro, type DestinoWebhook } from '@/lib/uazapi/registro';
 
 /**
  * O trabalho do webhook depois de autenticado (doc 3 §3.2). Fica fora da rota
@@ -38,10 +39,21 @@ export async function processar(evento: EventoUazapi, conexao: Conexao) {
     // Falha de leitura não é "dono inativo": lançar mantém a entrada em
     // webhook_entrada para o worker tentar de novo, em vez de apagar mensagens.
     if (erroDono) throw erroDono;
-    if (dono?.status !== 'ativo') return;
+    if (dono?.status !== 'ativo') {
+        for (const mensagem of mensagens) await registrar(conexao, evento, mensagem, 'dono_inativo');
+        return;
+    }
 
     // O chat que acompanha a mensagem ao vivo pode trazer o telefone de um chat @lid.
-    for (const mensagem of mensagens) await processarMensagem(mensagem, evento.message ? evento.chat ?? null : null, conexao);
+    for (const mensagem of mensagens) {
+        try {
+            const { destino, motivo } = await processarMensagem(mensagem, evento.message ? evento.chat ?? null : null, conexao);
+            await registrar(conexao, evento, mensagem, destino, motivo);
+        } catch (e) {
+            await registrar(conexao, evento, mensagem, 'erro', String(e));
+            throw e;
+        }
+    }
     if (evento.EventType?.toLowerCase() === 'history') {
         await supabase.from('conexoes_whatsapp').update({
             historico_status: 'recebido', historico_ultimo_em: new Date().toISOString(), updated_at: new Date().toISOString(),
@@ -49,10 +61,25 @@ export async function processar(evento: EventoUazapi, conexao: Conexao) {
     }
 }
 
-async function processarMensagem(mensagem: MensagemUazapi, chat: ChatUazapi | null, conexao: Conexao) {
+/**
+ * O rastro de cada mensagem que passou pelo webhook (lib/uazapi/registro.ts).
+ * Nunca derruba a ingestão: sem a tabela (0033 não aplicada) ou com erro, a
+ * mensagem segue sem rastro, como antes.
+ */
+async function registrar(conexao: Conexao, evento: EventoUazapi, mensagem: MensagemUazapi, destino: DestinoWebhook, motivo?: string | null) {
+    try {
+        const { error } = await criarClienteAdmin().from('webhook_registro')
+            .insert(linhaDoRegistro(conexao.id, evento.EventType ?? evento.event, mensagem, destino, motivo));
+        if (error && !TABELA_AUSENTE.has(error.code)) console.error(`webhook_registro ${conexao.id}:`, error.message);
+    } catch (e) {
+        console.error(`webhook_registro ${conexao.id}:`, e);
+    }
+}
+
+async function processarMensagem(mensagem: MensagemUazapi, chat: ChatUazapi | null, conexao: Conexao): Promise<{ destino: DestinoWebhook; motivo?: string }> {
     const supabase = criarClienteAdmin();
     const m = normalizarMensagem({ message: mensagem, chat });
-    if ('descartar' in m) return;
+    if ('descartar' in m) return { destino: 'descartada', motivo: m.motivo };
 
     // Contato fora da análise não é guardado: barrar aqui e não na análise
     // evita guardar o que pediram para não ser guardado. Três listas, a mesma
@@ -74,7 +101,9 @@ async function processarMensagem(mensagem: MensagemUazapi, chat: ChatUazapi | nu
     // Falha de leitura não é "pode guardar": lançar mantém a entrada em
     // webhook_entrada para o worker tentar de novo.
     for (const r of [pessoal, interno, colega]) if (r.error) throw r.error;
-    if (pessoal.data?.length || interno.data?.length || colega.data?.length) return;
+    if (pessoal.data?.length || interno.data?.length || colega.data?.length) {
+        return { destino: 'fora_da_analise', motivo: pessoal.data?.length ? 'bloqueado' : interno.data?.length ? 'interno' : 'colega' };
+    }
 
     // A conversa pertence à unidade VIGENTE do vendedor, a da conexão: se ele
     // é transferido, a próxima mensagem de um cliente antigo leva a conversa
@@ -126,6 +155,7 @@ async function processarMensagem(mensagem: MensagemUazapi, chat: ChatUazapi | nu
             );
         }
     }
+    return { destino: 'gravada' };
 }
 
 /**
@@ -159,6 +189,9 @@ async function conversaDoContato(
     if (error || !conversa) throw error ?? new Error('conversa não resolvida');
     return conversa;
 }
+
+/** 42P01 vem do Postgres; PGRST205 é como o PostgREST diz o mesmo. */
+const TABELA_AUSENTE = new Set(['42P01', 'PGRST205']);
 
 /** 42883 vem do Postgres; PGRST202 é como o PostgREST diz o mesmo. */
 const FUNCAO_AUSENTE = new Set(['42883', 'PGRST202']);
