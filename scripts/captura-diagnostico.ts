@@ -6,6 +6,11 @@
  *   … --recuperar   reinjeta pela webhook_entrada o que falta (o worker ingere, idempotente)
  *   … --registrar   grava o buraco [--desde, --ate] em buracos_captura (exige --ate), para
  *                   o relatório do dia sair com captura_incompleta ao ser reprocessado
+ *   … --chat <jid>  só leitura: lista o que a UAZAPI tem NAQUELE chat entre --desde e
+ *                   --ate, com o tipo bruto, se está no banco e o que a ingestão faria.
+ *                   Para mensagem que sumiu sem buraco (o PDF do Rafael ao Xexéu,
+ *                   08/10): a varredura geral para na primeira página com âncora e
+ *                   não chega a dias atrás.
  *
  * Caso de origem: Vitor, de 07/10/2026 10:56 até 08/10 07:35
  *   --desde 2026-10-07T10:56:00-03:00 --ate 2026-10-08T07:35:00-03:00
@@ -20,7 +25,7 @@ import { decifrar } from '../lib/crypto.ts';
 import { recuperarMensagens, resumoErrosWebhook } from '../lib/captura.ts';
 import { comNomesConhecidos, contatosConhecidos, estaFora } from '../lib/exclusao.ts';
 import { Uazapi } from '../lib/uazapi/cliente.ts';
-import type { MensagemUazapi } from '../lib/uazapi/normalizar.ts';
+import { normalizarMensagem, type MensagemUazapi } from '../lib/uazapi/normalizar.ts';
 
 const args = process.argv.slice(2);
 const valorDe = (nome: string) => { const i = args.indexOf(nome); return i >= 0 ? args[i + 1] : undefined; };
@@ -29,6 +34,8 @@ const desde = valorDe('--desde');
 const ate = valorDe('--ate');
 const reinjetar = args.includes('--recuperar');
 const registrar = args.includes('--registrar');
+const chat = valorDe('--chat');
+const paraMs = (m: MensagemUazapi) => { const t = m.messageTimestamp ?? m.timestamp ?? 0; return t < 1e12 ? t * 1000 : t; };
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,7 +45,7 @@ if (!url || !chave || !uazUrl) {
     process.exit(1);
 }
 if (!vendedor || !desde || Number.isNaN(Date.parse(desde)) || (ate && Number.isNaN(Date.parse(ate)))) {
-    console.error('uso: --vendedor <uuid> --desde <iso> [--ate <iso>] [--recuperar] [--registrar]');
+    console.error('uso: --vendedor <uuid> --desde <iso> [--ate <iso>] [--recuperar] [--registrar] [--chat <jid>]');
     process.exit(1);
 }
 if (registrar && !ate) {
@@ -58,6 +65,34 @@ if (error || !conexao?.instance_token) {
     process.exit(1);
 }
 const token = decifrar(Buffer.from(conexao.instance_token.replace(/^\\x/, ''), 'hex'));
+
+if (chat) {
+    // Do mais recente para trás, página por página, até passar de --desde.
+    const fim = ate ? Date.parse(ate) : Infinity;
+    const doChat: MensagemUazapi[] = [];
+    for (let offset = 0, paginas = 0; paginas < 20; paginas++) {
+        const r = await uaz.buscarMensagens(token, { limit: 100, offset, chatid: chat });
+        const msgs = r.messages ?? [];
+        doChat.push(...msgs);
+        const maisVelha = Math.min(...msgs.map((m) => paraMs(m)));
+        if (!msgs.length || !r.pagination?.hasMore || maisVelha < inicio.getTime()) break;
+        offset = r.pagination.nextOffset ?? offset + msgs.length;
+    }
+    const janela = doChat.filter((m) => paraMs(m) >= inicio.getTime() && paraMs(m) < fim).sort((a, b) => paraMs(a) - paraMs(b));
+    const { data: gravadas, error: erroGravadas } = await db.from('mensagens').select('wa_message_id,tipo')
+        .in('wa_message_id', janela.map((m) => (m.id ?? m.messageid) as string).filter(Boolean));
+    if (erroGravadas) { console.error(erroGravadas.message); process.exit(1); }
+    const tipoGravado = new Map((gravadas ?? []).map((g) => [g.wa_message_id as string, g.tipo as string]));
+    console.log(`== chat ${chat}: ${doChat.length} mensagens lidas na UAZAPI, ${janela.length} no intervalo`);
+    for (const m of janela) {
+        const id = (m.id ?? m.messageid) as string;
+        const n = normalizarMensagem({ message: m });
+        const ingestao = 'descartar' in n ? `descarta: ${n.motivo}` : n.tipo;
+        const hora = new Date(paraMs(m)).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        console.log(`${hora}  ${m.fromMe ? 'saída  ' : 'entrada'}  ${String(m.messageType ?? m.type ?? '-').padEnd(26)}  banco: ${tipoGravado.get(id) ?? 'FALTA'}  ingestão: ${ingestao}${m.fileName ? `  ${m.fileName}` : ''}`);
+    }
+    process.exit(0);
+}
 
 console.log('== erros de entrega do webhook desde', inicio.toISOString());
 try {
