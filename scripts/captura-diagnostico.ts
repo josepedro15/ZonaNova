@@ -10,7 +10,8 @@
  *                   --ate, com o tipo bruto, se está no banco e o que a ingestão faria.
  *                   Para mensagem que sumiu sem buraco (o PDF do Rafael ao Xexéu,
  *                   08/10): a varredura geral para na primeira página com âncora e
- *                   não chega a dias atrás.
+ *                   não chega a dias atrás. `--chat todos` varre a instância inteira,
+ *                   para achar mensagem que a UAZAPI guardou noutro chat.
  *
  * Caso de origem: Vitor, de 07/10/2026 10:56 até 08/10 07:35
  *   --desde 2026-10-07T10:56:00-03:00 --ate 2026-10-08T07:35:00-03:00
@@ -70,13 +71,20 @@ if (chat) {
     // Do mais recente para trás, página por página, até passar de --desde.
     const fim = ate ? Date.parse(ate) : Infinity;
     const doChat: MensagemUazapi[] = [];
-    for (let offset = 0, paginas = 0; paginas < 20; paginas++) {
-        const r = await uaz.buscarMensagens(token, { limit: 100, offset, chatid: chat });
+    const todos = chat === 'todos';
+    for (let offset = 0, paginas = 0; paginas < (todos ? 60 : 20); paginas++) {
+        const r = await uaz.buscarMensagens(token, { limit: 100, offset, ...(todos ? {} : { chatid: chat }) });
         const msgs = r.messages ?? [];
         doChat.push(...msgs);
         const maisVelha = Math.min(...msgs.map((m) => paraMs(m)));
-        if (!msgs.length || !r.pagination?.hasMore || maisVelha < inicio.getTime()) break;
-        offset = r.pagination.nextOffset ?? offset + msgs.length;
+        // A busca sem chat não diz sempre se há mais: pagina enquanto vier página cheia.
+        if (todos) {
+            const quando = (ms: number) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+            console.log(`página ${paginas + 1}: ${msgs.length} mensagens, de ${msgs.length ? quando(maisVelha) : '-'} a ${msgs.length ? quando(Math.max(...msgs.map(paraMs))) : '-'}, pagination ${JSON.stringify(r.pagination ?? null)}`);
+        }
+        const temMais = r.pagination?.hasMore ?? msgs.length === 100;
+        if (!msgs.length || maisVelha < inicio.getTime() || (!todos && !temMais) || (todos && msgs.length < 100 && !r.pagination?.hasMore)) break;
+        offset = r.pagination?.nextOffset ?? offset + msgs.length;
     }
     const janela = doChat.filter((m) => paraMs(m) >= inicio.getTime() && paraMs(m) < fim).sort((a, b) => paraMs(a) - paraMs(b));
     const { data: gravadas, error: erroGravadas } = await db.from('mensagens').select('wa_message_id,tipo')
@@ -89,7 +97,7 @@ if (chat) {
         const n = normalizarMensagem({ message: m });
         const ingestao = 'descartar' in n ? `descarta: ${n.motivo}` : n.tipo;
         const hora = new Date(paraMs(m)).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        console.log(`${hora}  ${m.fromMe ? 'saída  ' : 'entrada'}  ${String(m.messageType ?? m.type ?? '-').padEnd(26)}  banco: ${tipoGravado.get(id) ?? 'FALTA'}  ingestão: ${ingestao}${m.fileName ? `  ${m.fileName}` : ''}`);
+        console.log(`${hora}  ${m.fromMe ? 'saída  ' : 'entrada'}  ${String(m.messageType ?? m.type ?? '-').padEnd(26)}  banco: ${tipoGravado.get(id) ?? 'FALTA'}  ingestão: ${ingestao}${todos ? `  ${m.chatid ?? m.sender ?? '-'}` : ''}${m.fileName ? `  ${m.fileName}` : ''}`);
     }
     process.exit(0);
 }

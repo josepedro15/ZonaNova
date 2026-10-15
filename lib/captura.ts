@@ -241,8 +241,13 @@ export async function recuperarMensagens({ buscar, idsGravados, ingerir, desde, 
             if (depois && fora(telefone)) excluidas++;
             else if (!fora(telefone)) (depois ? novas : ancoras).push(m);
         }
-        if (ancoras.length || !mensagens.length || !r.pagination?.hasMore) break;
-        offset = r.pagination.nextOffset ?? offset + mensagens.length;
+        // A busca sem chat da UAZAPI devolve `pagination: null` (instância do
+        // Rafael, 15/10/2026): só com o `hasMore`, a recuperação lia uma
+        // página, não chegava ao começo do buraco e saía "sem_ancora". Sem a
+        // informação, página cheia quer dizer que há mais.
+        const temMais = r.pagination?.hasMore ?? mensagens.length >= porPagina;
+        if (ancoras.length || !mensagens.length || !temMais) break;
+        offset = r.pagination?.nextOffset ?? offset + mensagens.length;
     }
 
     if (!novas.length) return { encontradas: 0, recuperadas: 0, excluidas, motivo: excluidas ? 'so_contatos_fora' : 'uazapi_sem_mensagens' };
