@@ -32,6 +32,19 @@ test('pós-venda com solução aceita é encerrada, não venda', () => {
     assert.match(REGRA_STATUS, /Pós-venda nunca é venda_feita/);
 });
 
+// Silas, 15/10: o cliente que combina e diz que passa para pegar, e o que
+// reclama do preço e fecha com "tá blz", saíam em aberto (Rafael).
+test('vir buscar e aceitar depois de reclamar do preço são venda', () => {
+    assert.match(REGRA_STATUS, /diz que vai passar na loja para pegar/);
+    assert.match(REGRA_STATUS, /Reclamar do preço depois do pedido não desfaz a compra/);
+    assert.match(REGRA_STATUS, /C: "Tá blz" = compra_nova_fechada/);
+    assert.match(REGRA_STATUS, /Pedir orçamento para mostrar ao chefe sem dizer que vem buscar ainda é compra_nova_em_aberto/);
+    // Calibração de 15/10: "amanhã passo aí… mas se for te aviso" virava venda.
+    assert.match(REGRA_STATUS, /dúvida sobre VIR ou COMPRAR abre: "se eu for te aviso"/);
+    assert.match(REGRA_STATUS, /Escolher retirar na loja no lugar da entrega também fecha/);
+    assert.match(REGRA_STATUS, /Condição dita DEPOIS de prometer vir desfaz a promessa/);
+});
+
 test('a resposta sai conferida contra a conversa (ajustarResultado)', () => {
     const { schema } = pedidoAnalise({ transcript: 'C: "separa no nome"\nV: "Já está no pacote"', doutrina: 'MEC', itens: null, modelo: 'gpt-4.1-mini' });
     const resposta = {
