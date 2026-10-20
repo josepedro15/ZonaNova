@@ -19,12 +19,19 @@
 // qualquer loja da rede, cargo no nome); SEM_SINAL=1 roda sem ele. Só LÊ o
 // banco. Usa a service role e a OPENAI_API_KEY; ~US$ 0,005 por conversa no
 // gpt-4.1-mini.
+//
+// ANALISE_PROVEDOR=anthropic roda no Claude Haiku 5.5 (lib/claude.ts), com a
+// ANTHROPIC_API_KEY e o esforço de ANTHROPIC_EFFORT (low, o padrão, ou
+// medium); ~US$ 0,002 por conversa. É o teste lado a lado do estudo de 11/10
+// (docs/13-estudo-modelo-gpt41mini-vs-haiku55.md).
 // =============================================================================
 import { readFileSync, writeFileSync } from 'node:fs';
+import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { custoEstimado } from '../lib/analise.ts';
+import { analiseNoClaude, entradaClaude, esforcoClaude, MODELO_CLAUDE, textoDaMensagemClaude } from '../lib/claude.ts';
 import { cadastrosNaRede, naturezaSuspeita, sinalDoContato } from '../lib/natureza.ts';
-import { doutrinaMec, MODELO_PADRAO, pedidoAnalise } from '../lib/pedido-analise.ts';
+import { doutrinaMec, MODELO_PADRAO, pedidoAnalise, pedidoAnaliseClaude } from '../lib/pedido-analise.ts';
 import { transcriptDoDia } from './transcript-do-dia.mjs';
 
 const [arquivo, saida = 'analise-calibracao.json', rodadas = '1'] = process.argv.slice(2);
@@ -47,13 +54,17 @@ if (!arquivo) {
 }
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const apiKey = process.env.OPENAI_API_KEY;
+const claude = analiseNoClaude();
+const nomeDaChave = claude ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
+const apiKey = process.env[nomeDaChave];
 if (!url || !chave || !apiKey) {
-    console.error('faltam NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e OPENAI_API_KEY — rode com --env-file=.env.local');
+    console.error(`faltam NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e ${nomeDaChave} — rode com --env-file=.env.local`);
     process.exit(1);
 }
 const db = createClient(url, chave, { auth: { persistSession: false } });
-const modelo = process.env.OPENAI_MODEL || MODELO_PADRAO;
+const esforco = esforcoClaude();
+const modelo = claude ? MODELO_CLAUDE : process.env.OPENAI_MODEL || MODELO_PADRAO;
+const anthropic = claude ? new Anthropic({ apiKey }) : null;
 
 /** As expectativas que falharam, em texto; [] = passou. */
 function conferir(r, esperado) {
@@ -86,6 +97,7 @@ async function analisar(caso, doutrina) {
     const transcript = await transcriptDoDia(db, caso.conversa_id, caso.data_ref);
     if (!transcript) return { pulado: 'sem mensagem do contato no dia' };
     const contato = await sinalDaConversa(caso.conversa_id);
+    if (claude) return analisarNoClaude(transcript, doutrina, contato);
     const { corpo, schema } = pedidoAnalise({ transcript, doutrina, itens: null, midia: false, modelo, contato });
     const resposta = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify(corpo),
@@ -95,6 +107,31 @@ async function analisar(caso, doutrina) {
     const texto = json.output_text ?? json.output?.flatMap((o) => o.content ?? []).find((c) => c.type === 'output_text')?.text;
     const r = schema.zod.parse(JSON.parse(texto));
     return { r, custo: custoEstimado(modelo, json.usage?.input_tokens ?? 0, json.usage?.output_tokens ?? 0) };
+}
+
+/** O mesmo pedido do worker no Claude (lib/openai-analise.ts). Recusa e corte viram item pulado. */
+async function analisarNoClaude(transcript, doutrina, contato) {
+    const { corpo, schema } = pedidoAnaliseClaude({ transcript, doutrina, itens: null, midia: false, contato, esforco });
+    let mensagem;
+    try {
+        mensagem = await anthropic.messages.create(corpo);
+    } catch (e) {
+        return { pulado: `Claude ${e?.status ?? e?.message ?? e}` };
+    }
+    let texto;
+    try {
+        texto = textoDaMensagemClaude(mensagem);
+    } catch (e) {
+        return { pulado: e.message };
+    }
+    const custo = custoEstimado(modelo, entradaClaude(mensagem.usage), mensagem.usage.output_tokens);
+    // Fora do contrato (ex.: o MEC sem as 7 etapas) é falha do Claude, não da
+    // calibração: conta como pulado, com o custo, em vez de parar tudo.
+    try {
+        return { r: schema.zod.parse(JSON.parse(texto)), custo };
+    } catch (e) {
+        return { pulado: `fora do schema: ${(e.message ?? String(e)).slice(0, 120)}`, custo };
+    }
 }
 
 async function emLotes(itens, fn) {
@@ -113,7 +150,7 @@ try {
     const resultados = [];
     let custo = 0;
     for (let rodada = 1; rodada <= Number(rodadas); rodada++) {
-        console.error(`rodada ${rodada}: ${gabarito.length} conversas, modelo ${modelo}`);
+        console.error(`rodada ${rodada}: ${gabarito.length} conversas, modelo ${modelo}${claude ? ` (effort ${esforco})` : ''}`);
         const feitas = await emLotes(gabarito, (c) => analisar(c, doutrina.texto));
         feitas.forEach((f, i) => {
             const caso = gabarito[i];

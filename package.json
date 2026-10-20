@@ -18,6 +18,7 @@
     "analise:calibracao": "node --env-file=.env.local scripts/analise-calibracao.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.1",
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/montserrat": "^5.3.0",
     "@supabase/ssr": "^0.8.0",

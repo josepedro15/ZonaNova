@@ -3,17 +3,14 @@ import { z } from 'zod';
 import type { ResultadoComDetalhe } from '@/lib/analise';
 import type { ItemPlaybook } from '@/lib/mec';
 import type { SinalContato } from '@/lib/natureza';
-import { MODELO_PADRAO, pedidoAnalise } from '@/lib/pedido-analise';
+import Anthropic from '@anthropic-ai/sdk';
+import { analiseNoClaude, entradaClaude, esforcoClaude, RespostaIncompleta, textoDaMensagemClaude } from '@/lib/claude';
+import { MODELO_PADRAO, pedidoAnalise, pedidoAnaliseClaude } from '@/lib/pedido-analise';
 import { finalizarConsolidado, pedidoConsolidacao, schemaConsolidado, type CapturaDoRelatorio, type ConsolidadoIa } from '@/lib/consolidacao';
 
 type Uso = { input_tokens?: number; output_tokens?: number };
 
-/**
- * Resposta cortada no meio (`status: incomplete`, em geral por bater no
- * `max_output_tokens`). Com temperatura 0, repetir dá o mesmo corte: o worker
- * trata como falha definitiva em vez de pagar mais três tentativas iguais.
- */
-export class RespostaIncompleta extends Error {}
+export { RespostaIncompleta };
 
 function textoDaResposta(resposta: unknown): string {
     const r = resposta as { status?: string; incomplete_details?: { reason?: string }; output_text?: string; output?: { content?: { type?: string; text?: string }[] }[] };
@@ -25,7 +22,27 @@ function textoDaResposta(resposta: unknown): string {
     throw new Error('OpenAI não devolveu texto estruturado');
 }
 
-export async function analisarConversa({ transcript, doutrina, itens, midia = false, contato = null }: { transcript: string; doutrina: string; itens: readonly ItemPlaybook[] | null; midia?: boolean; contato?: SinalContato | null }): Promise<{ resultado: ResultadoComDetalhe; modelo: string; entrada: number; saida: number }> {
+type ResultadoDaAnalise = { resultado: ResultadoComDetalhe; modelo: string; entrada: number; saida: number };
+type PedidoDaConversa = { transcript: string; doutrina: string; itens: readonly ItemPlaybook[] | null; midia?: boolean; contato?: SinalContato | null };
+
+/** A análise no Claude Haiku 5.5 (`ANALISE_PROVEDOR=anthropic`). */
+async function analisarNoClaude(pedido: PedidoDaConversa): Promise<ResultadoDaAnalise> {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY não configurada');
+    const { schema, corpo } = pedidoAnaliseClaude({ ...pedido, esforco: esforcoClaude() });
+    // Erro de rede, 429 e 5xx: o SDK repete 2 vezes; o que sobra vai para a
+    // fila, que tenta de novo mais tarde.
+    const mensagem = await new Anthropic({ apiKey }).messages.create(corpo);
+    return {
+        resultado: schema.zod.parse(JSON.parse(textoDaMensagemClaude(mensagem))),
+        modelo: corpo.model,
+        entrada: entradaClaude(mensagem.usage),
+        saida: mensagem.usage.output_tokens,
+    };
+}
+
+export async function analisarConversa({ transcript, doutrina, itens, midia = false, contato = null }: PedidoDaConversa): Promise<ResultadoDaAnalise> {
+    if (analiseNoClaude()) return analisarNoClaude({ transcript, doutrina, itens, midia, contato });
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY não configurada');
     const modelo = process.env.OPENAI_MODEL || MODELO_PADRAO;

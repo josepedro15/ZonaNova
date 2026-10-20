@@ -75,6 +75,7 @@ test('hash do transcript é estável e custo do modelo é reproduzível', () => 
     assert.equal(hashTranscript('abc'), hashTranscript('abc'));
     assert.notEqual(hashTranscript('abc'), hashTranscript('abd'));
     assert.equal(custoEstimado('gpt-4.1-mini-2025-04-14', 1_000_000, 1_000_000), 2);
+    assert.equal(custoEstimado('claude-haiku-5-5', 1_000_000, 1_000_000), 0.6);
     assert.equal(custoEstimado('modelo-desconhecido', 1000, 1000), 0);
 });
 

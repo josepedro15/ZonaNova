@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pedidoAnalise, REGRA_ERROS, REGRA_ESCALAS, REGRA_OBJECOES, REGRA_STATUS, REGRA_SUPORTE, REGRA_TIPO } from '../../lib/pedido-analise.ts';
+import { pedidoAnalise, pedidoAnaliseClaude, REGRA_ERROS, REGRA_ESCALAS, REGRA_OBJECOES, REGRA_STATUS, REGRA_SUPORTE, REGRA_TIPO } from '../../lib/pedido-analise.ts';
 import { naturezaSuspeita, REGRA_NATUREZA } from '../../lib/natureza.ts';
 
 const instrucoes = () => pedidoAnalise({ transcript: 'C: "oi"', doutrina: 'MEC', itens: null, modelo: 'gpt-4.1-mini' }).corpo.instructions;
@@ -45,6 +45,14 @@ test('vir buscar e aceitar depois de reclamar do preço são venda', () => {
     assert.match(REGRA_STATUS, /Condição dita DEPOIS de prometer vir desfaz a promessa/);
 });
 
+// Silas, 16/10: "vou pegar no CD" fecha como "vou buscar na loja", mesmo
+// sem o vendedor responder por escrito; buscar no concorrente não.
+test('buscar no CD ou no depósito é venda; em loja de fora, perdida', () => {
+    assert.match(REGRA_STATUS, /Buscar no CD, no depósito ou em outra filial da rede vale o mesmo que buscar na loja/);
+    assert.match(REGRA_STATUS, /C: "vou pegar no CD amanhã cedo" = compra_nova_fechada/);
+    assert.match(REGRA_STATUS, /Comprar ou buscar em OUTRA loja que não é da rede/);
+});
+
 test('a resposta sai conferida contra a conversa (ajustarResultado)', () => {
     const { schema } = pedidoAnalise({ transcript: 'C: "separa no nome"\nV: "Já está no pacote"', doutrina: 'MEC', itens: null, modelo: 'gpt-4.1-mini' });
     const resposta = {
@@ -82,4 +90,48 @@ test('suporte cobre entrega, crediário e pagamento e não cobra fechamento', ()
 test('as faixas de 0 a 100 continuam sendo a escala do suporte', () => {
     assert.match(REGRA_SUPORTE, /70–100/);
     assert.match(REGRA_ESCALAS, /suporte tem as suas/);
+});
+
+// Claude Haiku 5.5 (16/10): o mesmo prompt e as mesmas conferências, no
+// formato que a Messages API aceita.
+test('o pedido ao Claude leva as mesmas regras, sem temperatura e com cache', () => {
+    const args = { transcript: 'C: "separa no nome"\nV: "Já está no pacote"', doutrina: 'MEC', itens: null };
+    const { corpo } = pedidoAnaliseClaude({ ...args, esforco: 'medium' });
+    assert.equal(corpo.model, 'claude-haiku-5-5');
+    assert.ok(!('temperature' in corpo));
+    assert.equal(corpo.system[0].text, pedidoAnalise({ ...args, modelo: 'gpt-4.1-mini' }).corpo.instructions);
+    assert.deepEqual(corpo.system[0].cache_control, { type: 'ephemeral' });
+    assert.equal(corpo.messages.at(-1)?.role, 'user');
+    assert.equal(corpo.output_config.effort, 'medium');
+    assert.ok(!JSON.stringify(corpo.output_config.format.schema).includes('"maximum"'));
+    // As 7 etapas do MEC são chaves obrigatórias, não uma lista de tamanho livre.
+    const mec = (corpo.output_config.format.schema.properties as Record<string, { type: string; required: string[] }>).mec;
+    assert.equal(mec.type, 'object');
+    assert.deepEqual(mec.required, ['acolhida', 'sondagem', 'solucao_completa', 'contorno_objecoes', 'estrategia_preco', 'fechamento', 'acompanhamento']);
+    assert.equal(pedidoAnaliseClaude(args).corpo.output_config.effort, 'low');
+});
+
+test('a resposta do Claude volta aos limites e passa pelas mesmas conferências', () => {
+    const { schema } = pedidoAnaliseClaude({ transcript: 'C: "separa no nome"\nV: "Já está no pacote"', doutrina: 'MEC', itens: null });
+    const resposta = {
+        quem_pede: 'contato_pede_a_loja', assuntos_do_dia: [{ assunto: 'pedido', situacao: 'compra_nova_fechada' }],
+        natureza_contato: 'cliente', confianca_natureza: 90, evidencia_natureza: 'separa no nome',
+        tipo_conversa: 'negociacao', status: 'venda_feita', sentiment: 70, score_atendimento: 130, score_oportunidade: 100, score_risco: -5,
+        estagio_funil: 'fechamento', potencial_venda: 'alto', urgencia: 9, resumo: 'r', destaque: 'd', proxima_acao: 'p', script_sugerido: 's',
+        objecoes: [], tecnicas_usadas: [], erros_vendedor: [], tags: [], perfil_cliente: 'nao_identificado', profissao_cliente: '',
+        evidencias: [1, 2, 3, 4, 5, 6].map((n) => ({ trecho: `separa no nome ${n}`, conclusao: 'pedido' })),
+        mec: ['acolhida', 'sondagem', 'solucao_completa', 'contorno_objecoes', 'estrategia_preco', 'fechamento', 'acompanhamento']
+            .map((etapa) => ({ etapa, aplicavel: true, aplicado: 'sim', justificativa: 'j', evidencias: [], itens: [] })),
+    };
+    // O Claude devolve o MEC por etapa; volta a ser a lista de 7, na ordem.
+    const porEtapa = Object.fromEntries(resposta.mec.map(({ etapa, ...resto }) => [etapa, resto]));
+    const r = schema.zod.parse({ ...resposta, mec: porEtapa });
+    assert.deepEqual(r.mec.map((e) => e.etapa), resposta.mec.map((e) => e.etapa));
+    assert.equal(r.score_atendimento, 100);
+    assert.equal(r.score_risco, 0);
+    assert.equal(r.urgencia, 5);
+    assert.equal(r.evidencias.length, 5);
+    assert.equal(r.status, 'venda_feita');
+    // Sem as 7 etapas do MEC não há o que ajustar: a resposta é recusada.
+    assert.throws(() => schema.zod.parse({ ...resposta, mec: resposta.mec.slice(0, 6) }));
 });

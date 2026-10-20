@@ -441,8 +441,11 @@ export function hashTranscript(transcript: string): string {
 }
 
 export function custoEstimado(modelo: string, entrada: number, saida: number): number {
-    // Preços do snapshot GPT-4.1 mini em 2026-09-21. Mantidos aqui para que o
-    // custo gravado seja reprodutível; modelo desconhecido fica sem estimativa.
-    if (!modelo.startsWith('gpt-4.1-mini')) return 0;
-    return (entrada * 0.40 + saida * 1.60) / 1_000_000;
+    // Preços do snapshot GPT-4.1 mini em 2026-09-21 e do Claude Haiku 5.5 em
+    // 2026-10-16 (prompt de até 100 mil tokens; o nosso tem ~6 mil). Mantidos
+    // aqui para que o custo gravado seja reprodutível; modelo desconhecido
+    // fica sem estimativa.
+    if (modelo.startsWith('gpt-4.1-mini')) return (entrada * 0.40 + saida * 1.60) / 1_000_000;
+    if (modelo === 'claude-haiku-5-5') return (entrada * 0.10 + saida * 0.50) / 1_000_000;
+    return 0;
 }
