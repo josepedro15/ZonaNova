@@ -22,11 +22,14 @@ const ITENS: Record<Papel, Item[]> = {
     ],
     gestor: [
         { href: '/equipe', rotulo: 'Minha equipe', curto: 'Equipe', icone: 'equipe' },
+        // A evolução da equipe e de cada vendedor (Silas, 16/10).
+        { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/equipe/mec', rotulo: 'Aderência ao MEC', curto: 'MEC', icone: 'mec' },
-        // No celular, Configurações cede o lugar: o Perfil está no topo da tela.
-        { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
         { href: '/conversas', rotulo: 'Conversas', icone: 'conversa' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        // No celular, Objeções e Configurações cedem o lugar: as objeções da
+        // semana estão na Minha equipe, e o Perfil no topo da tela.
+        { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
         { href: '/perfil', rotulo: 'Configurações', curto: 'Ajustes', icone: 'engrenagem' },
     ],
     supervisor: [
@@ -40,6 +43,7 @@ const ITENS: Record<Papel, Item[]> = {
         // Só supervisor e admin aprovam alguém como gestor, e só eles resolvem
         // cadastro de unidade que ainda não tem gestor.
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/descobertas', rotulo: 'Descobertas', icone: 'lampada' },
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
         { href: '/perfil', rotulo: 'Perfil', icone: 'pessoa' },
@@ -50,6 +54,7 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/admin/conexoes', rotulo: 'Conexões', icone: 'wifi' },
         { href: '/admin/eventos', rotulo: 'Registro de ações', curto: 'Registro', icone: 'lista' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
         { href: '/perfil', rotulo: 'Perfil', icone: 'pessoa' },
     ],

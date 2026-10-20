@@ -217,3 +217,34 @@ export function tempoCurto(segundos: number): string {
     const h = Math.floor(min / 60);
     return min % 60 ? `${h} h ${min % 60} min` : `${h} h`;
 }
+
+export type DiaVendedor = Dia & { user_id: string };
+export type Vendedor = { id: string; nome: string; unidade: string | null };
+export type LinhaComparacao = Vendedor & { resumo: Resumo; deltaNota: number | null; conversao: number | null };
+
+/**
+ * A equipe lado a lado no período: o resumo de cada vendedor com a mesma
+ * conta da tela dele, e a nota contra o período anterior. Ordem: maior nota
+ * primeiro; quem não teve nota no período vai para o fim, por volume.
+ */
+export function compararVendedores(linhas: readonly DiaVendedor[], vendedores: readonly Vendedor[], fim: string, dias: number): LinhaComparacao[] {
+    const porVendedor = new Map<string, DiaVendedor[]>();
+    for (const l of linhas) porVendedor.set(l.user_id, [...(porVendedor.get(l.user_id) ?? []), l]);
+    return vendedores.map((v) => {
+        const suas = porVendedor.get(v.id) ?? [];
+        const resumo = resumir(noIntervalo(suas, fim, dias));
+        const anteriores = noIntervalo(suas, diaMenos(fim, dias), dias);
+        const notaAnterior = anteriores.length ? resumir(anteriores).nota : null;
+        return {
+            ...v, resumo,
+            deltaNota: delta(resumo.nota === null ? null : Math.round(resumo.nota), notaAnterior === null ? null : Math.round(notaAnterior)),
+            conversao: resumo.leads ? (resumo.conversoes / resumo.leads) * 100 : null,
+        };
+    }).sort((a, b) => {
+        if (a.resumo.nota === null || b.resumo.nota === null) {
+            if (a.resumo.nota !== b.resumo.nota) return a.resumo.nota === null ? 1 : -1;
+            return b.resumo.leads - a.resumo.leads || a.nome.localeCompare(b.nome);
+        }
+        return b.resumo.nota - a.resumo.nota || a.nome.localeCompare(b.nome);
+    });
+}

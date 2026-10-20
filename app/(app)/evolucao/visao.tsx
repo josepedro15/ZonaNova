@@ -1,3 +1,5 @@
+import type { Route } from 'next';
+import type { ReactNode } from 'react';
 import { CabecalhoPagina, EstadoVazio, Pagina, Segmentado, type Papel } from '@/components/ui';
 import { diaMenos } from '@/lib/derivacoes';
 import {
@@ -14,29 +16,43 @@ export type NotaReferencia = { data_ref: string; score_geral: number | string | 
 
 const nota = (v: number | string | null | undefined) => (v === null || v === undefined ? null : Math.round(Number(v)));
 
+/** Gestor ou admin olhando a evolução de um vendedor da equipe. */
+export type Alvo = { id: string; nome: string; unidade: string | null };
+
 /**
  * A tela inteira a partir das linhas já buscadas: `linhas` cobre o período e
  * o anterior (para comparar); `referencia`, só o período. Sem I/O aqui — é o
  * que deixa /dev/evolucao mostrar a tela com dados de exemplo.
+ *
+ * Com `alvo`, é a tela do vendedor vista pelo gestor: as mesmas seções, com o
+ * nome dele no lugar de "Sua". `seletor` vai no cabeçalho e `equipe` (a
+ * comparação) no fim.
  */
-export function VisaoEvolucao({ papel, periodo, fim, linhas, referencia, aderencias, base = '/evolucao' }: {
+export function VisaoEvolucao({ papel, periodo, fim, linhas, referencia, aderencias, base = '/evolucao', manter = {}, alvo = null, seletor, equipe }: {
     papel: Papel; periodo: Periodo; fim: string; linhas: LinhaDia[]; referencia: NotaReferencia[]; aderencias: DiaMec[]; base?: string;
+    manter?: Record<string, string>; alvo?: Alvo | null; seletor?: ReactNode; equipe?: ReactNode;
 }) {
     const atuais = noIntervalo(linhas, fim, periodo);
     const anteriores = noIntervalo(linhas, diaMenos(fim, periodo), periodo);
     const resumo = resumir(atuais);
     const resumoAnterior = anteriores.length ? resumir(anteriores) : null;
 
-    const sujeito = papel === 'vendedor' ? 'Sua nota' : papel === 'gestor' ? 'A nota da unidade' : 'A nota da rede';
-    const rotuloReferencia = papel === 'vendedor' ? 'média da unidade' : papel === 'gestor' ? 'média da rede' : null;
-    const escopo = papel === 'vendedor' ? 'Seu histórico' : papel === 'gestor' ? 'Suas unidades' : 'A rede';
+    const primeiroNome = alvo?.nome.split(' ')[0];
+    const sujeito = alvo ? `A nota de ${primeiroNome}` : papel === 'vendedor' ? 'Sua nota' : papel === 'gestor' ? 'A nota da unidade' : 'A nota da rede';
+    const rotuloReferencia = alvo || papel === 'vendedor' ? 'média da unidade' : papel === 'gestor' ? 'média da rede' : null;
+    const escopo = alvo ? [alvo.nome, alvo.unidade].filter(Boolean).join(' · ')
+        : papel === 'vendedor' ? 'Seu histórico' : papel === 'gestor' ? 'Suas unidades' : 'A rede';
 
     const cabecalho = (
         <CabecalhoPagina
+            voltar={alvo ? { href: `${base}?${new URLSearchParams({ ...manter, periodo: String(periodo) })}` as Route, rotulo: 'Equipe toda' } : undefined}
             sobre={`${escopo} · ${ddmm(diaMenos(fim, periodo - 1))} a ${ddmm(fim)}`}
-            titulo="Evolução"
-            acoes={<Segmentado rotulo="Período" base={base} param="periodo" atual={String(periodo)}
-                               opcoes={[{ valor: '7', rotulo: '7 dias' }, { valor: '30', rotulo: '30 dias' }, { valor: '90', rotulo: '90 dias' }]} />} />
+            titulo={alvo ? `Evolução de ${primeiroNome}` : 'Evolução'}
+            acoes={<>
+                {seletor}
+                <Segmentado rotulo="Período" base={base} param="periodo" atual={String(periodo)} manter={{ ...manter, vendedor: alvo?.id }}
+                            opcoes={[{ valor: '7', rotulo: '7 dias' }, { valor: '30', rotulo: '30 dias' }, { valor: '90', rotulo: '90 dias' }]} />
+            </>} />
     );
 
     if (atuais.length === 0) {
@@ -47,6 +63,7 @@ export function VisaoEvolucao({ papel, periodo, fim, linhas, referencia, aderenc
                     Os relatórios fecham todo dia às 00h30, com as conversas do dia anterior.
                     {resumoAnterior ? ' Escolha um período maior para ver o histórico que já existe.' : ' A evolução aparece a partir do primeiro.'}
                 </EstadoVazio>
+                {equipe}
             </Pagina>
         );
     }
@@ -80,7 +97,7 @@ export function VisaoEvolucao({ papel, periodo, fim, linhas, referencia, aderenc
 
             <div className="grid gap-5 xl:grid-cols-12">
                 <div className={lateral ? 'xl:col-span-8' : 'xl:col-span-12'}>
-                    <NotaDoPeriodo titulo={`${sujeito} média · ${periodo} dias`} resumo={resumo} pontos={pontos}
+                    <NotaDoPeriodo titulo={alvo ? `Nota média de ${primeiroNome} · ${periodo} dias` : `${sujeito} média · ${periodo} dias`} resumo={resumo} pontos={pontos}
                                    deltaAnterior={delta(resumo.nota, resumoAnterior?.nota ?? null)}
                                    deltaReferencia={delta(resumo.nota, media(referencia.map((r) => r.score_geral)))}
                                    rotuloReferencia={referencia.length ? rotuloReferencia : null} />
@@ -90,12 +107,15 @@ export function VisaoEvolucao({ papel, periodo, fim, linhas, referencia, aderenc
                         {par && <Destaques melhor={par.melhor} pior={par.pior} sequencia={sequenciaAtual(atuais)}
                                            diasBons={atuais.filter((l) => (nota(l.score_geral) ?? -1) >= NOTA_BOA).length}
                                            diasComNota={resumo.diasComNota} />}
-                        {temLeitura && <Leitura sujeito={sujeito} periodo={periodo} virada={virada} comMec={temMec} {...mudancas} />}
+                        {temLeitura && <Leitura sujeito={sujeito} periodo={periodo} virada={virada} comMec={temMec}
+                                                mec={alvo ? { href: '/equipe/mec', rotulo: 'Ver o MEC da equipe' } : undefined} {...mudancas} />}
                     </div>
                 )}
             </div>
 
             <NumerosDoPeriodo atual={resumo} anterior={resumoAnterior} />
+
+            {equipe}
 
             <div className="grid gap-5 xl:grid-cols-12">
                 <div className={temMec ? 'xl:col-span-7' : 'xl:col-span-12'}>
@@ -109,7 +129,7 @@ export function VisaoEvolucao({ papel, periodo, fim, linhas, referencia, aderenc
                 </div>
                 {temMec && (
                     <div className="xl:col-span-5">
-                        <MecDoPeriodo titulo="Seu MEC no período" atual={mecAtual} anterior={mecAnterior} />
+                        <MecDoPeriodo titulo={alvo ? `MEC de ${primeiroNome} no período` : 'Seu MEC no período'} atual={mecAtual} anterior={mecAnterior} />
                     </div>
                 )}
             </div>

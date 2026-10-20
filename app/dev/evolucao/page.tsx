@@ -1,12 +1,15 @@
 import { notFound } from 'next/navigation';
 import { Shell } from '@/components/ui';
 import { VisaoEvolucao } from '@/app/(app)/evolucao/visao';
+import { CompararVendedores } from '@/app/(app)/evolucao/secoes';
+import { EscolherVendedor } from '@/app/(app)/evolucao/escolher-vendedor';
 import { diaMenos } from '@/lib/derivacoes';
-import { diaDaSemana, periodoDe, type DiaMec } from '@/lib/evolucao';
+import { compararVendedores, diaDaSemana, periodoDe, type DiaMec } from '@/lib/evolucao';
 import { diasAte, type LinhaDia } from '@/lib/painel';
 
 // A tela Evolução com dados de exemplo, para conferir no browser sem login.
-// Não existe em produção. `?periodo=7|30|90`, `?vazio=1`.
+// Não existe em produção. `?periodo=7|30|90`, `?vazio=1`; `?papel=gestor` mostra a
+// visão da equipe com a comparação, e `?papel=gestor&vendedor=v2`, um vendedor.
 const FIM = '2026-09-26';
 
 /** Pseudoaleatório estável: a mesma página sempre desenha o mesmo gráfico. */
@@ -48,11 +51,43 @@ function exemplo(): { linhas: LinhaDia[]; referencia: { data_ref: string; score_
     return { linhas, referencia, aderencias };
 }
 
-export default async function VitrineEvolucao({ searchParams }: { searchParams: Promise<{ periodo?: string; vazio?: string }> }) {
+const EQUIPE = [
+    { id: 'v1', nome: 'Ana Paula Souza', unidade: 'Loja Centro', ajuste: 6 },
+    { id: 'v2', nome: 'Rafael Muller', unidade: 'Loja Centro', ajuste: -4 },
+    { id: 'v3', nome: 'Mirian Costa', unidade: 'Loja Norte', ajuste: 12 },
+    { id: 'v4', nome: 'Nilso Pereira', unidade: 'Loja Norte', ajuste: -15 },
+    { id: 'v5', nome: 'Taís Gomes', unidade: 'Loja Norte', ajuste: null },
+];
+
+function exemploDaEquipe(linhas: LinhaDia[]): (LinhaDia & { user_id: string })[] {
+    return EQUIPE.flatMap((v, k) => (v.ajuste === null ? [] : linhas.map((l, i) => ({
+        ...l, user_id: v.id,
+        score_geral: l.score_geral === null ? null : Math.max(0, Math.min(100, Number(l.score_geral) + v.ajuste + Math.round((ruido(i, 20 + k) - 0.5) * 10))),
+        leads_atendidos: Math.round(Number(l.leads_atendidos) * (0.6 + k * 0.2)),
+    }))));
+}
+
+export default async function VitrineEvolucao({ searchParams }: { searchParams: Promise<{ periodo?: string; vazio?: string; papel?: string; vendedor?: string }> }) {
     if (process.env.NODE_ENV === 'production') notFound();
     const params = await searchParams;
     const periodo = periodoDe(params.periodo);
     const { linhas, referencia, aderencias } = params.vazio ? { linhas: [], referencia: [], aderencias: [] } : exemplo();
+    if (params.papel === 'gestor') {
+        const dias = exemploDaEquipe(linhas);
+        const alvo = EQUIPE.find((v) => v.id === params.vendedor) ?? null;
+        const seletor = <EscolherVendedor vendedores={EQUIPE} atual={alvo?.id ?? null} periodo={periodo} base="/dev/evolucao?papel=gestor" />;
+        return (
+            <Shell papel="gestor" nome="Gestor de exemplo" unidade="Loja Centro" atual="/evolucao">
+                {alvo
+                    ? <VisaoEvolucao papel="gestor" periodo={periodo} fim={FIM} base="/dev/evolucao" manter={{ papel: 'gestor' }} alvo={alvo} seletor={seletor}
+                                     linhas={dias.filter((d) => d.user_id === alvo.id)} aderencias={aderencias}
+                                     referencia={referencia.filter((r) => r.data_ref > diaMenos(FIM, periodo))} />
+                    : <VisaoEvolucao papel="gestor" periodo={periodo} fim={FIM} base="/dev/evolucao" manter={{ papel: 'gestor' }} linhas={linhas} aderencias={[]} seletor={seletor}
+                                     referencia={referencia.filter((r) => r.data_ref > diaMenos(FIM, periodo))}
+                                     equipe={<CompararVendedores linhas={compararVendedores(dias, EQUIPE, FIM, periodo)} periodo={periodo} comLoja base="/dev/evolucao?papel=gestor" />} />}
+            </Shell>
+        );
+    }
     return (
         <Shell papel="vendedor" nome="Vendedor de exemplo" unidade="Unidade de exemplo" atual="/evolucao">
             <VisaoEvolucao papel="vendedor" periodo={periodo} fim={FIM} base="/dev/evolucao" linhas={linhas} aderencias={aderencias}

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     delta, diaDaSemana, diaMaisFraco, mecDoPeriodo, melhorEPior, mudancasDoMec, noIntervalo, notaPorDiaDaSemana,
-    periodoDe, resumir, sequenciaAtual, tempoCurto, viradaDoPeriodo, type Dia,
+    periodoDe, resumir, sequenciaAtual, tempoCurto, viradaDoPeriodo, compararVendedores, type Dia,
 } from '../../lib/evolucao.ts';
 
 const dia = (data_ref: string, nota: number | string | null, extra: Partial<Dia> = {}): Dia => ({
@@ -127,4 +127,27 @@ test('tempo curto', () => {
     assert.equal(tempoCurto(240), '4 min');
     assert.equal(tempoCurto(4800), '1 h 20 min');
     assert.equal(tempoCurto(7200), '2 h');
+});
+
+// Silas, 16/10: o gestor compara a equipe no mesmo período da tela.
+test('comparação da equipe: nota do período, contra o anterior, e sem nota no fim', () => {
+    const de = (user_id: string, data_ref: string, nota: number | null, leads = 10, conversoes = 1) =>
+        ({ ...dia(data_ref, nota, { leads_atendidos: leads, conversoes_confirmadas: conversoes }), user_id });
+    const linhas = [
+        de('a', '2026-09-18', 50), de('a', '2026-09-25', 70), de('a', '2026-09-26', 80, 10, 4),
+        de('b', '2026-09-26', 90, 4, 1),
+        de('c', '2026-09-26', null, 2, 0),
+    ];
+    const vendedores = [
+        { id: 'a', nome: 'Ana', unidade: 'Loja 1' }, { id: 'b', nome: 'Bruno', unidade: 'Loja 1' },
+        { id: 'c', nome: 'Caio', unidade: 'Loja 2' }, { id: 'd', nome: 'Davi', unidade: 'Loja 2' },
+    ];
+    const r = compararVendedores(linhas, vendedores, '2026-09-26', 7);
+    assert.deepEqual(r.map((x) => x.id), ['b', 'a', 'c', 'd']);
+    const ana = r.find((x) => x.id === 'a')!;
+    assert.equal(ana.resumo.nota, 75);
+    assert.equal(ana.deltaNota, 25); // 75 contra os 50 da semana anterior
+    assert.equal(ana.conversao, 25); // 5 conversões em 20 leads
+    assert.equal(r.find((x) => x.id === 'b')!.deltaNota, null); // sem período anterior
+    assert.equal(r.find((x) => x.id === 'd')!.conversao, null); // sem lead, sem taxa
 });

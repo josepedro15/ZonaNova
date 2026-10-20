@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Barra, Cartao, Comparacao, Kpi, Numero, RotuloSecao, TEXTO } from '@/components/ui';
+import { Barra, Cartao, Comparacao, Kpi, Numero, RotuloSecao, Tabela, TEXTO } from '@/components/ui';
 import { ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
 import {
     NOMES_SEMANA, NOTA_BOA, diaDaSemana, tempoCurto,
-    type DiaDestaque, type Mec, type MudancaEtapa, type NotaSemana, type Resumo,
+    type DiaDestaque, type LinhaComparacao, type Mec, type MudancaEtapa, type NotaSemana, type Resumo,
 } from '@/lib/evolucao';
 import { caminhoSvg, tomDelta, tomFaixa, setaDoTom, type Sentido } from '@/lib/visual';
 
@@ -182,8 +182,9 @@ const JEITO_METADE: Record<number, string> = {
     90: 'da primeira para a segunda metade do período',
 };
 
-export function Leitura({ sujeito, periodo, virada, subiu, caiu, comMec }: {
+export function Leitura({ sujeito, periodo, virada, subiu, caiu, comMec, mec = { href: '/meu-mec', rotulo: 'Ver o Meu MEC' } }: {
     sujeito: string; periodo: number; virada: number | null; subiu: MudancaEtapa | null; caiu: MudancaEtapa | null; comMec: boolean;
+    mec?: { href: '/meu-mec' | '/equipe/mec'; rotulo: string };
 }) {
     const frase = virada === null ? null
         : Math.abs(virada) < 2 ? `${sujeito} ficou estável ao longo do período.`
@@ -199,7 +200,7 @@ export function Leitura({ sujeito, periodo, virada, subiu, caiu, comMec }: {
                 </p>
             )}
             {comMec && (
-                <Link href="/meu-mec" className="mt-auto flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-azul">Ver o Meu MEC →</Link>
+                <Link href={mec.href} className="mt-auto flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-azul">{mec.rotulo} →</Link>
             )}
         </Cartao>
     );
@@ -418,5 +419,70 @@ export function DiaADia({ linhas, visiveis = 7 }: { linhas: LinhaDiaADia[]; visi
                 </details>
             )}
         </Cartao>
+    );
+}
+
+// --- A equipe lado a lado ----------------------------------------------------------------
+
+/**
+ * Gestor e admin comparam a equipe no período da tela. Cada linha abre a
+ * evolução daquele vendedor. Quem não teve nota no período fica atenuado no
+ * fim: folga ou número desconectado não é nota baixa.
+ */
+export function CompararVendedores({ linhas, periodo, comLoja, base = '/evolucao' }: {
+    linhas: LinhaComparacao[]; periodo: number; comLoja: boolean; base?: string;
+}) {
+    const grade = comLoja
+        ? 'minmax(150px,2fr) minmax(90px,1.2fr) 72px 92px 64px 84px 72px 84px'
+        : 'minmax(150px,2fr) 72px 92px 64px 84px 72px 84px';
+    const nota = (l: LinhaComparacao) => (l.resumo.nota === null ? null : Math.round(l.resumo.nota));
+    const tomNota = (v: number | null) => (v === null ? 'text-tinta-3' : TEXTO[tomFaixa(v, 40, 60)]);
+    const variacao = (d: number | null) => {
+        if (d === null) return <span className="text-tinta-3">—</span>;
+        const tom = tomDelta(d, 'maior');
+        return <span className={`font-semibold ${TEXTO[tom]}`}><span aria-hidden="true">{setaDoTom(tom)} </span>{d > 0 ? `+${d}` : d} pts</span>;
+    };
+    const tempo = (s: number | null) => (s === null ? '—' : tempoCurto(s));
+    const conversao = (c: number | null) => (c === null ? '—' : `${Math.round(c)}%`);
+    return (
+        <section className="flex flex-col gap-3.5">
+            <RotuloSecao complemento={`${periodo} dias, ordenados pela nota · toque para ver a evolução de cada um`}>A equipe lado a lado</RotuloSecao>
+            <Tabela
+                colunas={['Vendedor', ...(comLoja ? ['Loja'] : []), 'Nota', 'vs anterior', 'Leads', 'Conversão', 'Perdidas', 'Resposta']}
+                grade={grade} larguraMin={comLoja ? 860 : 740}
+                vazio="Nenhum vendedor ativo na equipe."
+                linhas={linhas.map((l) => {
+                    const v = nota(l);
+                    return {
+                        chave: l.id,
+                        href: `${base}${base.includes('?') ? '&' : '?'}vendedor=${l.id}&periodo=${periodo}`,
+                        atenuada: v === null,
+                        celulas: [
+                            <span key="n" className="block truncate font-semibold">{l.nome}</span>,
+                            ...(comLoja ? [<span key="l" className="block truncate text-tinta-2">{l.unidade ?? '—'}</span>] : []),
+                            <strong key="s" className={`num display text-base ${tomNota(v)}`}>{v ?? '—'}</strong>,
+                            variacao(l.deltaNota),
+                            <span key="ld" className="num">{n(l.resumo.leads)}</span>,
+                            <span key="c" className="num">{conversao(l.conversao)} <span className="text-tinta-3">({n(l.resumo.conversoes)})</span></span>,
+                            <span key="p" className="num">{n(l.resumo.perdidas)}</span>,
+                            <span key="t" className="num">{tempo(l.resumo.respostaS)}</span>,
+                        ],
+                        resumo: (
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="truncate font-semibold">{l.nome}</p>
+                                    <p className="text-[12.5px] text-tinta-2">
+                                        {comLoja && l.unidade ? `${l.unidade} · ` : ''}{plural(l.resumo.leads, 'lead', 'leads')} · {conversao(l.conversao)} conversão · {tempo(l.resumo.respostaS)}
+                                    </p>
+                                </div>
+                                <div className="flex shrink-0 flex-col items-end">
+                                    <strong className={`num display text-lg ${tomNota(v)}`}>{v ?? '—'}</strong>
+                                    <span className="text-[12px]">{variacao(l.deltaNota)}</span>
+                                </div>
+                            </div>
+                        ),
+                    };
+                })} />
+        </section>
     );
 }
