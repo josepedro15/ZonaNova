@@ -138,6 +138,19 @@ aderência medida na v1 não é comparável com a v2. Por isso o playbook é
 versionado no banco (§7.5) e toda linha de aderência aponta para a versão sob a
 qual foi medida.
 
+**Como está implementado (20/10/2026).** Antes de virar item do Book, a
+descoberta aprovada entra na análise como **prática aprovada da rede**
+(`lib/praticas.ts`): a análise de cada conversa recebe as aprovadas (da rede e
+da unidade, as mais antigas primeiro, até 12) e diz, com trecho literal, se o
+vendedor **seguiu** ou **deixou passar** cada uma cuja situação apareceu. Fica
+em `payload.praticas_aprovadas` com o texto do dia. Não muda
+`score_atendimento`, `erros_vendedor` nem o MEC, então a aderência continua
+comparável. Sem aprovada, o pedido à IA é byte a byte o de antes. A conversa
+mostra o cartão "Práticas aprovadas da rede", e a tela Descobertas mostra
+desde quando a IA usa cada uma e quantas conversas a seguiram ou deixaram
+passar. Promover a prática a item do Book (v(n+1)) continua sendo o passo
+seguinte, decidido com esses números.
+
 ## 7.5 Dados
 
 Somam-se ao modelo da [§2](02-modelo-de-dados.md):

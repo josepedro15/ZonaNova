@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { schemaDetalhe, schemaJsonDetalhe, type DetalheMec, type ItemPlaybook } from './mec.ts';
 import { LIMIAR_CLIENTE, LIMIAR_NATUREZA, NATUREZAS, QUEM_PEDE } from './natureza.ts';
+import { schemaJsonPraticas, schemaPraticas, type PraticaAprovada, type PraticaNaConversa } from './praticas.ts';
 
 export type MensagemAnalise = {
     direcao: 'entrada' | 'saida';
@@ -103,7 +104,7 @@ export const schemaJsonAnalise = {
     },
 } as const;
 
-export type ResultadoComDetalhe = ResultadoAnalise & { mec_detalhe?: DetalheMec | null };
+export type ResultadoComDetalhe = ResultadoAnalise & { mec_detalhe?: DetalheMec | null; praticas_aprovadas?: PraticaNaConversa[] };
 
 /** Minúsculas, sem acento nem pontuação: para comparar frases, não bytes. */
 const normalizar = (texto: string) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -229,21 +230,29 @@ export function ajustarResultado<T extends Pick<ResultadoAnalise, 'assuntos_do_d
  * unidade fora do piloto), é exatamente o de sempre; com itens, ganha o bloco
  * obrigatório `mec_detalhe` (null fora de negociação), com os enums do Book.
  */
-export function montarSchemaAnalise(itens: readonly ItemPlaybook[] | null): { zod: z.ZodType<ResultadoComDetalhe>; json: Record<string, unknown> } {
-    if (!itens) return { zod: schemaAnalise as unknown as z.ZodType<ResultadoComDetalhe>, json: schemaJsonAnalise as unknown as Record<string, unknown> };
-    // Detalhe fora do contrato é descartado (null), não derruba a análise do dia.
-    const detalhe = schemaDetalhe(itens).nullable().catch((ctx) => {
-        console.warn('[mec_detalhe] descartado:', ctx.issues[0]?.message ?? ctx.issues);
-        return null;
-    });
-    return {
-        zod: schemaAnalise.extend({ mec_detalhe: detalhe }) as unknown as z.ZodType<ResultadoComDetalhe>,
-        json: {
-            ...schemaJsonAnalise,
-            required: [...schemaJsonAnalise.required, 'mec_detalhe'],
-            properties: { ...schemaJsonAnalise.properties, mec_detalhe: { anyOf: [schemaJsonDetalhe(itens), { type: 'null' }] } },
-        },
-    };
+export function montarSchemaAnalise(itens: readonly ItemPlaybook[] | null, praticas: readonly PraticaAprovada[] = []): { zod: z.ZodType<ResultadoComDetalhe>; json: Record<string, unknown> } {
+    if (!itens && !praticas.length) return { zod: schemaAnalise as unknown as z.ZodType<ResultadoComDetalhe>, json: schemaJsonAnalise as unknown as Record<string, unknown> };
+    let zod: z.ZodObject<z.ZodRawShape> = schemaAnalise;
+    let required: string[] = [...schemaJsonAnalise.required];
+    let properties: Record<string, unknown> = { ...schemaJsonAnalise.properties };
+    if (itens) {
+        // Detalhe fora do contrato é descartado (null), não derruba a análise do dia.
+        const detalhe = schemaDetalhe(itens).nullable().catch((ctx) => {
+            console.warn('[mec_detalhe] descartado:', ctx.issues[0]?.message ?? ctx.issues);
+            return null;
+        });
+        zod = zod.extend({ mec_detalhe: detalhe });
+        required = [...required, 'mec_detalhe'];
+        properties = { ...properties, mec_detalhe: { anyOf: [schemaJsonDetalhe(itens), { type: 'null' }] } };
+    }
+    // As práticas aprovadas (lib/praticas.ts) saem com o código do prompt; o
+    // id da descoberta entra na leitura (pedido-analise.ts `schemaConferido`).
+    if (praticas.length) {
+        zod = zod.extend({ praticas_aprovadas: schemaPraticas(praticas) });
+        required = [...required, 'praticas_aprovadas'];
+        properties = { ...properties, praticas_aprovadas: schemaJsonPraticas(praticas) };
+    }
+    return { zod: zod as unknown as z.ZodType<ResultadoComDetalhe>, json: { ...schemaJsonAnalise, required, properties } };
 }
 
 export function dataEmSaoPaulo(instante: Date): string {

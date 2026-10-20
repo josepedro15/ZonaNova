@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ResultadoComDetalhe } from '@/lib/analise';
 import type { ItemPlaybook } from '@/lib/mec';
 import type { SinalContato } from '@/lib/natureza';
+import type { PraticaAprovada } from '@/lib/praticas';
 import Anthropic from '@anthropic-ai/sdk';
 import { analiseNoClaude, entradaClaude, esforcoClaude, RespostaIncompleta, textoDaMensagemClaude } from '@/lib/claude';
 import { MODELO_PADRAO, pedidoAnalise, pedidoAnaliseClaude } from '@/lib/pedido-analise';
@@ -23,7 +24,7 @@ function textoDaResposta(resposta: unknown): string {
 }
 
 type ResultadoDaAnalise = { resultado: ResultadoComDetalhe; modelo: string; entrada: number; saida: number };
-type PedidoDaConversa = { transcript: string; doutrina: string; itens: readonly ItemPlaybook[] | null; midia?: boolean; contato?: SinalContato | null };
+type PedidoDaConversa = { transcript: string; doutrina: string; itens: readonly ItemPlaybook[] | null; midia?: boolean; contato?: SinalContato | null; praticas?: readonly PraticaAprovada[] };
 
 /** A análise no Claude Haiku 5.5 (`ANALISE_PROVEDOR=anthropic`). */
 async function analisarNoClaude(pedido: PedidoDaConversa): Promise<ResultadoDaAnalise> {
@@ -41,12 +42,12 @@ async function analisarNoClaude(pedido: PedidoDaConversa): Promise<ResultadoDaAn
     };
 }
 
-export async function analisarConversa({ transcript, doutrina, itens, midia = false, contato = null }: PedidoDaConversa): Promise<ResultadoDaAnalise> {
-    if (analiseNoClaude()) return analisarNoClaude({ transcript, doutrina, itens, midia, contato });
+export async function analisarConversa({ transcript, doutrina, itens, midia = false, contato = null, praticas = [] }: PedidoDaConversa): Promise<ResultadoDaAnalise> {
+    if (analiseNoClaude()) return analisarNoClaude({ transcript, doutrina, itens, midia, contato, praticas });
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY não configurada');
     const modelo = process.env.OPENAI_MODEL || MODELO_PADRAO;
-    const { schema, corpo: pedido } = pedidoAnalise({ transcript, doutrina, itens, midia, modelo, contato });
+    const { schema, corpo: pedido } = pedidoAnalise({ transcript, doutrina, itens, midia, modelo, contato, praticas });
 
     const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',

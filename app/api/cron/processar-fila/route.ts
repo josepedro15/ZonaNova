@@ -6,7 +6,7 @@ import { descreverMidia, formatoLegivel, MAX_BYTES_MIDIA, midiaLigada } from '@/
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
 import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, saudacaoInvisivel, type MensagemAnalise } from '@/lib/analise';
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao } from '@/lib/mec';
-import { doutrinaMec } from '@/lib/pedido-analise';
+import { doutrinaMec, praticasAprovadas } from '@/lib/pedido-analise';
 import { cadastrosNaRede, DESCARTADA, naturezaSuspeita, sinalDoContato } from '@/lib/natureza';
 import { comResolvida, comVendaPresencial } from '@/lib/presencial';
 import { semAtividadeDeSaida } from '@/lib/consolidacao';
@@ -434,7 +434,10 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     // Número cadastrado como interno em outra loja da rede, ou cargo no nome:
     // decide quem é o contato por cima da leitura da IA (lib/natureza.ts).
     const contato = sinalDoContato({ nome: conversa.cliente_nome, cadastros: await cadastrosNaRede(supabase, conversa.cliente_telefone) });
-    const analise = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe, midia: comMidia, contato });
+    // O que o supervisor aprovou na tela Descobertas (lib/praticas.ts): a IA
+    // diz se o vendedor seguiu ou deixou passar, sem mexer na nota.
+    const praticas = await praticasAprovadas(supabase, unidadeId);
+    const analise = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe, midia: comMidia, contato, praticas });
     const { modelo, entrada, saida } = analise;
     const resultado = ajustarAcolhida(analise.resultado, { retomada, invisivel: saudacaoInvisivel(recorte) });
     // As provas do detalhe são conferidas contra a conversa antes de gravar

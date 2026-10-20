@@ -16,13 +16,14 @@ import { AvisoMarca } from '@/components/aviso-marca';
 import { carregarPlaybook } from '@/lib/mec-dados';
 import { Transcricao, textoDaMensagem, type Mensagem } from './transcricao';
 import { ChecklistMec, type ObsTela } from './checklist-mec';
+import { praticasDoPayload, ROTULO_PRATICA } from '@/lib/praticas';
 
 export const dynamic = 'force-dynamic';
 
 type Payload = {
     resumo?: string; destaque?: string; proxima_acao?: string; script_sugerido?: string;
     evidencias?: { trecho: string; conclusao: string }[];
-    tecnicas_usadas?: unknown; erros_vendedor?: unknown; tags?: unknown;
+    tecnicas_usadas?: unknown; erros_vendedor?: unknown; tags?: unknown; praticas_aprovadas?: unknown;
     perfil_cliente?: string; profissao_cliente?: string;
 };
 type Marcacao = { id: string; etapa: string; aplicavel: boolean; aplicado: string | null; justificativa: string; itens: unknown; playbook_id: string };
@@ -89,6 +90,8 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
     const tecnicas = listaDeTextos(payload.tecnicas_usadas);
     const erros = listaDeTextos(payload.erros_vendedor);
     const tags = listaDeTextos(payload.tags).slice(0, 8);
+    // As práticas que o supervisor aprovou em Descobertas e esta conversa tocou.
+    const praticas = praticasDoPayload(payload.praticas_aprovadas);
     const grifos = grifarConversa(mensagens.map(textoDaMensagem), evidencias.map((e) => e.trecho));
     // A mesma regra do "Esperando você": "obrigado" e reação não pedem
     // resposta, e a análise que deu o atendimento por terminado depois da
@@ -272,6 +275,27 @@ export default async function ConversaPage({ params }: { params: Promise<{ id: s
                                                 </ul>
                                             ) : <p className="text-[13px] text-tinta-3">Nenhum erro apontado.</p>}
                                         </div>
+                                    </Cartao>
+                                )}
+
+                                {praticas.length > 0 && (
+                                    <Cartao className="flex flex-col gap-3">
+                                        <div>
+                                            <h2 className="display text-base font-bold">Práticas aprovadas da rede</h2>
+                                            <p className="mt-0.5 text-[12px] text-tinta-3">Aprovadas pela supervisão em Descobertas. Não mudam a nota.</p>
+                                        </div>
+                                        <ul className="flex flex-col gap-3">
+                                            {praticas.map((p) => (
+                                                <li key={p.id} className="flex items-start gap-2.5">
+                                                    <span aria-hidden="true" className={`font-bold ${p.seguiu ? 'text-bom-texto' : 'text-atencao-texto'}`}>{p.seguiu ? '✓' : '!'}</span>
+                                                    <span className="flex flex-col gap-0.5">
+                                                        <span className="text-[13px] font-semibold leading-snug">{p.seguiu ? 'Seguiu' : 'Deixou passar'} · {ROTULO_PRATICA[p.tipo] ?? 'Prática'}</span>
+                                                        <span className="text-[13px] leading-snug text-tinta-2">{p.texto}</span>
+                                                        <span className="text-[12px] text-tinta-3">“{p.trecho}”</span>
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </Cartao>
                                 )}
 
