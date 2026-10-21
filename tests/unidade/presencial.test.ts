@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    comResolvida, comVendaPresencial, diaDaVendaPresencial, MARCA_PRESENCIAL, MARCA_RESOLVIDA, marcaDeDesfecho, semResolvida, semVendaPresencial, ultimaMarca,
+    comResolvida, comVendaPresencial, contaNaNota, diaDaVendaPresencial, MARCA_PRESENCIAL, MARCA_RESOLVIDA, marcaDeDesfecho, semResolvida, semVendaPresencial, ultimaMarca,
 } from '../../lib/presencial.ts';
 
 const daIa = { tipo_conversa: 'negociacao', status: 'em_andamento', payload: { resumo: 'pediu orçamento' } };
@@ -39,6 +39,24 @@ test('payload nulo não quebra', () => {
     const marcada = comVendaPresencial({ tipo_conversa: null, status: null, payload: null });
     assert.equal(marcada.status, 'venda_feita');
     assert.deepEqual(semVendaPresencial(marcada), { tipo_conversa: null, status: null, payload: {} });
+});
+
+// --- a nota do dia (Silas, 21/10) --------------------------------------------
+
+test('negociação da IA marcada presencial continua na nota', () => {
+    assert.equal(contaNaNota(comVendaPresencial(daIa)), true);
+    assert.equal(contaNaNota(daIa), true);
+});
+
+// Bruno, Capão, 20/10: mídia sem texto, social com nota 0, marcada presencial.
+test('social ou suporte que só virou negociação pela marca fica fora da nota', () => {
+    assert.equal(contaNaNota(comVendaPresencial({ ...daIa, tipo_conversa: 'social', status: 'encerrada' })), false);
+    assert.equal(contaNaNota(comVendaPresencial({ ...daIa, tipo_conversa: 'suporte' })), false);
+});
+
+test('suporte e social sem marca nunca entram na nota', () => {
+    assert.equal(contaNaNota({ ...daIa, tipo_conversa: 'suporte' }), false);
+    assert.equal(contaNaNota({ tipo_conversa: null, status: null, payload: null }), false);
 });
 
 // --- em que dia a venda conta ------------------------------------------------

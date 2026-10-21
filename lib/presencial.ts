@@ -57,6 +57,19 @@ export function semVendaPresencial(a: AnalisePresencial): AnalisePresencial {
 }
 
 /**
+ * A nota da conversa entra na nota do dia? Só a de negociação que a IA
+ * avaliou como negociação. A marca faz da conversa social ou de suporte uma
+ * venda, e ela conta nas conversões, mas a nota que a IA deu mede outra coisa:
+ * a mídia sem texto do cliente que veio à loja saía 0 e derrubou o dia do
+ * Bruno (Capão, 20/10) de 66 para 53 (Silas, 21/10).
+ */
+export function contaNaNota(a: AnalisePresencial): boolean {
+    if (a.tipo_conversa !== 'negociacao') return false;
+    const antes = a.payload?.[MARCA_PRESENCIAL] ? a.payload[ANTES] as { tipo_conversa?: string | null } | undefined : undefined;
+    return !antes || antes.tipo_conversa === 'negociacao';
+}
+
+/**
  * A análise com o atendimento resolvido: encerrada, no tipo que a IA deu.
  * Venda que a IA viu no mesmo dia continua venda — resolver o pós-venda não
  * apaga uma compra nova.

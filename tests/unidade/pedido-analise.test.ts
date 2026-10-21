@@ -1,13 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pedidoAnalise, pedidoAnaliseClaude, REGRA_ERROS, REGRA_ESCALAS, REGRA_OBJECOES, REGRA_STATUS, REGRA_SUPORTE, REGRA_TIPO } from '../../lib/pedido-analise.ts';
+import { pedidoAnalise, pedidoAnaliseClaude, REGRA_ERROS, REGRA_ESCALAS, REGRA_OBJECOES, REGRA_PROXIMA, REGRA_STATUS, REGRA_SUPORTE, REGRA_TIPO } from '../../lib/pedido-analise.ts';
 import { naturezaSuspeita, REGRA_NATUREZA } from '../../lib/natureza.ts';
 
 const instrucoes = () => pedidoAnalise({ transcript: 'C: "oi"', doutrina: 'MEC', itens: null, modelo: 'gpt-4.1-mini' }).corpo.instructions;
 
 test('o prompt leva todas as regras', () => {
     const texto = instrucoes();
-    for (const regra of [REGRA_ESCALAS, REGRA_NATUREZA, REGRA_STATUS, REGRA_TIPO, REGRA_SUPORTE, REGRA_OBJECOES, REGRA_ERROS]) assert.ok(texto.includes(regra));
+    for (const regra of [REGRA_ESCALAS, REGRA_NATUREZA, REGRA_STATUS, REGRA_TIPO, REGRA_SUPORTE, REGRA_OBJECOES, REGRA_ERROS, REGRA_PROXIMA]) assert.ok(texto.includes(regra));
+    const claude = pedidoAnaliseClaude({ transcript: 'C: "oi"', doutrina: 'MEC', itens: null }).corpo.system[0].text;
+    assert.ok(claude.includes(REGRA_PROXIMA));
+});
+
+// Silas, 20/10: "envie a chave Pix" depois de o vendedor mandar o e-mail do financeiro.
+test('a sugestão é o próximo passo e o e-mail do financeiro é a chave Pix', () => {
+    assert.match(REGRA_PROXIMA, /Nunca peça nem conte o que já foi feito/);
+    assert.match(REGRA_PROXIMA, /V: "financeiro@zonanova.com.br" = chave Pix enviada/);
 });
 
 // Auditoria de 07/10: o vendedor pedindo ao estoque saía cliente, o

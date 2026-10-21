@@ -8,7 +8,7 @@ import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTr
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao } from '@/lib/mec';
 import { doutrinaMec, praticasAprovadas } from '@/lib/pedido-analise';
 import { cadastrosNaRede, DESCARTADA, naturezaSuspeita, sinalDoContato } from '@/lib/natureza';
-import { comResolvida, comVendaPresencial } from '@/lib/presencial';
+import { comResolvida, comVendaPresencial, contaNaNota } from '@/lib/presencial';
 import { semAtividadeDeSaida } from '@/lib/consolidacao';
 import { paginar } from '@/lib/paginar';
 import { capturaDoDia, type Buraco } from '@/lib/captura';
@@ -536,8 +536,10 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
     const corte = new Date(Math.min(fim.getTime(), Date.now()));
     const tempos = [...porConversa.values()].flatMap((msgs) => temposDeResposta(msgs, corte));
     const respostas = [...porConversa.values()].flatMap((msgs) => respostasPorBloco(msgs, corte));
+    // A venda marcada na loja conta nas conversões; a nota, só se a IA viu negociação.
+    const comNota = negociacoes.filter(contaNaNota);
     const metricas = {
-        score_geral: negociacoes.length ? negociacoes.reduce((s, a) => s + Number(a.score_atendimento ?? 0), 0) / negociacoes.length : null,
+        score_geral: comNota.length ? comNota.reduce((s, a) => s + Number(a.score_atendimento ?? 0), 0) / comNota.length : null,
         leads_atendidos: porConversa.size,
         conversoes_confirmadas: negociacoes.filter((a) => a.status === 'venda_feita').length,
         oportunidades_perdidas: negociacoes.filter((a) => a.status === 'perdida' || a.status === 'lead_frio').length,
