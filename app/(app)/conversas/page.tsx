@@ -30,7 +30,11 @@ export default async function ConversasPage({ searchParams }: { searchParams: Pr
     let consulta = supabase.from('conversas')
         .select(`id,user_id,cliente_nome,cliente_telefone,ultima_mensagem_em,total_mensagens,dispensada_em,fechada_presencial_em,resolvida_em,profiles!conversas_user_id_fkey(nome)${embed}` as string)
         .eq('bloqueada', false)
-        .order('ultima_mensagem_em', { ascending: false }).limit(JANELA);
+        // A importação do histórico cria conversa sem nenhuma mensagem (data
+        // nula), e em ordem decrescente o nulo vem primeiro: a Danielly via as
+        // 100 vagas tomadas por "Contato sem número visível" (Silas, 23/10/2026).
+        .gt('total_mensagens', 0)
+        .order('ultima_mensagem_em', { ascending: false, nullsFirst: false }).limit(JANELA);
     if (naoAnalisada) consulta = consulta.is('analises_conversa', null);
     else {
         if (daAnalise.tipo) consulta = consulta.eq('analises_conversa.tipo_conversa', daAnalise.tipo);
