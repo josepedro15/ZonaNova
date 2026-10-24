@@ -98,6 +98,11 @@ export async function cadastrar(_estado: Resultado, form: FormData): Promise<Res
         // O trigger on_auth_user_created lê estes campos e cria o profile já
         // com a unidade escolhida, em status 'pendente'.
         user_metadata: { nome, telefone, unidade_id: unidadeId },
+        // Desde a 0034 a unidade vem daqui: app_metadata só o service role
+        // grava, e é ela que decide em que fila de aprovação o cadastro cai.
+        // A cópia em user_metadata acima só serve ao trigger antigo, enquanto
+        // a 0034 não estiver aplicada; depois disso pode sair.
+        app_metadata: { unidade_id: unidadeId },
     });
 
     if (erroCriar) {
