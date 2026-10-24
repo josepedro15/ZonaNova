@@ -24,6 +24,33 @@ export function tokenDeRota(conexaoId: string, segredo: string): string {
     return `${conexaoId}.${assinar(conexaoId, segredo)}`;
 }
 
+export type DecisaoToken = 'conferir' | 'aceitar_sem_token' | 'descartar';
+
+/**
+ * O que fazer com o `instance_token` do payload. Até a auditoria de 24/10/2026,
+ * payload SEM token pulava a segunda pergunta e bastava a URL — quem a
+ * obtivesse (log, painel da UAZAPI compartilhada) injetava mensagem no
+ * vendedor dela.
+ *
+ * Ainda não está provado que a UAZAPI manda o token em todo evento, então a
+ * exigência entra em duas fases pela UAZAPI_EXIGIR_TOKEN:
+ * - ausente: o que chega sem token passa, e fica no log (observar);
+ * - `sim`: o que chega sem token é descartado com 200. Não 401: a UAZAPI
+ *   reentregaria para sempre um evento legítimo que por acaso venha sem token.
+ */
+export function decidirTokenDaInstancia(
+    tokenPayload: string | null | undefined,
+    temGuardado: boolean,
+    exigir: boolean,
+): DecisaoToken {
+    if (tokenPayload && temGuardado) return 'conferir';
+    return exigir ? 'descartar' : 'aceitar_sem_token';
+}
+
+export function exigeTokenDaInstancia(env: Record<string, string | undefined>): boolean {
+    return env.UAZAPI_EXIGIR_TOKEN === 'sim';
+}
+
 /** Devolve o id da conexão, ou null se a assinatura não bate. */
 export function conexaoDoToken(token: string, segredo: string): string | null {
     const corte = token.lastIndexOf('.');
