@@ -67,14 +67,31 @@ alter table public.aderencia_contestacoes
 -- -----------------------------------------------------------------------------
 -- 3. Conversa bloqueada some também da API
 -- -----------------------------------------------------------------------------
--- As tabelas filhas perguntam pela conversa com `exists` POSITIVO: a RLS de
--- `conversas` já esconde a bloqueada, então "a conversa existe para mim"
--- quer dizer "está no meu escopo e não está bloqueada". Um `not exists (…
--- bloqueada)` vazaria — a subconsulta não enxergaria a conversa bloqueada e
--- o teste daria verdadeiro.
+-- Análise, aderência e observação do MEC perguntam SÓ se a conversa está
+-- bloqueada, por uma função definer, e seguem com o escopo da própria linha.
+-- Passar pela RLS de `conversas` (um `exists` na tabela) herdaria o escopo da
+-- conversa: o vendedor transferido de unidade leva a conversa para a unidade
+-- nova (zn_conversa_do_contato, 0031), a análise antiga fica na de origem, e o
+-- gestor da origem perderia o histórico dela. E um `not exists (… bloqueada)`
+-- pela RLS vazaria: a subconsulta não enxergaria a conversa bloqueada.
+--
+-- A função devolve um booleano por id (uuid aleatório): não abre conversa de
+-- ninguém. Sem linha (conversa apagada) conta como não bloqueada; as filhas
+-- caem em cascata com ela.
 --
 -- Bloquear, desbloquear, excluir e o worker usam o service role, que passa
 -- por cima da RLS; nenhuma tela lê conversa bloqueada pela sessão.
+create or replace function public.zn_conversa_bloqueada(p_conversa uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select coalesce((select c.bloqueada from public.conversas c where c.id = p_conversa), false);
+$$;
+revoke execute on function public.zn_conversa_bloqueada(uuid) from public, anon;
+grant execute on function public.zn_conversa_bloqueada(uuid) to authenticated;
 drop policy if exists p_conversas_select on public.conversas;
 create policy p_conversas_select on public.conversas
     for select to authenticated
@@ -101,7 +118,7 @@ create policy p_analises_select on public.analises_conversa
     using (
         public.zn_ativo()
         and (user_id = auth.uid() or unidade_id in (select public.zn_unidades_visiveis()))
-        and exists (select 1 from public.conversas c where c.id = analises_conversa.conversa_id)
+        and not public.zn_conversa_bloqueada(analises_conversa.conversa_id)
     );
 
 drop policy if exists p_aderencia_select on public.aderencia_conversa;
@@ -110,7 +127,7 @@ create policy p_aderencia_select on public.aderencia_conversa
     using (
         public.zn_ativo()
         and (user_id = auth.uid() or unidade_id in (select public.zn_unidades_visiveis()))
-        and exists (select 1 from public.conversas c where c.id = aderencia_conversa.conversa_id)
+        and not public.zn_conversa_bloqueada(aderencia_conversa.conversa_id)
     );
 
 drop policy if exists p_mec_observacoes_select on public.mec_observacoes;
@@ -119,7 +136,7 @@ create policy p_mec_observacoes_select on public.mec_observacoes
     using (
         public.zn_ativo()
         and (user_id = auth.uid() or unidade_id in (select public.zn_unidades_visiveis()))
-        and exists (select 1 from public.conversas c where c.id = mec_observacoes.conversa_id)
+        and not public.zn_conversa_bloqueada(mec_observacoes.conversa_id)
     );
 
 -- -----------------------------------------------------------------------------

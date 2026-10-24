@@ -893,6 +893,23 @@ set role authenticated;
 select pg_temp.como('44444444-4444-4444-4444-444444444444');
 select pg_temp.ok('antes do bloqueio o vendedor lê a conversa e o que pende dela',
        (select (pg_temp.visivel_c1() >= 5)::int), 1);
+-- Transferência: o vendedor muda de unidade e a conversa vai junto (0031), mas
+-- a análise, a aderência e a observação antigas ficam na unidade de origem.
+-- O gestor da origem segue vendo esse histórico: o bloqueio não pode herdar o
+-- escopo da conversa.
+reset role;
+update public.conversas set unidade_id = 'aaaaaaaa-0000-0000-0000-000000000002'
+ where id = 'cccccccc-0000-0000-0000-000000000001';
+set role authenticated;
+select pg_temp.como('22222222-2222-2222-2222-222222222222');
+select pg_temp.ok('conversa transferida: gestor da origem segue vendo análise, aderência e MEC antigos',
+       (select count(*) from public.analises_conversa where conversa_id = 'cccccccc-0000-0000-0000-000000000001' and data_ref = '2026-01-02')
+     + (select count(*) from public.aderencia_conversa where id = 'eeeeeeee-0000-0000-0034-000000000001')
+     + (select count(*) from public.mec_observacoes where conversa_id = 'cccccccc-0000-0000-0000-000000000001' and data_ref = '2026-01-02'), 3);
+reset role;
+update public.conversas set unidade_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+ where id = 'cccccccc-0000-0000-0000-000000000001';
+
 reset role;
 update public.conversas set bloqueada = true where id = 'cccccccc-0000-0000-0000-000000000001';
 set role authenticated;
@@ -930,3 +947,11 @@ select pg_temp.ok('cadastro do app leva a unidade gravada no app_metadata',
            and unidade_id = 'aaaaaaaa-0000-0000-0000-000000000002' and nome = 'Cadastro do app'), 1);
 delete from public.profiles where id::text like '99999999-0000-0000-0034-%';
 delete from auth.users where id::text like '99999999-0000-0000-0034-%';
+
+do $$
+begin
+    if has_function_privilege('anon', 'public.zn_conversa_bloqueada(uuid)', 'execute')
+       or not has_function_privilege('authenticated', 'public.zn_conversa_bloqueada(uuid)', 'execute')
+    then raise notice 'FALHOU  zn_conversa_bloqueada com privilégio errado';
+    else raise notice 'PASSOU  zn_conversa_bloqueada só para authenticated'; end if;
+end $$;
