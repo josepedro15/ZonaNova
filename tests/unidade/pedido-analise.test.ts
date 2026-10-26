@@ -1,15 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pedidoAnalise, pedidoAnaliseClaude, REGRA_ERROS, REGRA_ESCALAS, REGRA_OBJECOES, REGRA_PROXIMA, REGRA_STATUS, REGRA_SUPORTE, REGRA_TIPO } from '../../lib/pedido-analise.ts';
+import { pedidoAnalise, pedidoAnaliseClaude, pedidoFeedbacksClaude, REGRA_ERROS, REGRA_ESCALAS, REGRA_FEEDBACKS, REGRA_OBJECOES, REGRA_PROXIMA, REGRA_STATUS, REGRA_SUPORTE, REGRA_TIPO } from '../../lib/pedido-analise.ts';
 import { naturezaSuspeita, REGRA_NATUREZA } from '../../lib/natureza.ts';
 
 const instrucoes = () => pedidoAnalise({ transcript: 'C: "oi"', doutrina: 'MEC', itens: null, modelo: 'gpt-4.1-mini' }).corpo.instructions;
 
 test('o prompt leva todas as regras', () => {
     const texto = instrucoes();
-    for (const regra of [REGRA_ESCALAS, REGRA_NATUREZA, REGRA_STATUS, REGRA_TIPO, REGRA_SUPORTE, REGRA_OBJECOES, REGRA_ERROS, REGRA_PROXIMA]) assert.ok(texto.includes(regra));
+    for (const regra of [REGRA_ESCALAS, REGRA_NATUREZA, REGRA_STATUS, REGRA_TIPO, REGRA_SUPORTE, REGRA_OBJECOES, REGRA_ERROS, REGRA_PROXIMA, REGRA_FEEDBACKS]) assert.ok(texto.includes(regra));
     const claude = pedidoAnaliseClaude({ transcript: 'C: "oi"', doutrina: 'MEC', itens: null }).corpo.system[0].text;
     assert.ok(claude.includes(REGRA_PROXIMA));
+    assert.ok(claude.includes(REGRA_FEEDBACKS));
 });
 
 // Silas, 20/10: "envie a chave Pix" depois de o vendedor mandar o e-mail do financeiro.
@@ -142,4 +143,30 @@ test('a resposta do Claude volta aos limites e passa pelas mesmas conferências'
     assert.equal(r.status, 'venda_feita');
     // Sem as 7 etapas do MEC não há o que ajustar: a resposta é recusada.
     assert.throws(() => schema.zod.parse({ ...resposta, mec: resposta.mec.slice(0, 6) }));
+});
+
+// Página Feedbacks (Silas, 22/10): a regra vai no fim, depois do MEC, para não
+// mexer no começo calibrado e em cache do prompt.
+test('a regra dos feedbacks vai no fim e separa feedback de cortesia e de objeção', () => {
+    const texto = instrucoes();
+    assert.ok(texto.indexOf(REGRA_FEEDBACKS) > texto.indexOf('MEC VIGENTE'));
+    assert.match(REGRA_FEEDBACKS, /linhas C:/);
+    assert.match(REGRA_FEEDBACKS, /obrigad/);
+    assert.match(REGRA_FEEDBACKS, /objecoes/);
+});
+
+// O histórico (scripts/extrair-feedbacks.ts) pede só os feedbacks, com a mesma
+// regra e a mesma conferência do trecho da análise do dia.
+test('o pedido só de feedbacks leva a regra e confere o trecho contra a conversa', () => {
+    const transcript = ['C: "Chegou tudo certinho, muito obrigada!"', 'V: "Nosso atendimento é o melhor"'].join('\n');
+    const { corpo, schema } = pedidoFeedbacksClaude({ transcript });
+    assert.ok(corpo.system[0].text.includes(REGRA_FEEDBACKS));
+    assert.ok(String(corpo.messages[0].content).includes(transcript));
+    assert.deepEqual(Object.keys((corpo.output_config.format.schema as { properties: object }).properties), ['feedbacks']);
+    const r = schema.parse({ feedbacks: [
+        { polaridade: 'positivo', assunto: 'entrega_frete', trecho: 'Chegou tudo certinho' },
+        { polaridade: 'positivo', assunto: 'atendimento', trecho: 'Nosso atendimento é o melhor' },
+    ] });
+    assert.deepEqual(r.feedbacks.map((f) => f.trecho), ['Chegou tudo certinho']);
+    assert.deepEqual(schema.parse({}).feedbacks, []);
 });

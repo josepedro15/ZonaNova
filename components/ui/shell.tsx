@@ -18,6 +18,9 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/conversas', rotulo: 'Conversas', icone: 'conversa' },
         { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/meu-mec', rotulo: 'Meu MEC', icone: 'mec' },
+        // Os elogios e as reclamações das próprias conversas (Silas, 22/10).
+        // No celular toma o lugar do Perfil, que também está no topo da tela.
+        { href: '/feedbacks', rotulo: 'Feedbacks', icone: 'estrela' },
         { href: '/perfil', rotulo: 'Perfil', icone: 'pessoa' },
     ],
     gestor: [
@@ -27,9 +30,10 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/equipe/mec', rotulo: 'Aderência ao MEC', curto: 'MEC', icone: 'mec' },
         { href: '/conversas', rotulo: 'Conversas', icone: 'conversa' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
-        // No celular, Objeções e Configurações cedem o lugar: as objeções da
-        // semana estão na Minha equipe, e o Perfil no topo da tela.
+        // No celular, Objeções, Feedbacks e Configurações cedem o lugar: as
+        // objeções da semana estão na Minha equipe, e o Perfil no topo da tela.
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
+        { href: '/feedbacks', rotulo: 'Feedbacks', icone: 'estrela' },
         { href: '/perfil', rotulo: 'Configurações', curto: 'Ajustes', icone: 'engrenagem' },
     ],
     supervisor: [
@@ -46,6 +50,7 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/descobertas', rotulo: 'Descobertas', icone: 'lampada' },
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
+        { href: '/feedbacks', rotulo: 'Feedbacks', icone: 'estrela' },
         { href: '/perfil', rotulo: 'Perfil', icone: 'pessoa' },
     ],
     admin: [
@@ -56,6 +61,7 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
         { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
+        { href: '/feedbacks', rotulo: 'Feedbacks', icone: 'estrela' },
         { href: '/perfil', rotulo: 'Perfil', icone: 'pessoa' },
     ],
 };

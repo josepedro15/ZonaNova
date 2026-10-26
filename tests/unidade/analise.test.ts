@@ -346,3 +346,35 @@ test('Pix de nota antiga sem comprovante é pós-venda, não venda', () => {
     assert.equal(notaAntiga('V: "Aquela nota de meses atrás"'), false);
     assert.equal(notaAntiga('C: "é sobre aquela nota"'), true);
 });
+
+// Página Feedbacks (Silas, 22/10).
+test('feedbacks fora do contrato não derrubam a análise', () => {
+    const { feedbacks } = schemaAnalise.shape;
+    assert.deepEqual(feedbacks.parse(undefined), []);
+    assert.deepEqual(feedbacks.parse('nenhum'), []);
+    assert.deepEqual(feedbacks.parse([{ polaridade: 'negativo', assunto: 'logistica', trecho: 'atrasou de novo' }]),
+        [{ polaridade: 'negativo', assunto: 'outros', trecho: 'atrasou de novo' }]);
+    // Item sem polaridade ou sem trecho sai; o resto fica.
+    assert.deepEqual(feedbacks.parse([{ polaridade: 'neutro', assunto: 'preco', trecho: 'x' }, { polaridade: 'positivo', assunto: 'atendimento', trecho: '' },
+        { polaridade: 'positivo', assunto: 'atendimento', trecho: 'adorei o atendimento' }]),
+        [{ polaridade: 'positivo', assunto: 'atendimento', trecho: 'adorei o atendimento' }]);
+});
+
+test('feedbacks é o último campo do schema: não influi no resto da análise', () => {
+    const ordem = Object.keys(schemaJsonAnalise.properties);
+    assert.equal(ordem.at(-1), 'feedbacks');
+});
+
+test('feedback que não está numa fala do cliente sai', () => {
+    const transcript = ['C: "Bom dia, a entrega atrasou de novo, já é a segunda vez!"', 'V: "Peço desculpas, nosso atendimento é sempre o melhor"',
+        'C: "Mas o Rafael é muito atencioso, isso eu reconheço"'].join('\n');
+    const r = ajustarResultado({ ...resultado(), feedbacks: [
+        { polaridade: 'negativo' as const, assunto: 'entrega_frete' as const, trecho: 'a entrega atrasou de novo, já é a segunda vez' },
+        { polaridade: 'positivo' as const, assunto: 'atendimento' as const, trecho: 'Rafael é muito atencioso' },
+        // Do vendedor, não do cliente.
+        { polaridade: 'positivo' as const, assunto: 'atendimento' as const, trecho: 'nosso atendimento é sempre o melhor' },
+        // Inventado.
+        { polaridade: 'positivo' as const, assunto: 'produto' as const, trecho: 'o piso ficou lindo' },
+    ] }, transcript);
+    assert.deepEqual(r.feedbacks.map((f) => f.trecho), ['a entrega atrasou de novo, já é a segunda vez', 'Rafael é muito atencioso']);
+});

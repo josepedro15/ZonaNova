@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { schemaFeedbacks, schemaJsonFeedbacks, type Feedback } from './feedbacks.ts';
 import { schemaDetalhe, schemaJsonDetalhe, type DetalheMec, type ItemPlaybook } from './mec.ts';
 import { LIMIAR_CLIENTE, LIMIAR_NATUREZA, NATUREZAS, QUEM_PEDE } from './natureza.ts';
 import { schemaJsonPraticas, schemaPraticas, type PraticaAprovada, type PraticaNaConversa } from './praticas.ts';
@@ -64,13 +65,15 @@ export const schemaAnalise = z.object({
         evidencias: z.array(z.string()),
         itens: z.array(z.string()),
     })).length(7),
+    // Elogios e reclamações do cliente (lib/feedbacks.ts, Silas 22/10).
+    feedbacks: schemaFeedbacks,
 });
 
 export type ResultadoAnalise = z.infer<typeof schemaAnalise>;
 
 export const schemaJsonAnalise = {
     type: 'object', additionalProperties: false,
-    required: ['quem_pede','assuntos_do_dia','natureza_contato','confianca_natureza','evidencia_natureza','tipo_conversa','status','sentiment','score_atendimento','score_oportunidade','score_risco','estagio_funil','potencial_venda','urgencia','resumo','destaque','proxima_acao','script_sugerido','objecoes','tecnicas_usadas','erros_vendedor','tags','evidencias','mec','perfil_cliente','profissao_cliente'],
+    required: ['quem_pede','assuntos_do_dia','natureza_contato','confianca_natureza','evidencia_natureza','tipo_conversa','status','sentiment','score_atendimento','score_oportunidade','score_risco','estagio_funil','potencial_venda','urgencia','resumo','destaque','proxima_acao','script_sugerido','objecoes','tecnicas_usadas','erros_vendedor','tags','evidencias','mec','perfil_cliente','profissao_cliente','feedbacks'],
     // A natureza vem primeiro: o modelo escreve na ordem do schema, e decidir
     // quem é o contato depois de avaliar a venda inteira dava "cliente" quase
     // sempre. Pelo mesmo motivo, quem pede e os assuntos do dia vêm antes dela:
@@ -101,6 +104,9 @@ export const schemaJsonAnalise = {
             aplicavel: { type: 'boolean' }, aplicado: { type: 'string', enum: ['sim','parcial','nao','nao_verificavel'] }, justificativa: { type: 'string' },
             evidencias: { type: 'array', items: { type: 'string' } }, itens: { type: 'array', items: { type: 'string' } },
         } } },
+        // Por último: o modelo escreve na ordem do schema, e os feedbacks não
+        // devem pesar na natureza, no status nem na nota.
+        feedbacks: schemaJsonFeedbacks,
     },
 } as const;
 
@@ -181,8 +187,10 @@ export function notaAntiga(transcript: string): boolean {
  * - O vendedor passou o pagamento ao crediário ou ao financeiro
  *   (`pagamentoComOSetor`): a compra nova em aberto está fechada. Com a regra
  *   só no prompt, o modelo deixava em aberto três rodadas em três (09/10).
+ * - Feedback cujo trecho não está numa fala do cliente sai: a aba Feedbacks
+ *   mostra o trecho como "o cliente disse" (22/10).
  */
-export function ajustarResultado<T extends Pick<ResultadoAnalise, 'assuntos_do_dia' | 'status' | 'tipo_conversa' | 'natureza_contato' | 'confianca_natureza' | 'objecoes'>>(r: T, transcript: string): T {
+export function ajustarResultado<T extends Pick<ResultadoAnalise, 'assuntos_do_dia' | 'status' | 'tipo_conversa' | 'natureza_contato' | 'confianca_natureza' | 'objecoes'> & { feedbacks?: Feedback[] }>(r: T, transcript: string): T {
     let ajustado = r;
     if (notaAntiga(transcript) && !comprovanteNoDia(transcript) && r.assuntos_do_dia.some((a) => a.situacao === 'compra_nova_fechada')) {
         const assuntos = r.assuntos_do_dia.map((a) => (a.situacao === 'compra_nova_fechada' ? { ...a, situacao: 'pos_venda' as const } : a));
@@ -222,7 +230,28 @@ export function ajustarResultado<T extends Pick<ResultadoAnalise, 'assuntos_do_d
         return doV >= 0.8 && parte(doContatoV) < doV;
     };
     if (ajustado.objecoes.some(copiada)) ajustado = { ...ajustado, objecoes: ajustado.objecoes.filter((o) => !copiada(o)) };
+    if (ajustado.feedbacks?.length) {
+        const conferidos = feedbacksDoCliente(ajustado.feedbacks, transcript);
+        if (conferidos.length < ajustado.feedbacks.length) ajustado = { ...ajustado, feedbacks: conferidos };
+    }
     return ajustado;
+}
+
+/**
+ * Só fica o feedback cujo trecho está numa fala do cliente: a aba Feedbacks
+ * mostra o trecho como "o cliente disse". Literal, ou quase — o modelo tira
+ * pontuação e às vezes uma palavra.
+ */
+export function feedbacksDoCliente(feedbacks: readonly Feedback[], transcript: string): Feedback[] {
+    const doContato = falasDe(transcript, 'C');
+    const vocabulario = new Set(doContato.flatMap((f) => f.split(' ')));
+    return feedbacks.filter((f) => {
+        const trecho = normalizar(f.trecho);
+        if (!trecho) return false;
+        if (doContato.some((fala) => fala.includes(trecho))) return true;
+        const palavras = [...new Set(trecho.split(' ').filter((p) => p.length >= 4))];
+        return palavras.length >= 2 && palavras.filter((p) => vocabulario.has(p)).length / palavras.length >= 0.8;
+    });
 }
 
 /**
