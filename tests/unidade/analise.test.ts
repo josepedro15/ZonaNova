@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ajustarAcolhida, ajustarResultado, comprovanteNoDia, notaAntiga, pagamentoComOSetor, aderenciaPercentual, saudacaoInvisivel, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
+import { ajustarAcolhida, ajustarResultado, comprovanteNoDia, notaAntiga, pagamentoComOSetor, aderenciaPercentual, saudacaoInvisivel, custoEstimado, dataEmSaoPaulo, dataValida, diaFechado, hashTranscript, janelaDoDia, MARCA_FORA_DO_EXPEDIENTE, marcaRetomada, montarTranscript, MAX_CHARS_FALA, MAX_CHARS_TRANSCRIPT, schemaAnalise, schemaJsonAnalise } from '../../lib/analise.ts';
 
 test('o dia comercial usa São Paulo na virada do UTC', () => {
     assert.equal(dataEmSaoPaulo(new Date('2026-09-22T01:30:00Z')), '2026-09-21');
@@ -240,6 +240,14 @@ test('compra nova fechada entre os assuntos é venda, mesmo com o último assunt
     ] }), '');
     assert.equal(r.status, 'venda_feita');
     assert.equal(r.tipo_conversa, 'negociacao');
+});
+
+// Silas, 27/10: domingo e sábado à tarde não são "sem resposta".
+test('com a marca de fora do expediente, sem_resposta vira em_andamento', () => {
+    const transcript = ['V: "Bom dia"', 'C: "Tem cimento CP2?"', MARCA_FORA_DO_EXPEDIENTE].join('\n');
+    assert.equal(ajustarResultado(resultado({ status: 'sem_resposta' }), transcript).status, 'em_andamento');
+    assert.equal(ajustarResultado(resultado({ status: 'sem_resposta' }), 'C: "Tem cimento CP2?"').status, 'sem_resposta');
+    assert.equal(ajustarResultado(resultado({ status: 'perdida' }), transcript).status, 'perdida');
 });
 
 test('contato interno com "compra fechada" não vira venda', () => {

@@ -1,10 +1,11 @@
+import type { Route } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import {
     Avatar, Barra, BotaoLink, Cartao, Comparacao, Icone, Kpi, Numero, SELO, Selo, SerieDias, Tabela, TEXTO, TempoEspera,
     type DiaSerie,
 } from '@/components/ui';
-import { comparaTempo, falaCurta, listaDeTextos, rotuloPerfilCliente, setaDoTom, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
+import { comparaTempo, falaCurta, listaDeTextos, rotuloPerfilCliente, setaDoTom, textosComConversa, tomDelta, tomEspera, tomFaixa, urgenciaAlta } from '@/lib/visual';
 import { ETAPAS, NOMES_ETAPA } from '@/lib/derivacoes';
 import { esperaDoCliente, esperaEmTexto, linkResponder, type Aparelho, telefoneBonito, type Msg } from '@/lib/painel';
 import { DIAS_PARA_RETOMAR, type ItemRetomar } from '@/lib/retomar';
@@ -43,6 +44,8 @@ export type Coaching = {
     resumo?: string; melhorias?: string[]; elogio?: string; desafio?: string;
     // Também saem do fechamento diário e não apareciam em tela nenhuma.
     padroes_sucesso?: unknown; padroes_falha?: unknown; objecoes_frequentes?: unknown; alertas?: unknown;
+    /** De qual conversa saiu cada melhoria, padrão de falha e alerta (lib/consolidacao.ts). */
+    lastro?: { melhorias?: unknown; padroes_falha?: unknown; alertas?: unknown };
     /** Nenhuma mensagem do vendedor saiu no dia: o relatório não tem nota nem treino. */
     sem_atividade_saida?: boolean;
 };
@@ -321,10 +324,17 @@ export function RelatorioDoDia({ relatorio, variacao, historico, mediaLeads, med
     );
 }
 
+/** Leva o item do treino à conversa de onde ele saiu (Silas, 28/10). */
+function VerConversa({ id, tom = 'text-azul' }: { id: string | null; tom?: string }) {
+    if (!id) return null;
+    return <Link href={`/conversas/${id}` as Route} className={`ml-1.5 whitespace-nowrap font-semibold underline-offset-2 hover:underline ${tom}`}>ver conversa</Link>;
+}
+
 export function Treino({ className = '', coaching }: { className?: string; coaching: Coaching }) {
-    const alertas = listaDeTextos(coaching.alertas).slice(0, 3);
+    const alertas = textosComConversa(coaching.alertas, coaching.lastro?.alertas).slice(0, 3);
+    const melhorias = textosComConversa(coaching.melhorias, coaching.lastro?.melhorias);
     const deuCerto = listaDeTextos(coaching.padroes_sucesso).slice(0, 3);
-    const deuErrado = listaDeTextos(coaching.padroes_falha).slice(0, 3);
+    const deuErrado = textosComConversa(coaching.padroes_falha, coaching.lastro?.padroes_falha).slice(0, 3);
     const objecoes = listaDeTextos(coaching.objecoes_frequentes).slice(0, 6);
     return (
         <Cartao variante="suave" className={`flex flex-col gap-4 ${className}`}>
@@ -334,15 +344,15 @@ export function Treino({ className = '', coaching }: { className?: string; coach
             </div>
             {alertas.length > 0 && (
                 <ul aria-label="Alertas do dia" className="flex flex-col gap-1.5 rounded-[10px] bg-atencao-sof px-3.5 py-3">
-                    {alertas.map((a) => <li key={a} className="flex gap-2 text-[13px] leading-snug text-atencao-texto"><Icone nome="alerta" tamanho={15} className="mt-px shrink-0" />{a}</li>)}
+                    {alertas.map((a) => <li key={a.texto} className="flex gap-2 text-[13px] leading-snug text-atencao-texto"><Icone nome="alerta" tamanho={15} className="mt-px shrink-0" /><span>{a.texto}<VerConversa id={a.conversaId} tom="text-atencao-texto" /></span></li>)}
                 </ul>
             )}
-            {!!coaching.melhorias?.length && (
+            {melhorias.length > 0 && (
                 <ol className="flex flex-col gap-2">
-                    {coaching.melhorias.map((m, i) => (
-                        <li key={m} className="flex items-start gap-3 rounded-[10px] bg-superficie px-3.5 py-3">
+                    {melhorias.map((m, i) => (
+                        <li key={m.texto} className="flex items-start gap-3 rounded-[10px] bg-superficie px-3.5 py-3">
                             <span className="display flex size-[26px] shrink-0 items-center justify-center rounded-[7px] bg-azul text-[13px] font-bold text-white">{i + 1}</span>
-                            <span className="text-[13.5px] leading-snug">{m}</span>
+                            <span className="text-[13.5px] leading-snug">{m.texto}<VerConversa id={m.conversaId} /></span>
                         </li>
                     ))}
                 </ol>
@@ -364,7 +374,7 @@ export function Treino({ className = '', coaching }: { className?: string; coach
                     {deuErrado.length > 0 && (
                         <div className="flex flex-col gap-1.5">
                             <span className="text-xs font-bold uppercase tracking-[0.06em] text-azul">Deu errado</span>
-                            <ul className="flex flex-col gap-1">{deuErrado.map((p) => <li key={p} className="flex gap-2 text-[13px] leading-snug"><span aria-hidden="true" className="font-bold text-risco-texto">✕</span>{p}</li>)}</ul>
+                            <ul className="flex flex-col gap-1">{deuErrado.map((p) => <li key={p.texto} className="flex gap-2 text-[13px] leading-snug"><span aria-hidden="true" className="font-bold text-risco-texto">✕</span><span>{p.texto}<VerConversa id={p.conversaId} /></span></li>)}</ul>
                         </div>
                     )}
                 </div>

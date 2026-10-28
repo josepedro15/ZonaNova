@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, voltouAEscrever, concluidaPelaAnalise, temposDeResposta, respostasPorBloco, msDeExpediente, TOLERANCIA_BLOCO_ABERTO_MS, ehSoConfirmacao, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, voltouAEscrever, concluidaPelaAnalise, temposDeResposta, respostasPorBloco, msDeExpediente, TOLERANCIA_BLOCO_ABERTO_MS, ehSoConfirmacao, esperaForaDoExpediente, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -198,6 +198,29 @@ test('confirmação do cliente não pede resposta', () => {
         assert.equal(ehSoConfirmacao(diz('10:00', t)), false, t);
     assert.equal(ehSoConfirmacao(diz('10:00', null, 'imagem')), false, 'foto ou áudio pode ser pedido');
     assert.equal(ehSoConfirmacao(cli('10:00')), false, 'sem conteúdo lido: conta como pedido, como antes');
+});
+
+// Silas, 27/10: a IA dava nota baixa ao que o cliente mandou no domingo ou no
+// sábado à tarde. Expediente: seg–sex 8–18, sáb 8–12.
+test('espera que começou com a loja fechada é fora do expediente', () => {
+    const fimDe = (dia: string) => new Date(sp('23:59', dia));
+    assert.equal(esperaForaDoExpediente([cli('10:00', '27')], fimDe('27')), true, 'domingo');
+    assert.equal(esperaForaDoExpediente([ven('09:00', '26'), cli('09:10', '26'), ven('09:20', '26'), cli('17:40', '26')], fimDe('26')), true, 'sábado à tarde');
+    assert.equal(esperaForaDoExpediente([cli('11:50', '26')], fimDe('26')), true, 'sábado, a 10 minutos de fechar');
+    assert.equal(esperaForaDoExpediente([cli('19:30')], FIM_DO_DIA), true, 'segunda de noite');
+    assert.equal(esperaForaDoExpediente([cli('10:00', '26')], fimDe('26')), false, 'sábado de manhã: dava para responder');
+    assert.equal(esperaForaDoExpediente([cli('15:00'), cli('19:00')], FIM_DO_DIA), false, 'o bloco começou no expediente');
+    assert.equal(esperaForaDoExpediente([cli('19:00'), ven('19:05')], FIM_DO_DIA), false, 'respondido');
+    assert.equal(esperaForaDoExpediente([ven('17:00'), diz('19:00', 'Obrigado')], FIM_DO_DIA), false, 'agradecimento não espera nada');
+});
+
+// Silas, 28/10: a cliente pagou, a vendedora agradeceu, e o "Eu que agradeço"
+// final deixava a conversa em "O cliente falou por último".
+test('agradecimento com despedida também não pede resposta', () => {
+    for (const t of ['Eu que agradeço', 'Eu que agradeço 🙏', 'Agradeço', 'Obrigado, bom dia', 'Muito obrigada, tenha um bom dia', 'Valeu, até amanhã', 'Nós que agradecemos!', 'Obrigada por tudo', 'ta bom'])
+        assert.equal(ehSoConfirmacao(diz('10:00', t)), true, t);
+    for (const t of ['Boa tarde', 'Bom dia, tudo bem?', 'Eu', 'Que?', 'Agradeço, mas e o frete?'])
+        assert.equal(ehSoConfirmacao(diz('10:00', t)), false, t);
 });
 
 test('o cliente que agradece no fim não deixa bloco aberto', () => {

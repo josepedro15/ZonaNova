@@ -189,6 +189,22 @@ test('frase do resumo ou do desafio com conselho de manual sem erro nenhum que o
     assert.equal(semFechamento.desafio, '');
 });
 
+// Rafael e Ana Paula, 28/10: o elogio ao fechamento saía como conselho sem
+// lastro, e o resumo começava em "Porém" ou ficava em branco.
+test('fechamento que aconteceu não é conselho de manual e não deixa o resumo solto', () => {
+    const fontes = [{ erros_vendedor: ['Respondeu o pedido de melhor preço só com o valor, sem consultar a gerência nem contornar a objeção'] }];
+    const r = finalizarConsolidado({
+        ...vazia,
+        resumo: 'Você fechou duas vendas e respondeu rápido. Porém, deixou algumas objeções de preço sem contorno.',
+    }, fontes);
+    assert.equal(r.resumo, 'Você fechou duas vendas e respondeu rápido. Porém, deixou algumas objeções de preço sem contorno.');
+    const so = finalizarConsolidado({ ...vazia, resumo: 'Você conduziu a liberação dos pedidos garantindo fechamento com cordialidade.' }, fontes);
+    assert.equal(so.resumo, 'Você conduziu a liberação dos pedidos garantindo fechamento com cordialidade.');
+    // Conselho continua saindo, e o que sobra não começa contrapondo.
+    const conselho = finalizarConsolidado({ ...vazia, resumo: 'Não conduziu para o fechamento. Porém, respondeu rápido.' }, fontes);
+    assert.equal(conselho.resumo, 'Respondeu rápido.');
+});
+
 test('trecho literal de um erro também sustenta a crítica', () => {
     const r = finalizarConsolidado({ ...vazia, melhorias: [{ texto: 'Pergunte sobre a obra.', analise: 1, base: 'sondou mais detalhes da obra' }] }, analises);
     assert.deepEqual(r.melhorias, ['Pergunte sobre a obra.']);

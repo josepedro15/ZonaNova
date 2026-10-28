@@ -89,6 +89,30 @@ test('a resposta sai conferida contra a conversa (ajustarResultado)', () => {
     assert.equal(oferta.schema.zod.parse(resposta).natureza_contato, 'fornecedor_ou_parceiro');
 });
 
+// Silas, 27/10: produto que a rede não trabalha nem tem como substituir.
+test('produto sem alternativa citado vai no fim do pedido e tira a cobrança de alternativa', () => {
+    const transcript = 'C: "Tem porcelanato 120x120?"\nV: "Não trabalhamos"';
+    const semLista = pedidoAnalise({ transcript, doutrina: 'MEC', itens: null, modelo: 'm' });
+    const comLista = pedidoAnalise({ transcript, doutrina: 'MEC', itens: null, modelo: 'm', semAlternativa: [{ produto: 'Porcelanato 120x120', observacao: null }] });
+    // Sem produto citado, o prompt calibrado não muda; com, só ganha o fim.
+    assert.equal(pedidoAnalise({ transcript, doutrina: 'MEC', itens: null, modelo: 'm', semAlternativa: [] }).corpo.instructions, semLista.corpo.instructions);
+    assert.ok(comLista.corpo.instructions.startsWith(semLista.corpo.instructions));
+    assert.match(comLista.corpo.instructions, /PRODUTOS SEM ALTERNATIVA NA REDE: .*"Porcelanato 120x120"/);
+    assert.match(pedidoAnaliseClaude({ transcript, doutrina: 'MEC', itens: null, semAlternativa: [{ produto: 'Porcelanato 120x120', observacao: null }] }).corpo.system[0]!.text, /PRODUTOS SEM ALTERNATIVA/);
+    const resposta = {
+        quem_pede: 'contato_pede_a_loja', assuntos_do_dia: [{ assunto: 'porcelanato', situacao: 'compra_nova_em_aberto' }],
+        natureza_contato: 'cliente', confianca_natureza: 90, evidencia_natureza: '', tipo_conversa: 'negociacao', status: 'perdida',
+        sentiment: 50, score_atendimento: 40, score_oportunidade: 30, score_risco: 30, estagio_funil: 'f', potencial_venda: 'baixo', urgencia: 2,
+        resumo: 'r', destaque: 'd', proxima_acao: 'p', script_sugerido: '', objecoes: [], tecnicas_usadas: [],
+        erros_vendedor: ['Não sugeriu alternativa ao porcelanato 120x120', 'Não cumprimentou o cliente'], tags: [],
+        evidencias: [{ trecho: 't', conclusao: 'c' }], perfil_cliente: 'nao_identificado', profissao_cliente: '',
+        mec: ['acolhida', 'sondagem', 'solucao_completa', 'contorno_objecoes', 'estrategia_preco', 'fechamento', 'acompanhamento']
+            .map((etapa) => ({ etapa, aplicavel: true, aplicado: 'sim', justificativa: 'j', evidencias: [], itens: [] })),
+    };
+    assert.deepEqual(comLista.schema.zod.parse(resposta).erros_vendedor, ['Não cumprimentou o cliente']);
+    assert.equal(semLista.schema.zod.parse(resposta).erros_vendedor.length, 2);
+});
+
 // O caso do piloto (08/10): cliente perguntando pela entrega ou pelo crediário
 // tirava nota baixa do vendedor por falta de fechamento.
 test('suporte cobre entrega, crediário e pagamento e não cobra fechamento', () => {

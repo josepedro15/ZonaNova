@@ -201,6 +201,18 @@ function acrescentaAssunto(texto: string, base: string): boolean {
 }
 
 /**
+ * O fechamento que aconteceu não é conselho de manual: "Você fechou duas
+ * vendas", "garantindo fechamento com cordialidade". Com o /fech/ pegando
+ * isso, o elogio saía do resumo e sobrava "Porém, deixou…" (Rafael, 28/10)
+ * ou nada (Ana Paula, 28/10). "Não fechou" e "conduza ao fechamento" seguem
+ * sendo conselho.
+ */
+const FECHAMENTO_FEITO = /(?<!\bnao )\b(?:fech(?:ou|aram|amos|ei|ando)|(?:garantiu|garantindo|concluiu|concluindo|conseguiu|conduziu|conduzindo|levou|levando)(?: \w+){0,3} (?:ao |o |os |a )?fechamentos?)\b/g;
+
+/** Frase que sobrou depois de outra sair não pode começar contrapondo o nada. */
+const CONECTIVO_SOLTO = /^(?:por[eé]m|mas|no entanto|contudo|entretanto|todavia|ainda assim|por outro lado)\s*,?\s*/i;
+
+/**
  * Resumo e desafio não citam análise: a frase que traz um assunto de manual
  * que nenhum erro do dia menciona sai inteira (Keli, 07/10: "não ofereceu
  * complementares" sem um erro sequer sobre isso).
@@ -208,8 +220,16 @@ function acrescentaAssunto(texto: string, base: string): boolean {
 function semAssuntoSemLastro(texto: string, errosDoDia: string[]): string {
     const erros = errosDoDia.map(normal);
     const frases = texto.split(/(?<=[.!?])\s+/);
-    const ficam = frases.filter((f) => !ASSUNTOS_DE_MANUAL.some((r) => r.test(normal(f)) && !erros.some((e) => r.test(e))));
-    return ficam.length === frases.length ? texto : ficam.join(' ');
+    const ficam = frases.filter((f) => {
+        const n = normal(f).replace(FECHAMENTO_FEITO, ' ');
+        return !ASSUNTOS_DE_MANUAL.some((r) => r.test(n) && !erros.some((e) => r.test(e)));
+    });
+    if (ficam.length === frases.length) return texto;
+    if (ficam.length && ficam[0] !== frases[0]) {
+        const solta = ficam[0]!.replace(CONECTIVO_SOLTO, '');
+        ficam[0] = solta.charAt(0).toLocaleUpperCase('pt-BR') + solta.slice(1);
+    }
+    return ficam.join(' ');
 }
 
 /** A base aparece nas fontes da análise? Cópia exata ou um trecho dela. */

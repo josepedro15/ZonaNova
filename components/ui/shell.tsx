@@ -59,6 +59,7 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/admin/conexoes', rotulo: 'Conexões', icone: 'wifi' },
         { href: '/admin/eventos', rotulo: 'Registro de ações', curto: 'Registro', icone: 'lista' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        { href: '/admin/produtos', rotulo: 'Sem alternativa', curto: 'Produtos', icone: 'cadastro' },
         { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
         { href: '/feedbacks', rotulo: 'Feedbacks', icone: 'estrela' },

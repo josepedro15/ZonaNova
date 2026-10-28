@@ -4,15 +4,16 @@ import { aposFalha, aposFalhaDoItem } from '@/lib/fila';
 import { baixarMidiaSegura, hashDoAudio, promptDeTranscricao, transcrever } from '@/lib/transcricao';
 import { descreverMidia, formatoLegivel, MAX_BYTES_MIDIA, midiaLigada } from '@/lib/midia';
 import { analisarConversa, consolidarVendedor, RespostaIncompleta } from '@/lib/openai-analise';
-import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, marcaRetomada, montarTranscript, saudacaoInvisivel, type MensagemAnalise } from '@/lib/analise';
+import { ajustarAcolhida, aderenciaPercentual, custoEstimado, diaFechado, hashTranscript, janelaDoDia, MARCA_FORA_DO_EXPEDIENTE, marcaRetomada, montarTranscript, saudacaoInvisivel, type MensagemAnalise } from '@/lib/analise';
 import { conferirDetalhe, detalheLigado, observacoesDoDetalhe, resumirObservacoes, type DetalheMec, type LinhaObservacao } from '@/lib/mec';
-import { doutrinaMec, praticasAprovadas } from '@/lib/pedido-analise';
+import { doutrinaMec, praticasAprovadas, produtosSemAlternativa } from '@/lib/pedido-analise';
+import { citadosNaConversa } from '@/lib/sem-alternativa';
 import { cadastrosNaRede, DESCARTADA, naturezaSuspeita, sinalDoContato } from '@/lib/natureza';
 import { comResolvida, comVendaPresencial, contaNaNota } from '@/lib/presencial';
 import { semAtividadeDeSaida } from '@/lib/consolidacao';
 import { paginar } from '@/lib/paginar';
 import { capturaDoDia, type Buraco } from '@/lib/captura';
-import { numerosDoFechamento, respostasPorBloco, temposDeResposta, type Msg } from '@/lib/painel';
+import { esperaForaDoExpediente, numerosDoFechamento, respostasPorBloco, temposDeResposta, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { drenarEntradas, expurgarEntradas } from '@/lib/uazapi/ingestao';
@@ -408,6 +409,12 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     if (!mensagens.some((m) => m.direcao === 'entrada' && !m.automatica)) throw new IgnorarItem('disparo sem resposta do cliente');
     if (mensagens.some((m) => /feliz anivers[aá]rio|parab[eé]ns pelo seu dia/i.test(m.conteudo ?? '')))
         throw new IgnorarItem('conversa de aniversário');
+    // O cliente escreveu com a loja fechada (domingo, sábado à tarde, de
+    // noite). Sem ninguém do lado de cá no dia, não houve atendimento para dar
+    // nota; com o vendedor ativo, a marca no fim avisa a IA (Silas, 27/10).
+    const foraDoExpediente = esperaForaDoExpediente(mensagens, fim);
+    if (foraDoExpediente && !mensagens.some((m) => m.direcao === 'saida' && !m.automatica))
+        throw new IgnorarItem('cliente escreveu fora do expediente');
 
     const primeiraEntrada = mensagens.findIndex((m) => m.direcao === 'entrada');
     const recorte = primeiraEntrada > 0 && mensagens.slice(0, primeiraEntrada).every((m) => m.automatica)
@@ -417,7 +424,7 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
         .order('enviada_em', { ascending: false }).limit(1).maybeSingle<{ enviada_em: string }>();
     if (erroAnterior) throw erroAnterior;
     const retomada = marcaRetomada(anterior?.enviada_em ?? null, inicio);
-    const transcript = [retomada, montarTranscript(recorte)].filter(Boolean).join('\n');
+    const transcript = [retomada, montarTranscript(recorte), foraDoExpediente ? MARCA_FORA_DO_EXPEDIENTE : null].filter(Boolean).join('\n');
     const hash = hashTranscript(transcript);
     const { data: existente } = await supabase.from('analises_conversa').select('id,transcript_hash,updated_at')
         .eq('conversa_id', conversaId).eq('data_ref', dataRef).maybeSingle<{ id: string; transcript_hash: string | null; updated_at: string }>();
@@ -437,7 +444,10 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     // O que o supervisor aprovou na tela Descobertas (lib/praticas.ts): a IA
     // diz se o vendedor seguiu ou deixou passar, sem mexer na nota.
     const praticas = await praticasAprovadas(supabase, unidadeId);
-    const analise = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe, midia: comMidia, contato, praticas });
+    // Produto que a rede não trabalha nem tem como substituir (/admin/produtos):
+    // só os citados na conversa vão ao pedido (lib/sem-alternativa.ts).
+    const semAlternativa = citadosNaConversa(await produtosSemAlternativa(supabase), transcript);
+    const analise = await analisarConversa({ transcript, doutrina: doutrina.texto, itens: itensDetalhe, midia: comMidia, contato, praticas, semAlternativa });
     const { modelo, entrada, saida } = analise;
     const resultado = ajustarAcolhida(analise.resultado, { retomada, invisivel: saudacaoInvisivel(recorte) });
     // As provas do detalhe são conferidas contra a conversa antes de gravar

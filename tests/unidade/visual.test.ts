@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, listaDeTextos, media, NAO_ANALISADA, passaNoFiltro, rotuloPerfilCliente, rotuloPotencial, urgenciaAlta,
+    caminhoSvg, comparaTempo, grifar, grifarConversa, iniciais, listaDeTextos, textosComConversa, media, NAO_ANALISADA, passaNoFiltro, rotuloPerfilCliente, rotuloPotencial, urgenciaAlta,
     setaDoTom, tomDelta, tomEspera, tomFaixa, tomResposta, falaCurta } from '../../lib/visual.ts';
 
 const MIN = 60 * 1000;
@@ -137,6 +137,19 @@ test('resposta: até 15 min é neutra, acima de 15 pede atenção', () => {
 });
 
 // --- campos que a IA já gera ----------------------------------------------------
+
+// Silas, 28/10: o "Deu errado" do treino não dizia de qual conversa saiu.
+test('textosComConversa casa cada item com a conversa do lastro, mesmo com repetido no meio', () => {
+    const lastro = [{ conversa_id: 'c1', base: 'x' }, { conversa_id: 'c2', base: 'y' }, { conversa_id: null, base: 'z' }, { conversa_id: 'c4', base: 'w' }];
+    assert.deepEqual(textosComConversa(['Respondeu só com Kkkk', 'respondeu só com kkkk', 'Sem base', ' Não deu prazo '], lastro), [
+        { texto: 'Respondeu só com Kkkk', conversaId: 'c1' },
+        { texto: 'Sem base', conversaId: null },
+        { texto: 'Não deu prazo', conversaId: 'c4' },
+    ]);
+    // Relatório de antes do lastro.
+    assert.deepEqual(textosComConversa(['Não sondou'], undefined), [{ texto: 'Não sondou', conversaId: null }]);
+    assert.deepEqual(textosComConversa({}, []), []);
+});
 
 test('listaDeTextos tira vazio, repetido e o que não é texto', () => {
     assert.deepEqual(listaDeTextos(['  Sondou a obra ', '', 'sondou a obra', 42, null, 'Ofereceu rejunte']), ['Sondou a obra', 'Ofereceu rejunte']);

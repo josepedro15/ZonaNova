@@ -160,6 +160,29 @@ export function listaDeTextos(valor: unknown): string[] {
     return saida;
 }
 
+/**
+ * A lista do treino com a conversa de onde cada item saiu: `lastro` é o
+ * `payload.lastro.<lista>` que lib/consolidacao.ts grava na mesma ordem do
+ * texto. Casados antes de tirar vazio e repetido, para o índice não
+ * escorregar. Relatório de antes do lastro (07/10): sem conversa, sem link.
+ */
+export function textosComConversa(valor: unknown, lastro: unknown): { texto: string; conversaId: string | null }[] {
+    if (!Array.isArray(valor)) return [];
+    const fontes = Array.isArray(lastro) ? lastro : [];
+    const vistos = new Set<string>();
+    const saida: { texto: string; conversaId: string | null }[] = [];
+    valor.forEach((item, i) => {
+        if (typeof item !== 'string') return;
+        const texto = item.trim();
+        const chave = texto.toLocaleLowerCase('pt-BR');
+        if (!texto || vistos.has(chave)) return;
+        vistos.add(chave);
+        const id = (fontes[i] as { conversa_id?: unknown } | null | undefined)?.conversa_id;
+        saida.push({ texto, conversaId: typeof id === 'string' && id ? id : null });
+    });
+    return saida;
+}
+
 const POTENCIAL: Record<string, string> = { baixo: 'Potencial baixo', medio: 'Potencial médio', alto: 'Potencial alto' };
 
 /** `potencial_venda` da análise em português de tela; valor fora do enum some. */

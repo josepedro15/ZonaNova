@@ -234,6 +234,8 @@ export function ajustarResultado<T extends Pick<ResultadoAnalise, 'assuntos_do_d
         const conferidos = feedbacksDoCliente(ajustado.feedbacks, transcript);
         if (conferidos.length < ajustado.feedbacks.length) ajustado = { ...ajustado, feedbacks: conferidos };
     }
+    // Com a loja fechada, o cliente espera o próximo expediente, não foi largado.
+    if (ajustado.status === 'sem_resposta' && transcript.includes(MARCA_FORA_DO_EXPEDIENTE)) ajustado = { ...ajustado, status: 'em_andamento' };
     return ajustado;
 }
 
@@ -343,6 +345,16 @@ export function marcaRetomada(ultimaAnterior: string | null, inicioDoDia: Date):
     const dia = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' }).format(instante);
     return `[Conversa em andamento: última mensagem anterior em ${dia}]`;
 }
+
+/**
+ * Fim do transcript quando a espera do cliente começou com a loja fechada
+ * (`esperaForaDoExpediente`, lib/painel.ts). O transcript não tem hora, e a
+ * IA lia o "sem resposta" de domingo ou de sábado à tarde como descaso
+ * (Silas, 27/10). A regra vai aqui, e não no prompt: as outras conversas
+ * seguem byte a byte com o pedido calibrado.
+ */
+export const MARCA_FORA_DO_EXPEDIENTE = '[Fora do expediente: a última fala do cliente chegou com a loja fechada (domingo, sábado à tarde ou de noite) e só pode ser respondida no próximo expediente. '
+    + 'A falta de resposta a ela não é erro do vendedor: não entra em erros_vendedor, não baixa score_atendimento e o status não é sem_resposta.]';
 
 /**
  * A primeira resposta humana do vendedor no recorte é mídia sem texto (áudio

@@ -157,8 +157,17 @@ export function msDeExpediente(de: Date, ate: Date): number {
 
 /** Palavras de quem só confirma ou agradece. Fora daqui, a fala pede algo. */
 const CONFIRMACAO = new Set(('ok okay okk blz beleza obrigado obrigada obrigadao obg brigado brigada grato grata valeu vlw ' +
-    'show top perfeito combinado certo certinho otimo isso isto sim ta to bom bem joia maravilha entendi fechado ' +
+    'agradeco agradecemos agradecido agradecida ' +
+    'show top perfeito combinado certo certinho otimo isso isto sim ta to bem joia maravilha entendi fechado ' +
     'de nada dinada muito pela atencao entao ah ahh e a').split(' '));
+
+/**
+ * Despedida e reforço que só acompanham o agradecimento: "Eu que agradeço",
+ * "Obrigada, bom dia", "Valeu, até amanhã" (Silas, 28/10). Sozinhas não
+ * confirmam nada: "Bom dia" abre conversa e pede resposta.
+ */
+const ACOMPANHA = new Set(('eu que nos voce vc tambem igualmente por tudo bom boa dia tarde noite tenha um uma otima ' +
+    'semana abraco abracos ate mais logo amanha tchau').split(' '));
 
 /**
  * A fala do cliente é só confirmação — "Obrigado", "Ok", 👍, reação,
@@ -171,11 +180,15 @@ export function ehSoConfirmacao(m: Msg): boolean {
     if (!texto) return false;
     if (/^\[(reagiu com .*|reação|figurinha)\]$/.test(texto)) return true;
     if (m.tipo && m.tipo !== 'texto') return false;
+    // Pergunta pede resposta, por mais cordial que seja: "Bom dia, tudo bem?".
+    if (texto.includes('?')) return false;
     const palavras = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
     // Letra esticada ("obrigadaa", "bemm") sem estragar "isso". Só emoji ou
     // pontuação ("👍🏻", ".") também é confirmação.
-    return palavras.every((p) => CONFIRMACAO.has(p) || CONFIRMACAO.has(p.replace(/([a-z])\1+/g, '$1')));
+    const em = (lista: Set<string>, p: string) => lista.has(p) || lista.has(p.replace(/([a-z])\1+/g, '$1'));
+    return palavras.every((p) => em(CONFIRMACAO, p) || em(ACOMPANHA, p))
+        && (palavras.length === 0 || palavras.some((p) => em(CONFIRMACAO, p)));
 }
 
 /**
@@ -238,6 +251,21 @@ export function temposDeResposta(msgs: Msg[], fim: Date): number[] {
  */
 export function respostasPorBloco(msgs: Msg[], fim: Date): boolean[] {
     return blocosDoCliente(msgs, fim).map((b) => b.respondido);
+}
+
+/**
+ * A espera que o cliente deixou no fim do dia começou com a loja fechada —
+ * domingo, sábado à tarde, de noite — ou a menos de
+ * `TOLERANCIA_BLOCO_ABERTO_MS` do fechamento? Então ninguém o ignorou: quem
+ * responde é o próximo expediente. A análise não via a hora das mensagens e
+ * dava nota de "ignorou" (Silas, 27/10). `fimDoDia` é o fim do dia da
+ * análise, não o "agora": vale o expediente que ainda havia para responder.
+ */
+export function esperaForaDoExpediente(msgs: Msg[], fimDoDia: Date): boolean {
+    const ordenadas = emOrdem(msgs);
+    const ultimaResposta = ordenadas.map(ehResposta).lastIndexOf(true);
+    const pendente = ordenadas.slice(ultimaResposta + 1).find((m) => ehCliente(m) && !ehSoConfirmacao(m));
+    return !!pendente && msDeExpediente(new Date(pendente.enviada_em), fimDoDia) < TOLERANCIA_BLOCO_ABERTO_MS;
 }
 
 /**
