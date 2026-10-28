@@ -13,7 +13,7 @@ import { comResolvida, comVendaPresencial, contaNaNota } from '@/lib/presencial'
 import { semAtividadeDeSaida } from '@/lib/consolidacao';
 import { paginar } from '@/lib/paginar';
 import { capturaDoDia, type Buraco } from '@/lib/captura';
-import { esperaForaDoExpediente, numerosDoFechamento, respostasPorBloco, temposDeResposta, type Msg } from '@/lib/painel';
+import { atendidaForaDoExpediente, esperaForaDoExpediente, expedienteDe, notaDoDia, numerosDoFechamento, respostasPorBloco, temposDeResposta, type Expediente, type Msg } from '@/lib/painel';
 import { decifrar } from '@/lib/crypto';
 import { Uazapi } from '@/lib/uazapi/cliente';
 import { drenarEntradas, expurgarEntradas } from '@/lib/uazapi/ingestao';
@@ -377,6 +377,15 @@ async function gravarObservacoes(
     if (error) throw error;
 }
 
+/** O expediente do vendedor (`expedienteDe`): o sábado depende da loja e, na Venda Externa, de quem ele é. */
+async function expedienteDoVendedor(supabase: Admin, userId: string, unidadeId: string): Promise<Expediente> {
+    const [{ data: perfil }, { data: unidade }] = await Promise.all([
+        supabase.from('profiles').select('nome').eq('id', userId).maybeSingle<{ nome: string | null }>(),
+        supabase.from('unidades').select('nome').eq('id', unidadeId).maybeSingle<{ nome: string | null }>(),
+    ]);
+    return expedienteDe(unidade?.nome, perfil?.nome);
+}
+
 /**
  * Analisa uma conversa do dia. Devolve se o passo seguinte (o relatório do
  * vendedor) precisa rodar: análise nova, sim; transcript igual ao já
@@ -412,7 +421,7 @@ async function analisarItem(supabase: Admin, conversaId: string, dataRef: string
     // O cliente escreveu com a loja fechada (domingo, sábado à tarde, de
     // noite). Sem ninguém do lado de cá no dia, não houve atendimento para dar
     // nota; com o vendedor ativo, a marca no fim avisa a IA (Silas, 27/10).
-    const foraDoExpediente = esperaForaDoExpediente(mensagens, fim);
+    const foraDoExpediente = esperaForaDoExpediente(mensagens, fim, await expedienteDoVendedor(supabase, conversa.user_id, unidadeId));
     if (foraDoExpediente && !mensagens.some((m) => m.direcao === 'saida' && !m.automatica))
         throw new IgnorarItem('cliente escreveu fora do expediente');
 
@@ -523,6 +532,8 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
     const analises = todas.filter((a) => !naturezaSuspeita(a.payload) && !fora.has(a.conversa_id as string));
     if (!analises.length) throw new IgnorarItem('só conversas sugeridas como contato interno');
     const negociacoes = analises.filter((a) => a.tipo_conversa === 'negociacao');
+    const unidadeId = String(analises[0].unidade_id);
+    const expediente = await expedienteDoVendedor(supabase, userId, unidadeId);
     const conversaIds = analises.map((a) => a.conversa_id as string);
     const { inicio, fim } = janelaDoDia(dataRef);
     // Paginado e em lotes de ids: o PostgREST corta em 1000 linhas sem avisar,
@@ -544,12 +555,17 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
     // Bloco sem resposta conta até o fim do expediente do dia — ou até agora,
     // quando o relatório é parcial (o dia ainda não acabou).
     const corte = new Date(Math.min(fim.getTime(), Date.now()));
-    const tempos = [...porConversa.values()].flatMap((msgs) => temposDeResposta(msgs, corte));
-    const respostas = [...porConversa.values()].flatMap((msgs) => respostasPorBloco(msgs, corte));
+    const tempos = [...porConversa.values()].flatMap((msgs) => temposDeResposta(msgs, corte, expediente));
+    const respostas = [...porConversa.values()].flatMap((msgs) => respostasPorBloco(msgs, corte, expediente));
     // A venda marcada na loja conta nas conversões; a nota, só se a IA viu negociação.
+    // Atendimento com a loja fechada só sobe a nota, nunca baixa (`notaDoDia`).
     const comNota = negociacoes.filter(contaNaNota);
+    const comLojaFechada = (a: (typeof comNota)[number]) => atendidaForaDoExpediente(porConversa.get(a.conversa_id as string) ?? [], expediente);
+    const nota = (a: (typeof comNota)[number]) => Number(a.score_atendimento ?? 0);
+    const noHorario = comNota.filter((a) => !comLojaFechada(a)).map(nota);
+    const foraDoHorario = comNota.filter(comLojaFechada).map(nota);
     const metricas = {
-        score_geral: comNota.length ? comNota.reduce((s, a) => s + Number(a.score_atendimento ?? 0), 0) / comNota.length : null,
+        score_geral: notaDoDia(noHorario, foraDoHorario, !noHorario.length && foraDoHorario.length ? await notaRecente(supabase, userId, dataRef) : null),
         leads_atendidos: porConversa.size,
         conversoes_confirmadas: negociacoes.filter((a) => a.status === 'venda_feita').length,
         oportunidades_perdidas: negociacoes.filter((a) => a.status === 'perdida' || a.status === 'lead_frio').length,
@@ -568,7 +584,6 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
         delete copia.mec_detalhe;
         return copia;
     };
-    const unidadeId = String(analises[0].unidade_id);
     // Buraco de captura no expediente do dia (lib/captura.ts): com falha de
     // fato, o relatório é marcado e a IA é avisada, para o silêncio não virar
     // abandono. Buraco sem indício é vendedor que não conversou e não marca.
@@ -604,6 +619,15 @@ async function consolidarItem(supabase: Admin, userId: string, dataRef: string) 
     }, { onConflict: 'user_id,data_ref' });
     if (erroRel) throw erroRel;
     await consolidarAderenciaDiaria(supabase, userId, unidadeId, dataRef);
+}
+
+/** A média das notas do vendedor nos 30 relatórios antes do dia: a régua do dia só com atendimento fora do horário. */
+async function notaRecente(supabase: Admin, userId: string, dataRef: string): Promise<number | null> {
+    const { data, error } = await supabase.from('relatorios_diarios').select('score_geral')
+        .eq('user_id', userId).lt('data_ref', dataRef).not('score_geral', 'is', null)
+        .order('data_ref', { ascending: false }).limit(30).returns<{ score_geral: number | string }[]>();
+    if (error) throw error;
+    return data?.length ? data.reduce((s, r) => s + Number(r.score_geral), 0) / data.length : null;
 }
 
 async function consolidarAderenciaDiaria(supabase: Admin, userId: string, unidadeId: string, dataRef: string) {

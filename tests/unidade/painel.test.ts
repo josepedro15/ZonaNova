@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, voltouAEscrever, concluidaPelaAnalise, temposDeResposta, respostasPorBloco, msDeExpediente, TOLERANCIA_BLOCO_ABERTO_MS, ehSoConfirmacao, esperaForaDoExpediente, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
+import { desde, diasAte, juntarPorDia, numerosDoFechamento, primeiroNome, esperaDoCliente, esperaNaLista, INICIO_DA_LISTA_DE_ESPERA, esperaEmTexto, marcadaDepoisDoCliente, voltouAEscrever, concluidaPelaAnalise, temposDeResposta, respostasPorBloco, msDeExpediente, TOLERANCIA_BLOCO_ABERTO_MS, ehSoConfirmacao, esperaForaDoExpediente, expedienteDe, noExpediente, atendidaForaDoExpediente, notaDoDia, telefoneBonito, telefoneE164, variantesTelefone, ehCelular, linkWhatsapp, type Msg } from '../../lib/painel.ts';
 
 const AGORA = new Date('2026-09-21T18:00:00Z');
 const em = (hhmm: string) => `2026-09-21T${hhmm}:00Z`;
@@ -212,6 +212,62 @@ test('espera que começou com a loja fechada é fora do expediente', () => {
     assert.equal(esperaForaDoExpediente([cli('15:00'), cli('19:00')], FIM_DO_DIA), false, 'o bloco começou no expediente');
     assert.equal(esperaForaDoExpediente([cli('19:00'), ven('19:05')], FIM_DO_DIA), false, 'respondido');
     assert.equal(esperaForaDoExpediente([ven('17:00'), diz('19:00', 'Obrigado')], FIM_DO_DIA), false, 'agradecimento não espera nada');
+});
+
+// Silas, 28/10: o sábado de cada loja. Matriz (Capão da Canoa e Pisos Matriz)
+// 8h–17h30, Tramandaí 8h30–17h, Arroio do Sal 8h–17h30, Noiva e Xangri-Lá
+// 8h–12h, Venda Externa fechada, menos o usuário "Venda Externa" até 12h.
+test('sábado por loja, e o usuário Venda Externa', () => {
+    const sabado = (inicio: string, fim: string, e = expedienteDe('Capão da Canoa')) => msDeExpediente(new Date(sp(inicio, '26')), new Date(sp(fim, '26')), e);
+    assert.equal(sabado('07:00', '23:00'), 9.5 * 60 * MIN, 'Matriz: 8h–17h30, almoço conta');
+    assert.equal(sabado('07:00', '23:00', expedienteDe('Pisos Matriz')), 9.5 * 60 * MIN);
+    assert.equal(sabado('07:00', '23:00', expedienteDe('Tramandaí')), 8.5 * 60 * MIN, 'Tramandaí abre 8h30');
+    assert.equal(sabado('07:00', '23:00', expedienteDe('ARROIO DO SAL')), 9.5 * 60 * MIN, 'sem depender de caixa');
+    assert.equal(sabado('07:00', '23:00', expedienteDe('Xangri-Lá')), 4 * 60 * MIN);
+    assert.equal(sabado('07:00', '23:00', expedienteDe('Noiva do Mar')), 4 * 60 * MIN);
+    assert.equal(sabado('07:00', '23:00', expedienteDe('Venda Externa', 'Keila Costa')), 0, 'Venda Externa fecha');
+    assert.equal(sabado('07:00', '23:00', expedienteDe('Venda Externa', 'Venda Externa')), 4 * 60 * MIN, 'menos o usuário Venda Externa');
+    assert.equal(sabado('07:00', '23:00', expedienteDe('Loja Nova')), 4 * 60 * MIN, 'loja fora da lista: o padrão');
+    assert.equal(sabado('07:00', '23:00', expedienteDe(null)), 4 * 60 * MIN);
+    assert.equal(msDeExpediente(new Date(sp('07:00')), new Date(sp('23:00')), expedienteDe('Tramandaí')), 10 * 60 * MIN, 'segunda não muda');
+    const fimDe = (dia: string) => new Date(sp('23:59', dia));
+    assert.equal(esperaForaDoExpediente([cli('15:00', '26')], fimDe('26'), expedienteDe('Capão da Canoa')), false, 'Matriz aberta sábado à tarde: deixou o cliente esperando');
+    assert.equal(esperaForaDoExpediente([cli('15:00', '26')], fimDe('26'), expedienteDe('Xangri-Lá')), true);
+    assert.deepEqual(respostasPorBloco([cli('14:00', '26')], fimDe('26'), expedienteDe('Arroio do Sal')), [false]);
+    assert.deepEqual(temposDeResposta([cli('13:00', '26'), ven('13:20', '26')], fimDe('26'), expedienteDe('Tramandaí')), [20 * MIN]);
+});
+
+test('no expediente: abre incluído, fecha excluído', () => {
+    const tramandai = expedienteDe('Tramandaí');
+    assert.equal(noExpediente(new Date(sp('08:29', '26')), tramandai), false);
+    assert.equal(noExpediente(new Date(sp('08:30', '26')), tramandai), true);
+    assert.equal(noExpediente(new Date(sp('16:59', '26')), tramandai), true);
+    assert.equal(noExpediente(new Date(sp('17:00', '26')), tramandai), false);
+    assert.equal(noExpediente(new Date(sp('10:00', '27'))), false, 'domingo');
+    assert.equal(noExpediente(new Date(sp('17:59'))), true);
+    assert.equal(noExpediente(new Date(sp('18:00'))), false);
+});
+
+test('atendida fora do expediente: toda resposta humana com a loja fechada', () => {
+    assert.equal(atendidaForaDoExpediente([cli('09:00', '27'), ven('09:10', '27')]), true, 'domingo');
+    assert.equal(atendidaForaDoExpediente([cli('19:00'), ven('19:30'), bot('19:31')]), true, 'de noite');
+    assert.equal(atendidaForaDoExpediente([cli('17:50'), ven('17:55'), ven('18:30')]), false, 'começou no horário');
+    assert.equal(atendidaForaDoExpediente([cli('19:00'), bot('19:01')]), false, 'sem resposta humana');
+    assert.equal(atendidaForaDoExpediente([cli('14:00', '26'), ven('14:10', '26')], expedienteDe('Capão da Canoa')), false, 'Matriz sábado à tarde é horário');
+    assert.equal(atendidaForaDoExpediente([cli('14:00', '26'), ven('14:10', '26')], expedienteDe('Noiva do Mar')), true);
+});
+
+// Silas, 28/10: fora do horário a nota "em hipótese alguma pode baixar, porém
+// ainda pode subir".
+test('nota do dia: atendimento fora do horário só sobe a nota', () => {
+    assert.equal(notaDoDia([80, 60], [], null), 70);
+    assert.equal(notaDoDia([80, 60], [40], 90), 70, 'fora do horário abaixo da média não entra');
+    assert.equal(notaDoDia([60], [90, 80, 65], null), (60 + 90 + 80) / 3, 'entra enquanto puxa para cima');
+    assert.equal(notaDoDia([70], [70], null), 70, 'igual à média não muda nada');
+    assert.equal(notaDoDia([], [90, 50], 70), 90, 'domingo: só o que chega à média recente');
+    assert.equal(notaDoDia([], [50], 70), null, 'domingo abaixo da média recente: sem nota no dia');
+    assert.equal(notaDoDia([], [90, 50], null), 70, 'sem relatório antes: entram todas');
+    assert.equal(notaDoDia([], [], 70), null);
 });
 
 // Silas, 28/10: a cliente pagou, a vendedora agradeceu, e o "Eu que agradeço"

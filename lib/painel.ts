@@ -126,13 +126,47 @@ export function concluidaPelaAnalise(msgs: Msg[], analises: readonly AnaliseDaFi
         && Date.parse(analise.updated_at) >= Date.parse(ultimaDoCliente.enviada_em);
 }
 
+/** Abre e fecha, em horas de Brasília (8.5 = 8h30), por dia da semana (0 = domingo); null = fechado. */
+export type Expediente = readonly (readonly [number, number] | null)[];
+
 /**
- * O expediente em que o relógio da resposta corre, por dia da semana (0 =
- * domingo), em horas de Brasília: seg–sex 8h–18h, sábado 8h–12h. O almoço
- * conta — não premia quem some nele. Decidido com o piloto em 08/10/2026.
- * Feriado não está aqui.
+ * O expediente em que o relógio da resposta corre: seg–sex 8h–18h, sábado
+ * 8h–12h. O almoço conta — não premia quem some nele. Decidido com o piloto
+ * em 08/10/2026. Feriado não está aqui.
  */
-export const EXPEDIENTE: readonly ([number, number] | null)[] = [null, [8, 18], [8, 18], [8, 18], [8, 18], [8, 18], [8, 12]];
+export const EXPEDIENTE: Expediente = [null, [8, 18], [8, 18], [8, 18], [8, 18], [8, 18], [8, 12]];
+
+/**
+ * O sábado de cada loja (Silas, 28/10). O almoço conta, como no resto da
+ * semana: a Matriz, 8h–12h e 13h–17h30, fica 8h–17h30. "Matriz" é Capão da
+ * Canoa e Pisos Matriz, as duas lojas da matriz. Loja fora da lista segue o
+ * padrão (8h–12h).
+ */
+const SABADO_POR_UNIDADE: Readonly<Record<string, readonly [number, number] | null>> = {
+    'capao da canoa': [8, 17.5],
+    'pisos matriz': [8, 17.5],
+    tramandai: [8.5, 17],
+    'arroio do sal': [8, 17.5],
+    'noiva do mar': [8, 12],
+    'xangri-la': [8, 12],
+    'venda externa': null,
+};
+
+/** A Venda Externa fecha no sábado, menos o usuário "Venda Externa", que vai até 12h (Silas, 28/10). */
+const SABADO_POR_VENDEDOR: Readonly<Record<string, readonly [number, number]>> = {
+    'venda externa|venda externa': [8, 12],
+};
+
+const chave = (nome: string | null | undefined) =>
+    (nome ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ');
+
+/** O expediente de um vendedor, pela loja e pelo nome dele. Sem loja conhecida, o padrão. */
+export function expedienteDe(unidade: string | null | undefined, vendedor?: string | null): Expediente {
+    const u = chave(unidade);
+    const sabado = SABADO_POR_VENDEDOR[`${u}|${chave(vendedor)}`]
+        ?? (u in SABADO_POR_UNIDADE ? SABADO_POR_UNIDADE[u] : EXPEDIENTE[6]);
+    return [...EXPEDIENTE.slice(0, 6), sabado];
+}
 
 /** Brasília é UTC−3 o ano todo desde 2019 (sem horário de verão). */
 const FUSO_MS = -3 * 60 * 60 * 1000;
@@ -140,19 +174,27 @@ const HORA_MS = 60 * 60 * 1000;
 const DIA_MS = 24 * HORA_MS;
 
 /** Quantos ms de expediente há entre dois instantes. */
-export function msDeExpediente(de: Date, ate: Date): number {
+export function msDeExpediente(de: Date, ate: Date, expediente: Expediente = EXPEDIENTE): number {
     const ini = de.getTime(), fim = ate.getTime();
     if (!(fim > ini)) return 0;
     let total = 0;
     // Meia-noite de Brasília do dia de `de`, como instante.
     for (let dia = Math.floor((ini + FUSO_MS) / DIA_MS) * DIA_MS - FUSO_MS; dia < fim; dia += DIA_MS) {
-        const horario = EXPEDIENTE[new Date(dia + FUSO_MS).getUTCDay()];
+        const horario = expediente[new Date(dia + FUSO_MS).getUTCDay()];
         if (!horario) continue;
         const abre = Math.max(ini, dia + horario[0] * HORA_MS);
         const fecha = Math.min(fim, dia + horario[1] * HORA_MS);
         if (fecha > abre) total += fecha - abre;
     }
     return total;
+}
+
+/** O instante cai dentro do expediente? */
+export function noExpediente(instante: Date, expediente: Expediente = EXPEDIENTE): boolean {
+    const local = instante.getTime() + FUSO_MS;
+    const horario = expediente[new Date(local).getUTCDay()];
+    const hora = (((local % DIA_MS) + DIA_MS) % DIA_MS) / HORA_MS;
+    return !!horario && hora >= horario[0] && hora < horario[1];
 }
 
 /** Palavras de quem só confirma ou agradece. Fora daqui, a fala pede algo. */
@@ -209,7 +251,7 @@ type Bloco = { respondido: boolean; ms: number };
  * manhã e largou a cliente das 14h saía com 100% e um minuto (Marco, 07/10).
  * O relatório fechado passa o fim do dia; o painel, o "agora".
  */
-function blocosDoCliente(msgs: Msg[], fim: Date): Bloco[] {
+function blocosDoCliente(msgs: Msg[], fim: Date, expediente: Expediente): Bloco[] {
     const blocos: Bloco[] = [];
     let inicioDoBloco: Date | null = null;
 
@@ -221,12 +263,12 @@ function blocosDoCliente(msgs: Msg[], fim: Date): Bloco[] {
         }
         // Automática não fecha o bloco: o cliente continua esperando gente.
         if (ehResposta(m) && inicioDoBloco !== null) {
-            blocos.push({ respondido: true, ms: msDeExpediente(inicioDoBloco, new Date(m.enviada_em)) });
+            blocos.push({ respondido: true, ms: msDeExpediente(inicioDoBloco, new Date(m.enviada_em), expediente) });
             inicioDoBloco = null;
         }
     }
     if (inicioDoBloco !== null) {
-        const ms = msDeExpediente(inicioDoBloco, fim);
+        const ms = msDeExpediente(inicioDoBloco, fim, expediente);
         if (ms >= TOLERANCIA_BLOCO_ABERTO_MS) blocos.push({ respondido: false, ms });
     }
     return blocos;
@@ -238,8 +280,8 @@ function blocosDoCliente(msgs: Msg[], fim: Date): Bloco[] {
  * medir: entrar como zero puxaria a média para baixo sem ninguém ter atendido
  * mais rápido.
  */
-export function temposDeResposta(msgs: Msg[], fim: Date): number[] {
-    return blocosDoCliente(msgs, fim).filter((b) => b.ms > 0).map((b) => b.ms);
+export function temposDeResposta(msgs: Msg[], fim: Date, expediente: Expediente = EXPEDIENTE): number[] {
+    return blocosDoCliente(msgs, fim, expediente).filter((b) => b.ms > 0).map((b) => b.ms);
 }
 
 /**
@@ -249,8 +291,8 @@ export function temposDeResposta(msgs: Msg[], fim: Date): number[] {
  * Sem fala do cliente não há bloco: um disparo em massa que ninguém respondeu
  * não é uma falha de atendimento, é uma conversa que nunca começou.
  */
-export function respostasPorBloco(msgs: Msg[], fim: Date): boolean[] {
-    return blocosDoCliente(msgs, fim).map((b) => b.respondido);
+export function respostasPorBloco(msgs: Msg[], fim: Date, expediente: Expediente = EXPEDIENTE): boolean[] {
+    return blocosDoCliente(msgs, fim, expediente).map((b) => b.respondido);
 }
 
 /**
@@ -261,11 +303,11 @@ export function respostasPorBloco(msgs: Msg[], fim: Date): boolean[] {
  * dava nota de "ignorou" (Silas, 27/10). `fimDoDia` é o fim do dia da
  * análise, não o "agora": vale o expediente que ainda havia para responder.
  */
-export function esperaForaDoExpediente(msgs: Msg[], fimDoDia: Date): boolean {
+export function esperaForaDoExpediente(msgs: Msg[], fimDoDia: Date, expediente: Expediente = EXPEDIENTE): boolean {
     const ordenadas = emOrdem(msgs);
     const ultimaResposta = ordenadas.map(ehResposta).lastIndexOf(true);
     const pendente = ordenadas.slice(ultimaResposta + 1).find((m) => ehCliente(m) && !ehSoConfirmacao(m));
-    return !!pendente && msDeExpediente(new Date(pendente.enviada_em), fimDoDia) < TOLERANCIA_BLOCO_ABERTO_MS;
+    return !!pendente && msDeExpediente(new Date(pendente.enviada_em), fimDoDia, expediente) < TOLERANCIA_BLOCO_ABERTO_MS;
 }
 
 /**
@@ -429,6 +471,39 @@ export type LinhaDia = {
     tempo_medio_resposta_s: number | null;
     taxa_resposta: number | null;
 };
+
+/**
+ * O vendedor só atendeu com a loja fechada — domingo, sábado depois do
+ * fechamento, de noite? Toda resposta humana dele no dia caiu fora do
+ * expediente. Sem resposta nenhuma, não é atendimento fora do horário.
+ */
+export function atendidaForaDoExpediente(msgs: Msg[], expediente: Expediente = EXPEDIENTE): boolean {
+    const respostas = msgs.filter(ehResposta);
+    return respostas.length > 0 && respostas.every((m) => !noExpediente(new Date(m.enviada_em), expediente));
+}
+
+/**
+ * A nota do dia do vendedor: atendimento fora do horário só pode subir a nota,
+ * nunca baixar (Silas, 28/10). As conversas do horário fazem a média; das de
+ * fora, entra cada uma que ainda puxa a média para cima, da maior para a
+ * menor. Dia só com atendimento fora do horário (domingo) entra com as que
+ * chegam à `referencia` — a média recente do vendedor —, e sem nenhuma fica
+ * sem nota; sem referência (primeiro relatório), entram todas.
+ */
+export function notaDoDia(noHorario: readonly number[], foraDoHorario: readonly number[], referencia: number | null): number | null {
+    const media = (xs: readonly number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
+    const fora = [...foraDoHorario].sort((a, b) => b - a);
+    if (!noHorario.length) {
+        const entram = referencia === null ? fora : fora.filter((n) => n >= referencia);
+        return entram.length ? media(entram) : null;
+    }
+    const entram = [...noHorario];
+    for (const n of fora) {
+        if (n <= media(entram)) break;
+        entram.push(n);
+    }
+    return media(entram);
+}
 
 /**
  * Os números de um fechamento (unidade a partir dos vendedores, rede a partir
