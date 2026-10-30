@@ -688,6 +688,15 @@ async function candidatoCrm(supabase: Admin, conversaId: string, dataRef: string
     const { data: perfil, error: erroPerfil } = await supabase.from('profiles').select('nome')
         .eq('id', conversa.user_id).maybeSingle<{ nome: string }>();
     if (erroPerfil) throw erroPerfil;
+    // Falas de cada lado, sem as automáticas: o card exige que o vendedor
+    // tenha respondido de verdade (`conversaDeVerdade`, lib/crm.ts).
+    const contar = async (direcao: 'entrada' | 'saida') => {
+        const { count, error: erroContagem } = await supabase.from('mensagens').select('id', { count: 'exact', head: true })
+            .eq('conversa_id', conversaId).eq('direcao', direcao).eq('automatica', false);
+        if (erroContagem) throw erroContagem;
+        return count ?? 0;
+    };
+    const [falasCliente, falasVendedor] = await Promise.all([contar('entrada'), contar('saida')]);
     const analise = conversa.analises_conversa[0] ?? null;
     // A análise grava a unidade ATUAL do vendedor (`analisarItem`); a da
     // conversa pode ser a antiga se ele foi transferido. Sem análise, o
@@ -700,6 +709,7 @@ async function candidatoCrm(supabase: Admin, conversaId: string, dataRef: string
             // Dispensada ("Não é atendimento") não é lead: o CRM a trata como bloqueada.
             unidadeId, bloqueada: conversa.bloqueada || !!conversa.dispensada_em, telefone: conversa.cliente_telefone,
             suspeitaInterno: naturezaSuspeita(analise?.payload) !== null,
+            falas: { cliente: falasCliente, vendedor: falasVendedor },
             analise: analise && {
                 tipo_conversa: analise.tipo_conversa, status: analise.status,
                 potencial_venda: analise.potencial_venda, score_oportunidade: analise.score_oportunidade,
