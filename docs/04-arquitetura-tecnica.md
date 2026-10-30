@@ -47,6 +47,7 @@ docs/
 | `/equipe/*` | `gestor`, `supervisor`, `admin` | server-side + RLS |
 | `/unidades/*` | `supervisor`, `admin` | server-side + RLS |
 | `/admin/*` | `admin` | server-side |
+| `/admin/produtos` | `supervisor`, `admin` | server-side |
 | `/api/webhook/uazapi` | UAZAPI | token de rota + confere instância |
 | `/api/cron/*` | pg_cron do Supabase | `Authorization: Bearer ${CRON_SECRET}` |
 

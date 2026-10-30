@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { conexaoObrigatoria, precisaConectar } from '../../lib/conexao.ts';
+import { abreRotaDeAdmin, conexaoObrigatoria, precisaConectar } from '../../lib/conexao.ts';
 
 // Vendedor ativo que ainda não tem linha em conexoes_whatsapp: nunca abriu a
 // tela de conectar.
@@ -42,4 +42,25 @@ test('só o vendedor é obrigado a conectar o WhatsApp', () => {
     assert.equal(conexaoObrigatoria('gestor'), false);
     assert.equal(conexaoObrigatoria('supervisor'), false);
     assert.equal(conexaoObrigatoria('admin'), false);
+});
+
+test('admin abre todas as rotas de /admin', () => {
+    for (const rota of ['/admin', '/admin/unidades', '/admin/conexoes', '/admin/eventos', '/admin/produtos']) {
+        assert.equal(abreRotaDeAdmin('admin', rota), true, rota);
+    }
+});
+
+// A lista vale para a rede inteira, e é a única tela de /admin do supervisor.
+test('supervisor abre só a lista de produtos sem alternativa', () => {
+    assert.equal(abreRotaDeAdmin('supervisor', '/admin/produtos'), true);
+    for (const rota of ['/admin', '/admin/unidades', '/admin/conexoes', '/admin/eventos', '/admin/produtos-x']) {
+        assert.equal(abreRotaDeAdmin('supervisor', rota), false, rota);
+    }
+});
+
+test('gestor e vendedor não abrem nada de /admin', () => {
+    for (const papel of ['gestor', 'vendedor']) {
+        assert.equal(abreRotaDeAdmin(papel, '/admin/produtos'), false, papel);
+        assert.equal(abreRotaDeAdmin(papel, '/admin'), false, papel);
+    }
 });

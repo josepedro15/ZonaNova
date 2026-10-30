@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/env';
-import { conexaoObrigatoria, inicioPorPapel, precisaConectar } from '@/lib/conexao';
+import { abreRotaDeAdmin, conexaoObrigatoria, inicioPorPapel, precisaConectar } from '@/lib/conexao';
 
 // /auth/callback tem de ser pública: quem chega do link do e-mail ainda NÃO
 // tem sessão — é essa rota que a cria. Protegida, o proxy mandava para o login
@@ -123,7 +123,7 @@ export async function proxy(request: NextRequest) {
         }
     }
 
-    if (comecaCom(caminho, ROTAS_DE_ADMIN) && papel !== 'admin') {
+    if (comecaCom(caminho, ROTAS_DE_ADMIN) && !abreRotaDeAdmin(papel, caminho)) {
         return redirecionar(inicio);
     }
     if (comecaCom(caminho, ROTAS_DE_REDE) && !['supervisor', 'admin'].includes(papel)) {

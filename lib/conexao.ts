@@ -34,6 +34,15 @@ export function inicioPorPapel(papel: string): '/equipe' | '/unidades' | '/admin
     return '/dashboard';
 }
 
+/**
+ * Se o papel abre esta rota de /admin. O admin abre todas; o supervisor, só a
+ * lista de produtos sem alternativa, que também é dele desde 30/10.
+ */
+export function abreRotaDeAdmin(papel: string, caminho: string): boolean {
+    if (papel === 'admin') return true;
+    return papel === 'supervisor' && (caminho === '/admin/produtos' || caminho.startsWith('/admin/produtos/'));
+}
+
 export type ConexaoGravada = { status: string; numero: string | null };
 /** O que a UAZAPI respondeu. `owner` é o número, que só ela sabe. */
 export type ConexaoReal = { status: string; owner?: string | null };

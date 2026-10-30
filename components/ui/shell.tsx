@@ -47,6 +47,7 @@ const ITENS: Record<Papel, Item[]> = {
         // Só supervisor e admin aprovam alguém como gestor, e só eles resolvem
         // cadastro de unidade que ainda não tem gestor.
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        { href: '/admin/produtos', rotulo: 'Sem alternativa', curto: 'Produtos', icone: 'cadastro' },
         { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/descobertas', rotulo: 'Descobertas', icone: 'lampada' },
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },

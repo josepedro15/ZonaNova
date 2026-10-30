@@ -5,22 +5,22 @@ import { criarClienteAdmin } from '@/lib/supabase/admin';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
-/** Só admin ativo mexe na lista de produtos sem alternativa (Silas, 27/10: "somente admins"). */
-async function adminAtivo() {
+/** Quem mexe na lista de produtos sem alternativa: admin e, desde 30/10, supervisor — ativos. */
+async function quemCuida() {
     const supabase = await criarClienteServidor();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
     const admin = criarClienteAdmin();
     const { data: p } = await admin.from('profiles').select('role,status').eq('id', user.id)
         .maybeSingle<{ role: string; status: string }>();
-    return p?.status === 'ativo' && p.role === 'admin' ? { admin, userId: user.id } : null;
+    return p?.status === 'ativo' && (p.role === 'admin' || p.role === 'supervisor') ? { admin, userId: user.id } : null;
 }
 
 export async function adicionarProdutoSemAlternativa(form: FormData) {
     const produto = String(form.get('produto') ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
     const observacao = String(form.get('observacao') ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) || null;
     if (produto.length < 2) return;
-    const ctx = await adminAtivo();
+    const ctx = await quemCuida();
     if (!ctx) return;
     const { error } = await ctx.admin.from('produtos_sem_alternativa').insert({ produto, observacao, criado_por: ctx.userId });
     // Já na lista (o índice ignora maiúsculas): nada a fazer.
@@ -34,7 +34,7 @@ export async function adicionarProdutoSemAlternativa(form: FormData) {
 export async function removerProdutoSemAlternativa(form: FormData) {
     const id = String(form.get('id') ?? '');
     if (!UUID.test(id)) return;
-    const ctx = await adminAtivo();
+    const ctx = await quemCuida();
     if (!ctx) return;
     const { data: alvo, error } = await ctx.admin.from('produtos_sem_alternativa').delete().eq('id', id)
         .select('produto').maybeSingle<{ produto: string }>();

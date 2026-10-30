@@ -1,8 +1,8 @@
 /**
  * Produtos que a rede não trabalha e para os quais não há alternativa a
  * oferecer (Silas, 27/10). A análise cobrava "não sugeriu alternativa de
- * produto" nesses casos, e a crítica ia para o treino do vendedor. O admin
- * mantém a lista (0035, /admin/produtos).
+ * produto" nesses casos, e a crítica ia para o treino do vendedor. Admin e
+ * supervisor mantêm a lista (0035, /admin/produtos).
  *
  * Só os itens que aparecem na conversa vão para o pedido: sem nenhum, o
  * prompt é byte a byte o calibrado. E, como em `ajustarResultado`, a regra no
