@@ -46,12 +46,15 @@ export default async function IaPage() {
                         )}
                         {lista.map((m) => {
                             const aberto = !m.encerrado_em && m.fim >= hoje;
-                            const podeParar = aberto && (m.criado_por === perfil.id || ['supervisor', 'admin'].includes(perfil.role));
+                            // Período que já terminou fica no painel mais 3 dias (cardVisivel):
+                            // também precisa de um jeito de sair antes.
+                            const terminou = !m.encerrado_em && m.fim < hoje;
+                            const podeParar = !m.encerrado_em && (m.criado_por === perfil.id || ['supervisor', 'admin'].includes(perfil.role));
                             return (
                                 <Cartao key={m.id} variante={aberto ? 'padrao' : 'tracejado'} className="flex flex-col gap-1.5">
                                     <div className="flex items-start justify-between gap-2">
                                         <h3 className="text-[14px] font-semibold">{m.titulo}</h3>
-                                        <Selo tom={aberto ? (m.inicio > hoje ? 'azul' : 'bom') : 'neutro'}>{!aberto ? 'Encerrado' : m.inicio > hoje ? 'Agendado' : 'Ativo'}</Selo>
+                                        <Selo tom={aberto ? (m.inicio > hoje ? 'azul' : 'bom') : 'neutro'}>{m.encerrado_em ? 'Parado' : terminou ? 'Terminou' : m.inicio > hoje ? 'Agendado' : 'Ativo'}</Selo>
                                     </div>
                                     <p className="text-[13px] text-tinta-2">{m.criterio}</p>
                                     <p className="text-[12.5px] text-tinta-3">
@@ -60,7 +63,7 @@ export default async function IaPage() {
                                     {podeParar && (
                                         <form action={encerrarMonitoramento} className="self-start">
                                             <input type="hidden" name="id" value={m.id} />
-                                            <button type="submit" className="min-h-11 text-[13px] font-semibold text-tinta-3 hover:text-risco">Parar</button>
+                                            <button type="submit" className="min-h-11 text-[13px] font-semibold text-tinta-3 hover:text-risco">{terminou ? 'Tirar do painel' : 'Parar'}</button>
                                         </form>
                                     )}
                                 </Cartao>

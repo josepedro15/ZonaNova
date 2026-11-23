@@ -116,10 +116,10 @@ export function CardMonitoramento({ m, resumo, hoje, modo, podeEncerrar }: Await
                 </div>
             )}
 
-            {podeEncerrar && !acabou && (
+            {podeEncerrar && (
                 <form action={encerrarMonitoramento} className="self-end">
                     <input type="hidden" name="id" value={m.id} />
-                    <button type="submit" className="min-h-11 text-[13px] font-semibold text-tinta-3 hover:text-risco">Parar de monitorar</button>
+                    <button type="submit" className="min-h-11 text-[13px] font-semibold text-tinta-3 hover:text-risco">{acabou ? 'Tirar do painel' : 'Parar de monitorar'}</button>
                 </form>
             )}
         </Cartao>
