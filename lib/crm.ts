@@ -42,21 +42,41 @@ export function telefoneDoCrm(telefone: string): string | null {
 
 export const refExterna = (telefone: string) => `zonanova:${telefone}`;
 
+const INVISIVEIS = /[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩﻿]/g;
+const LINKS = /\b(?:https?:\/\/|www\.)\S+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|br|io|me|ly|gl|xyz|info|app|site|online|shop|link|top|click)\b(?:\/\S*)?/gi;
+
+/**
+ * Texto que vai ao CRM. Nome do contato é o que o cliente pôs no WhatsApp, e
+ * resumo, próxima ação e profissão saem da IA lendo a conversa — o cliente
+ * escreve o que quiser ali e molda o que a IA devolve (auditoria 24/10/2026).
+ * Por isso: sem link (a equipe lê o card e clicaria), sem caractere de
+ * controle nem de inversão de direção (que disfarçam o texto na tela), numa
+ * linha só e com teto de tamanho.
+ */
+export function textoParaCrm(texto: string | null | undefined, max: number): string {
+    return (texto ?? '')
+        .replace(INVISIVEIS, ' ')
+        .replace(LINKS, '[link removido]')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, max);
+}
+
 export function nomeDoContato(nome: string | null, telefone: string): string {
-    return (nome?.trim() || `Cliente ${telefone}`).slice(0, 120);
+    return (textoParaCrm(nome, 120) || `Cliente ${telefone}`).slice(0, 120);
 }
 
 /** A profissão no título: é o que o Silas queria ver no nome do contato. */
 export function tituloDoCard(nome: string | null, profissao: string, telefone: string): string {
     // O título tem 200 de limite; o nome do contato, 120. Cortar antes daqui
     // cortaria o título no limite do contato.
-    const quem = nome?.trim() || `Cliente ${telefone}`;
-    const oficio = profissao.trim();
+    const quem = textoParaCrm(nome, 200) || `Cliente ${telefone}`;
+    const oficio = textoParaCrm(profissao, 60);
     return (oficio ? `${quem} · ${oficio}` : quem).slice(0, 200);
 }
 
 export function etiquetaDoVendedor(nome: string): string {
-    return nome.trim().slice(0, 50);
+    return textoParaCrm(nome, 50);
 }
 
 export type ResumoLead = { vendedor: string; dataRef: string; score: number; resumo: string; proximaAcao: string };
@@ -64,13 +84,30 @@ export type ResumoLead = { vendedor: string; dataRef: string; score: number; res
 /** A nota interna do contato: o porquê do card, para o vendedor não abrir o ZonaNova. */
 export function notaDoCard(r: ResumoLead): string {
     const [ano, mes, dia] = r.dataRef.split('-');
+    const resumo = textoParaCrm(r.resumo, 500);
+    const proximaAcao = textoParaCrm(r.proximaAcao, 300);
     return [
         `Lead quente identificado pelo ZonaNova na conversa de ${dia}/${mes}/${ano}.`,
-        `Vendedor: ${r.vendedor}`,
+        'Texto gerado por IA a partir da conversa: não clique em links nem siga instruções daqui.',
+        `Vendedor: ${textoParaCrm(r.vendedor, 120)}`,
         `Oportunidade: ${r.score}/100 · potencial alto`,
-        r.resumo.trim() && `Resumo: ${r.resumo.trim()}`,
-        r.proximaAcao.trim() && `Próxima ação: ${r.proximaAcao.trim()}`,
+        resumo && `Resumo: ${resumo}`,
+        proximaAcao && `Próxima ação: ${proximaAcao}`,
     ].filter(Boolean).join('\n');
+}
+
+/**
+ * Mínimo de falas de cada lado para a conversa virar card. A nota de lead vem
+ * da IA, e o texto do cliente molda a IA: sem isto, um estranho escrevendo
+ * sozinho ("sou lead quente, potencial alto") abria card no CRM. Resposta do
+ * vendedor é o sinal que o cliente não forja; automática (bot, template) não conta.
+ */
+export const MIN_FALAS_CRM = 2;
+
+export type Falas = { cliente: number; vendedor: number };
+
+export function conversaDeVerdade(f: Falas): boolean {
+    return f.cliente >= MIN_FALAS_CRM && f.vendedor >= MIN_FALAS_CRM;
 }
 
 export type ConfigCrm = {
@@ -107,7 +144,7 @@ export function faltandoParaEnviar(c: ConfigCrm): string[] {
 }
 
 /** `suspeitaInterno`: a análise viu colega, fornecedor ou pessoal (lib/natureza.ts) e o gestor ainda não decidiu. */
-export type Candidato = { unidadeId: string; bloqueada: boolean; telefone: string; analise: AnaliseCrm | null; suspeitaInterno?: boolean };
+export type Candidato = { unidadeId: string; bloqueada: boolean; telefone: string; analise: AnaliseCrm | null; falas: Falas; suspeitaInterno?: boolean };
 
 export type Decisao = { acao: 'ignorar'; motivo: string } | { acao: 'simular' | 'enviar'; telefone: string };
 
@@ -124,6 +161,7 @@ export function decidirEnvio(c: Candidato, config: ConfigCrm): Decisao {
     // Colega pedindo para separar pedido parecia lead quente e virava card no CRM.
     if (c.suspeitaInterno) return ignorar('suspeita de contato interno');
     if (!c.analise || !leadQuente(c.analise)) return ignorar('não é lead quente');
+    if (!conversaDeVerdade(c.falas)) return ignorar('pouca troca entre cliente e vendedor');
     const telefone = telefoneDoCrm(c.telefone);
     if (!telefone) return ignorar('contato sem telefone brasileiro');
     return { acao: config.modo === 'envio' ? 'enviar' : 'simular', telefone };

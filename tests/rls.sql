@@ -778,3 +778,180 @@ begin
     then raise notice 'FALHOU  authenticated executa as funções de unificação';
     else raise notice 'PASSOU  funções de unificação fora do cliente'; end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 0034: correções da auditoria de segurança (24/10/2026)
+-- ---------------------------------------------------------------------------
+
+-- 1. O trigger das colunas de poder barra por conta própria. O teste da
+-- escalada acima passa pelo grant por coluna, que barra antes do trigger
+-- rodar; aqui o grant é aberto de propósito para provar a segunda tranca.
+reset role;
+grant update (role, unidade_id, status) on public.profiles to authenticated;
+set role authenticated;
+select pg_temp.como('22222222-2222-2222-2222-222222222222');
+do $$
+begin
+    update public.profiles set role = 'supervisor' where id = auth.uid();
+    raise notice 'FALHOU  com o grant aberto, o gestor SE PROMOVEU (trigger não protege)';
+exception when insufficient_privilege then
+    raise notice 'PASSOU  trigger barra a promoção mesmo com o grant de coluna aberto';
+end $$;
+do $$
+begin
+    update public.profiles set unidade_id = 'aaaaaaaa-0000-0000-0000-000000000002' where id = auth.uid();
+    raise notice 'FALHOU  com o grant aberto, o gestor TROCOU a própria unidade';
+exception when insufficient_privilege then
+    raise notice 'PASSOU  trigger barra a troca de unidade mesmo com o grant aberto';
+end $$;
+select pg_temp.como('77777777-7777-7777-7777-777777777777');
+do $$
+begin
+    update public.profiles set status = 'ativo' where id = auth.uid();
+    raise notice 'FALHOU  com o grant aberto, o pendente SE APROVOU';
+exception when insufficient_privilege then
+    raise notice 'PASSOU  trigger barra a autoaprovação mesmo com o grant aberto';
+end $$;
+reset role;
+revoke update (role, unidade_id, status) on public.profiles from authenticated;
+
+-- E o service role (server actions de aprovação) continua passando.
+set role service_role;
+update public.profiles set status = 'ativo' where id = '77777777-7777-7777-7777-777777777777';
+reset role;
+select pg_temp.ok('service role ainda aprova cadastro',
+       (select count(*) from public.profiles
+         where id = '77777777-7777-7777-7777-777777777777' and status = 'ativo'), 1);
+update public.profiles set status = 'pendente' where id = '77777777-7777-7777-7777-777777777777';
+
+-- 2. Contestação: o gestor escreve o motivo; veredito e revisor não são dele.
+set role authenticated;
+select pg_temp.como('33333333-3333-3333-3333-333333333333');
+do $$
+begin
+    insert into public.aderencia_contestacoes (aderencia_id, contestado_por, motivo, veredito)
+    values ('eeeeeeee-0000-0000-0000-000000000001', auth.uid(), 'forjada', 'procedente');
+    raise notice 'FALHOU  gestor inseriu contestação já com veredito';
+exception when insufficient_privilege then
+    raise notice 'PASSOU  gestor não escolhe o veredito da contestação';
+end $$;
+do $$
+begin
+    insert into public.aderencia_contestacoes (aderencia_id, contestado_por, motivo, revisado_por, revisado_em)
+    values ('eeeeeeee-0000-0000-0000-000000000001', auth.uid(), 'forjada',
+            '11111111-1111-1111-1111-111111111111', now());
+    raise notice 'FALHOU  gestor inseriu contestação em nome do supervisor';
+exception when insufficient_privilege then
+    raise notice 'PASSOU  gestor não assina a revisão pelo supervisor';
+end $$;
+do $$
+begin
+    insert into public.aderencia_contestacoes (aderencia_id, contestado_por, motivo)
+    values ('eeeeeeee-0000-0000-0000-000000000001', auth.uid(), repeat('x', 1001));
+    raise notice 'FALHOU  motivo de 1001 caracteres entrou';
+exception when check_violation then
+    raise notice 'PASSOU  motivo acima de 1000 caracteres é recusado';
+end $$;
+do $$
+begin
+    insert into public.aderencia_contestacoes (aderencia_id, contestado_por, motivo)
+    values ('eeeeeeee-0000-0000-0000-000000000001', auth.uid(), 'contestação legítima 0034');
+    raise notice 'PASSOU  gestor ainda contesta normalmente';
+exception when others then
+    raise notice 'FALHOU  gestor não consegue mais contestar: %', sqlerrm;
+end $$;
+reset role;
+select pg_temp.ok('contestação legítima nasce pendente e sem revisor',
+       (select count(*) from public.aderencia_contestacoes
+         where motivo = 'contestação legítima 0034' and veredito = 'pendente'
+           and revisado_por is null and revisado_em is null), 1);
+delete from public.aderencia_contestacoes where motivo = 'contestação legítima 0034';
+
+-- 3. Conversa bloqueada some da API inteira, não só das telas. Conversa de
+-- Rafael (Centro) com análise, aderência e observação do MEC num dia de teste.
+insert into public.analises_conversa (conversa_id, user_id, unidade_id, data_ref, payload)
+values ('cccccccc-0000-0000-0000-000000000001', '44444444-4444-4444-4444-444444444444',
+        'aaaaaaaa-0000-0000-0000-000000000001', '2026-01-02', '{}');
+insert into public.aderencia_conversa (id, conversa_id, user_id, unidade_id, data_ref, playbook_id, etapa, aplicavel, aplicado)
+values ('eeeeeeee-0000-0000-0034-000000000001', 'cccccccc-0000-0000-0000-000000000001',
+        '44444444-4444-4444-4444-444444444444', 'aaaaaaaa-0000-0000-0000-000000000001',
+        '2026-01-02', 'dddddddd-0000-0000-0000-000000000001', 'acolhida', true, 'sim');
+insert into public.mec_observacoes (conversa_id, user_id, unidade_id, data_ref, playbook_id, etapa, sinal)
+values ('cccccccc-0000-0000-0000-000000000001', '44444444-4444-4444-4444-444444444444',
+        'aaaaaaaa-0000-0000-0000-000000000001', '2026-01-02', 'dddddddd-0000-0000-0000-000000000001',
+        'acolhida', 'pergunta_aberta');
+
+create or replace function pg_temp.visivel_c1() returns bigint language sql as $$
+    select (select count(*) from public.conversas where id = 'cccccccc-0000-0000-0000-000000000001')
+         + (select count(*) from public.mensagens where conversa_id = 'cccccccc-0000-0000-0000-000000000001')
+         + (select count(*) from public.analises_conversa where conversa_id = 'cccccccc-0000-0000-0000-000000000001')
+         + (select count(*) from public.aderencia_conversa where conversa_id = 'cccccccc-0000-0000-0000-000000000001')
+         + (select count(*) from public.mec_observacoes where conversa_id = 'cccccccc-0000-0000-0000-000000000001');
+$$;
+
+set role authenticated;
+select pg_temp.como('44444444-4444-4444-4444-444444444444');
+select pg_temp.ok('antes do bloqueio o vendedor lê a conversa e o que pende dela',
+       (select (pg_temp.visivel_c1() >= 5)::int), 1);
+-- Transferência: o vendedor muda de unidade e a conversa vai junto (0031), mas
+-- a análise, a aderência e a observação antigas ficam na unidade de origem.
+-- O gestor da origem segue vendo esse histórico: o bloqueio não pode herdar o
+-- escopo da conversa.
+reset role;
+update public.conversas set unidade_id = 'aaaaaaaa-0000-0000-0000-000000000002'
+ where id = 'cccccccc-0000-0000-0000-000000000001';
+set role authenticated;
+select pg_temp.como('22222222-2222-2222-2222-222222222222');
+select pg_temp.ok('conversa transferida: gestor da origem segue vendo análise, aderência e MEC antigos',
+       (select count(*) from public.analises_conversa where conversa_id = 'cccccccc-0000-0000-0000-000000000001' and data_ref = '2026-01-02')
+     + (select count(*) from public.aderencia_conversa where id = 'eeeeeeee-0000-0000-0034-000000000001')
+     + (select count(*) from public.mec_observacoes where conversa_id = 'cccccccc-0000-0000-0000-000000000001' and data_ref = '2026-01-02'), 3);
+reset role;
+update public.conversas set unidade_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+ where id = 'cccccccc-0000-0000-0000-000000000001';
+
+reset role;
+update public.conversas set bloqueada = true where id = 'cccccccc-0000-0000-0000-000000000001';
+set role authenticated;
+select pg_temp.como('44444444-4444-4444-4444-444444444444');
+select pg_temp.ok('conversa bloqueada: vendedor não lê nada dela pela API',
+       pg_temp.visivel_c1(), 0);
+select pg_temp.como('22222222-2222-2222-2222-222222222222');
+select pg_temp.ok('conversa bloqueada: gestor da unidade não lê nada dela',
+       pg_temp.visivel_c1(), 0);
+select pg_temp.como('11111111-1111-1111-1111-111111111111');
+select pg_temp.ok('conversa bloqueada: supervisor não lê nada dela',
+       pg_temp.visivel_c1(), 0);
+select pg_temp.ok('conversa bloqueada não esconde as outras',
+       (select count(*) from public.conversas), 2);
+reset role;
+update public.conversas set bloqueada = false where id = 'cccccccc-0000-0000-0000-000000000001';
+delete from public.analises_conversa where conversa_id = 'cccccccc-0000-0000-0000-000000000001' and data_ref = '2026-01-02';
+delete from public.aderencia_conversa where id = 'eeeeeeee-0000-0000-0034-000000000001';
+delete from public.mec_observacoes where conversa_id = 'cccccccc-0000-0000-0000-000000000001' and data_ref = '2026-01-02';
+
+-- 4. Cadastro: a unidade só vale vinda do app_metadata (o servidor grava);
+-- a do user_metadata é o que um signup público pela API manda.
+insert into auth.users (id, email, raw_user_meta_data)
+values ('99999999-0000-0000-0034-000000000001', 'signup-publico@teste.com',
+        '{"nome": "Signup público", "unidade_id": "aaaaaaaa-0000-0000-0000-000000000001"}');
+insert into auth.users (id, email, raw_user_meta_data, raw_app_meta_data)
+values ('99999999-0000-0000-0034-000000000002', 'cadastro-app@teste.com',
+        '{"nome": "Cadastro do app"}', '{"unidade_id": "aaaaaaaa-0000-0000-0000-000000000002"}');
+select pg_temp.ok('signup público não escolhe unidade (user_metadata ignorado)',
+       (select count(*) from public.profiles
+         where id = '99999999-0000-0000-0034-000000000001' and unidade_id is null and status = 'pendente'), 1);
+select pg_temp.ok('cadastro do app leva a unidade gravada no app_metadata',
+       (select count(*) from public.profiles
+         where id = '99999999-0000-0000-0034-000000000002'
+           and unidade_id = 'aaaaaaaa-0000-0000-0000-000000000002' and nome = 'Cadastro do app'), 1);
+delete from public.profiles where id::text like '99999999-0000-0000-0034-%';
+delete from auth.users where id::text like '99999999-0000-0000-0034-%';
+
+do $$
+begin
+    if has_function_privilege('anon', 'public.zn_conversa_bloqueada(uuid)', 'execute')
+       or not has_function_privilege('authenticated', 'public.zn_conversa_bloqueada(uuid)', 'execute')
+    then raise notice 'FALHOU  zn_conversa_bloqueada com privilégio errado';
+    else raise notice 'PASSOU  zn_conversa_bloqueada só para authenticated'; end if;
+end $$;

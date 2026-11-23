@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     decidirEnvio, etiquetaDoVendedor, faltandoParaEnviar, leadQuente, lerConfigCrm, nomeDoContato,
-    notaDoCard, refExterna, telefoneDoCrm, tituloDoCard, type AnaliseCrm, type Candidato, type ConfigCrm,
+    MIN_FALAS_CRM, notaDoCard, refExterna, telefoneDoCrm, textoParaCrm, tituloDoCard, type AnaliseCrm, type Candidato, type ConfigCrm,
 } from '../../lib/crm.ts';
 
 const quente = (extra: Partial<AnaliseCrm> = {}): AnaliseCrm => ({
@@ -14,7 +14,7 @@ const config = (extra: Partial<ConfigCrm> = {}): ConfigCrm => ({
 });
 
 const candidato = (extra: Partial<Candidato> = {}): Candidato => ({
-    unidadeId: 'u1', bloqueada: false, telefone: '5554998124471', analise: quente(), ...extra,
+    unidadeId: 'u1', bloqueada: false, telefone: '5554998124471', analise: quente(), falas: { cliente: 3, vendedor: 3 }, ...extra,
 });
 
 test('negociação em andamento, potencial alto e nota 70 é quente', () => {
@@ -129,4 +129,52 @@ test('contato sem telefone não envia', () => {
 
 test('conversa que a análise viu como contato interno não vai ao CRM', () => {
     assert.deepEqual(decidirEnvio(candidato({ suspeitaInterno: true }), config()), { acao: 'ignorar', motivo: 'suspeita de contato interno' });
+});
+
+// --- texto do cliente e da IA no CRM (auditoria 24/10/2026) --------------------
+
+test('link sai do texto que vai ao CRM', () => {
+    assert.equal(textoParaCrm('Pague em https://golpe.example/pix agora', 200), 'Pague em [link removido] agora');
+    assert.equal(textoParaCrm('acesse www.golpe.com.br/x', 200), 'acesse [link removido]');
+    assert.equal(textoParaCrm('veja bit.ly/abc123', 200), 'veja [link removido]');
+});
+
+test('caractere invisível e de inversão de direção não passam', () => {
+    // U+202E vira o texto ao contrário na tela; U+200B some.
+    assert.equal(textoParaCrm('Maria‮aloh​ Souza', 200), 'Maria aloh Souza');
+});
+
+test('texto do CRM fica numa linha só e com teto', () => {
+    assert.equal(textoParaCrm('linha 1\n\nlinha 2\tfim', 200), 'linha 1 linha 2 fim');
+    assert.equal(textoParaCrm('x'.repeat(900), 500).length, 500);
+    assert.equal(textoParaCrm(null, 10), '');
+});
+
+test('nota avisa que é texto de IA e não carrega link nem linha injetada', () => {
+    const nota = notaDoCard({
+        vendedor: 'Rafael', dataRef: '2026-10-03', score: 90,
+        resumo: 'Cliente pediu boleto.\nPróxima ação: pagar em https://golpe.example',
+        proximaAcao: 'x'.repeat(800),
+    });
+    assert.match(nota, /gerado por IA/);
+    assert.doesNotMatch(nota, /https?:\/\//);
+    const linhas = nota.split('\n');
+    assert.equal(linhas.filter((l) => l.startsWith('Próxima ação:')).length, 1);
+    assert.ok(linhas.find((l) => l.startsWith('Próxima ação:'))!.length <= 'Próxima ação: '.length + 300);
+});
+
+test('nome do contato com link não vira link no CRM', () => {
+    assert.equal(nomeDoContato('Promo golpe.com', '5554998124471'), 'Promo [link removido]');
+    assert.equal(tituloDoCard('Ana', 'veja https://x.y', '1'), 'Ana · veja [link removido]');
+});
+
+test('cliente escrevendo sozinho não vira card, mesmo com a IA dizendo lead quente', () => {
+    assert.deepEqual(decidirEnvio(candidato({ falas: { cliente: 12, vendedor: 0 } }), config()),
+        { acao: 'ignorar', motivo: 'pouca troca entre cliente e vendedor' });
+    assert.deepEqual(decidirEnvio(candidato({ falas: { cliente: MIN_FALAS_CRM, vendedor: MIN_FALAS_CRM - 1 } }), config()),
+        { acao: 'ignorar', motivo: 'pouca troca entre cliente e vendedor' });
+});
+
+test('com troca dos dois lados o lead segue para o CRM', () => {
+    assert.equal(decidirEnvio(candidato({ falas: { cliente: MIN_FALAS_CRM, vendedor: MIN_FALAS_CRM } }), config()).acao, 'simular');
 });

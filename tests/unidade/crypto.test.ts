@@ -68,3 +68,32 @@ test('lixo não derruba o parser', () => {
         assert.equal(conexaoDoToken(t, SEGREDO), null, JSON.stringify(t));
     }
 });
+
+// --- token da instância no payload (auditoria 24/10/2026) ---------------------
+const { decidirTokenDaInstancia, exigeTokenDaInstancia } = await import('../../lib/uazapi/rota.ts');
+
+test('payload com token e conexão com token guardado: confere', () => {
+    assert.equal(decidirTokenDaInstancia('tk', true, false), 'conferir');
+    assert.equal(decidirTokenDaInstancia('tk', true, true), 'conferir');
+});
+
+test('payload sem token passa enquanto a exigência está desligada (fase de observar)', () => {
+    assert.equal(decidirTokenDaInstancia(undefined, true, false), 'aceitar_sem_token');
+    assert.equal(decidirTokenDaInstancia('', true, false), 'aceitar_sem_token');
+});
+
+test('payload sem token é descartado com a exigência ligada', () => {
+    assert.equal(decidirTokenDaInstancia(undefined, true, true), 'descartar');
+    assert.equal(decidirTokenDaInstancia(null, true, true), 'descartar');
+});
+
+test('conexão sem token guardado não tem com que conferir: descarta se exigir', () => {
+    assert.equal(decidirTokenDaInstancia('tk', false, true), 'descartar');
+    assert.equal(decidirTokenDaInstancia('tk', false, false), 'aceitar_sem_token');
+});
+
+test('só a palavra exata liga a exigência do token', () => {
+    assert.equal(exigeTokenDaInstancia({ UAZAPI_EXIGIR_TOKEN: 'sim' }), true);
+    assert.equal(exigeTokenDaInstancia({ UAZAPI_EXIGIR_TOKEN: 'true' }), false);
+    assert.equal(exigeTokenDaInstancia({}), false);
+});

@@ -1,7 +1,7 @@
 import { after } from 'next/server';
 import { criarClienteAdmin } from '@/lib/supabase/admin';
 import { decifrar, segredoIgual } from '@/lib/crypto';
-import { conexaoDoToken } from '@/lib/uazapi/rota';
+import { conexaoDoToken, decidirTokenDaInstancia, exigeTokenDaInstancia } from '@/lib/uazapi/rota';
 import { type EventoUazapi } from '@/lib/uazapi/normalizar';
 import { processar, processarEntrada } from '@/lib/uazapi/ingestao';
 
@@ -52,7 +52,16 @@ export async function POST(
     // Quem tivesse a URL de um vendedor não conseguiria empurrar tráfego de
     // outra instância por ela.
     const tokenPayload = evento.token ?? evento.instance?.token;
-    if (tokenPayload && conexao.instance_token) {
+    const decisao = decidirTokenDaInstancia(tokenPayload, !!conexao.instance_token, exigeTokenDaInstancia(process.env));
+    if (decisao !== 'conferir') {
+        const motivo = tokenPayload ? 'conexão sem instance_token gravado' : 'payload sem token da instância';
+        const tipo = evento.EventType ?? evento.event ?? '?';
+        if (decisao === 'descartar') {
+            console.warn(`webhook ${conexaoId}: descartado, ${motivo} (${tipo})`);
+            return Response.json({ ok: true, ignorado: motivo });
+        }
+        console.warn(`webhook ${conexaoId}: ${motivo} (${tipo}), aceito — com UAZAPI_EXIGIR_TOKEN=sim seria descartado`);
+    } else if (tokenPayload && conexao.instance_token) {
         let guardado: string;
         try {
             guardado = decifrar(Buffer.from(conexao.instance_token.replace(/^\\x/, ''), 'hex'));
