@@ -37,7 +37,7 @@ export default async function IaPage() {
                 <CabecalhoPagina sobre="Pergunte sobre as conversas ou peça para acompanhar uma ação da rede" titulo="Conversar com a IA" />
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
                     <Chat nome={perfil.nome.split(' ')[0]} papel={perfil.role} />
-                    <aside aria-label="Monitoramentos" className="flex flex-col gap-3">
+                    <aside aria-label="Monitoramentos" className="flex flex-col gap-3 xl:sticky xl:top-6">
                         <h2 className="text-[12.5px] font-semibold text-tinta-3">Monitorando ({abertos.length} de {MAX_MONITORAMENTOS_ATIVOS})</h2>
                         {lista.length === 0 && (
                             <Cartao variante="tracejado">

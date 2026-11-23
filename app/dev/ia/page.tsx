@@ -16,7 +16,15 @@ const MON: Monitoramento = {
 const VENDEDORES = [['v1', 'Thamires ZN'], ['v2', 'Rafael Muller'], ['v3', 'Ana Paula Rocha'], ['v4', 'Vanderlei'], ['v5', 'Taliane']] as const;
 const CLIENTES = ['Construtora Lima', 'Ana Paula · porcelanato', 'Rogério', 'Fernanda Tintas', 'Marcos obra praia', 'Dona Cleusa', 'Jair', 'Paula Reforma', 'Sérgio', 'Vilmar'];
 
+const RANKING = 'A **nota média das negociações de 17 a 23/11 foi 55,5**, em 884 negociações. Os dias ficaram entre 53,8 e 58,1.\n\n'
+    + '**Notas mais altas**\n- Keila Costa: **66,6** (28 conversas)\n- Rodrigo: 61,8 (35)\n- Thamires ZN: 61,2 (40)\n- Bruno Souza: 60,2 (15)\n- Danielly: 59,9 (25)\n\n'
+    + '**Notas mais baixas**\n- Vanderlei: **47,9** (18)\n- Taliane: 51,5 (35)\n- Cristian: 52,1 (32)\n- Keli Copatti: 52,5 (42)\n- Priscila Guimarães: 52,5 (11)\n\n'
+    + '**Todos com 10 conversas ou mais**\n- Keila Costa: 66,6\n- Rodrigo: 61,8\n- Thamires ZN: 61,2\n- Bruno Souza: 60,2\n- Danielly: 59,9\n- Giancarlo: 59,3\n- Maicon Gonsalves: 59,2\n- Carolina: 59,0\n- Lidiane Acosta: 58,4\n- Vitor Teixeira: 56,8\n- Tiele: 56,1\n- Venda Externa: 53,5\n\n'
+    + 'Quer que eu puxe as conversas com nota mais baixa do Vanderlei ou da Taliane?';
+
 const TURNOS: Turno[] = [
+    { papel: 'usuario', texto: 'Como foi a nota das negociações nos últimos 7 dias, por vendedor?' },
+    { papel: 'ia', texto: RANKING },
     { papel: 'usuario', texto: 'A partir de 1º de dezembro, monitora se os vendedores estão mandando as ações de Natal para os clientes.' },
     {
         papel: 'ia',
@@ -40,7 +48,15 @@ export default async function VitrineIa({ searchParams }: { searchParams: Promis
         <Shell papel={vendedor ? 'vendedor' : 'supervisor'} nome="Silas Exemplo" unidade={null} atual={vendedor ? '/dashboard' : '/ia'}>
             <Pagina>
                 <CabecalhoPagina sobre="Pergunte sobre as conversas ou peça para acompanhar uma ação da rede" titulo="Conversar com a IA" />
-                {!vendedor && <Chat nome="Silas" papel="supervisor" inicial={vazio ? [] : TURNOS} />}
+                {!vendedor && (
+                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+                        <Chat nome="Silas" papel="supervisor" inicial={vazio ? [] : TURNOS} />
+                        <aside className="flex flex-col gap-3 xl:sticky xl:top-6">
+                            <h2 className="text-[12.5px] font-semibold text-tinta-3">Monitorando (1 de 5)</h2>
+                            <p className="rounded-card border border-linha bg-superficie p-4 text-[13px] text-tinta-2">Ações de Natal · 01/12 a 24/12</p>
+                        </aside>
+                    </div>
+                )}
                 <div className="grid gap-4 xl:grid-cols-2">
                     <CardMonitoramento m={MON} resumo={resumo} hoje="2026-12-06" modo={vendedor ? 'vendedor' : 'gestao'} podeEncerrar={!vendedor} />
                 </div>
