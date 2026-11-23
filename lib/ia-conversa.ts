@@ -205,14 +205,22 @@ function ferramentas(supabase: Supabase, perfil: PerfilConversa, propostas: Prop
             unidade_id: z.string().uuid().optional(),
             exemplos: z.number().int().min(1).max(20).optional(),
         }),
-        run: async ({ palavras, de, ate, unidade_id, exemplos }) => {
+        run: async ({ palavras, de, ate, unidade_id: pedida, exemplos }) => {
             if (de > ate) return 'A data inicial vem depois da final.';
+            // Esta busca lê dezenas de milhares de mensagens. Pela sessão, a RLS
+            // de mensagens (que confere a conversa linha a linha) estourava o
+            // tempo do banco (teste de 23/11: só 2 de 5 dias voltaram). Vai pela
+            // chave de serviço, com o escopo aplicado aqui: o gestor só na
+            // unidade dele; supervisor e admin, na rede ou na unidade pedida.
+            if (perfil.role === 'gestor' && !perfil.unidade_id) return 'Seu perfil não tem unidade.';
+            const unidade_id = perfil.role === 'gestor' ? perfil.unidade_id! : pedida;
             if (diasEntre(de, ate) > 31) return 'No máximo 31 dias por busca.';
             const inicio = janelaDoDia(de).inicio;
             const fim = janelaDoDia(ate).fim;
             type Linha = MensagemCandidata & { conversas: { user_id: string; cliente_nome: string | null; bloqueada: boolean } };
+            const admin = criarClienteAdmin();
             const linhas = await paginar<Linha>((i, f) => {
-                let q = supabase.from('mensagens')
+                let q = admin.from('mensagens')
                     .select('id,conversa_id,enviada_em,tipo,conteudo,transcricao,midia_nome,midia_descricao,conversas!inner(user_id,unidade_id,cliente_nome,bloqueada)')
                     .eq('direcao', 'saida').eq('automatica', false).eq('conversas.bloqueada', false)
                     .gte('enviada_em', inicio.toISOString()).lt('enviada_em', fim.toISOString());
