@@ -5,6 +5,7 @@ import { CabecalhoPagina, EstadoVazio, Icone, Pagina, RotuloSecao, Selo, Shell, 
 import { aparelhoDe, concluidaPelaAnalise, COOKIE_WHATSAPP_APP, desde, diasAte, esperaNaLista, expedienteDe, marcadaDepoisDoCliente, primeiroNome, respostaMediaEmMinutos, respostasPorBloco, telefoneBonito, temposDeResposta } from '@/lib/painel';
 import { desfazerDispensa, desfazerFechadoPresencial, desfazerResolvida } from '@/app/actions/conversa';
 import { AvisoMarca } from '@/components/aviso-marca';
+import { CardsMonitoramento } from '@/components/monitoramentos';
 import { dataEmSaoPaulo } from '@/lib/analise';
 import { media } from '@/lib/visual';
 import { variacaoSemanal } from '@/lib/derivacoes';
@@ -126,6 +127,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     quem ele não desvia — e para o caso de o proxy não correr. */}
                 {!ligado && <AvisoConexao conexao={conexao} />}
                 {gere && <AvisoAprovacoes pendentes={pendentes ?? 0} />}
+                {/* Ações que a gestão pediu para acompanhar (Conversar com a IA). */}
+                <CardsMonitoramento supabase={supabase} modo="vendedor" quem={{ id: user!.id, role: 'vendedor' }} />
                 {doAviso && aviso === 'presencial' && (
                     <AvisoMarca tom="bom" titulo={`${nomeDoAviso}: fechada presencialmente`}
                                 desfazer={{ acao: desfazerFechadoPresencial, conversaId: doAviso.id, voltar: 'dashboard' }}>

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
 import {
@@ -66,8 +67,10 @@ async function ultimasFalas(supabase: Supabase, ids: string[], desde: string): P
  * só). `unidadeIds` null é o escopo inteiro que a RLS deixa ver — o
  * comportamento de antes para supervisor e admin em /equipe.
  */
-export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, voltar }: {
+export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, voltar, extra }: {
     supabase: Supabase; unidadeIds: string[] | null; nomeUnidade: string; titulo: string; voltar?: { href: Route; rotulo: string };
+    /** Logo abaixo do título: os cards de monitoramento (Conversar com a IA). */
+    extra?: ReactNode;
 }) {
     const hoje = dataHoje();
     const agora = new Date();
@@ -222,6 +225,7 @@ export async function VisaoUnidade({ supabase, unidadeIds, nomeUnidade, titulo, 
     return (
         <Pagina>
             <CabecalhoPagina voltar={voltar} sobre={sobre} titulo={titulo} />
+            {extra}
 
             {(foraDoAr.length > 0 || semCaptura.length > 0 || esperas.length > 0 || !!pendentes) && (
                 <section aria-label="Alertas" className="grid gap-4 lg:grid-cols-3">

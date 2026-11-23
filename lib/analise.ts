@@ -496,6 +496,10 @@ export function custoEstimado(modelo: string, entrada: number, saida: number): n
     // aqui para que o custo gravado seja reprodutível; modelo desconhecido
     // fica sem estimativa.
     if (modelo.startsWith('gpt-4.1-mini')) return (entrada * 0.40 + saida * 1.60) / 1_000_000;
+    // O da mídia, quando OPENAI_MODELO_MIDIA aponta para ele.
+    if (modelo.startsWith('gpt-4.1-nano')) return (entrada * 0.10 + saida * 0.40) / 1_000_000;
     if (modelo === 'claude-haiku-5-5') return (entrada * 0.10 + saida * 0.50) / 1_000_000;
+    // O do chat do painel (Conversar com a IA), preço de 2026-11-23.
+    if (modelo === 'claude-opus-5-5') return (entrada * 4 + saida * 20) / 1_000_000;
     return 0;
 }

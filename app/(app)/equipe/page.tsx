@@ -1,6 +1,7 @@
 import { Shell } from '@/components/ui';
 import { contextoApp } from '@/lib/contexto-app';
 import { VisaoUnidade } from './visao-unidade';
+import { CardsMonitoramento } from '@/components/monitoramentos';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,8 @@ export default async function EquipePage() {
             : `${unidadeIds?.length ?? 0} lojas`;
     return (
         <Shell papel={perfil.role} nome={perfil.nome} unidade={perfil.unidade} atual="/equipe" pendentes={pendentes ?? 0}>
-            <VisaoUnidade supabase={supabase} unidadeIds={unidadeIds} nomeUnidade={nomeUnidade} titulo="Minha equipe" />
+            <VisaoUnidade supabase={supabase} unidadeIds={unidadeIds} nomeUnidade={nomeUnidade} titulo="Minha equipe"
+                          extra={<CardsMonitoramento supabase={supabase} modo="gestao" quem={perfil} />} />
         </Shell>
     );
 }

@@ -1,5 +1,6 @@
 import { Alerta, CabecalhoPagina, Cartao, GraficoLinhas, Numero, Pagina, Segmentado, Selo, Shell, Sparkline, Tabela, TEXTO } from '@/components/ui';
 import { contextoApp, dataCurta, dataHoje } from '@/lib/contexto-app';
+import { CardsMonitoramento } from '@/components/monitoramentos';
 import { paginar } from '@/lib/paginar';
 import { destaquesDaRede, diaMenos, serieSemanal, variacaoDoPeriodo } from '@/lib/derivacoes';
 import { setaDoTom, tomDelta, tomResposta, type Sentido } from '@/lib/visual';
@@ -84,6 +85,7 @@ export default async function RedePage({ searchParams }: { searchParams: Promise
                                  sobre={[`${lojas.length} lojas`, atual && `${atual.vendedores_ativos} vendedores com movimento`, atual && `relatório de ${dataCurta(`${atual.data_ref}T12:00:00-03:00`)}`].filter(Boolean).join(' · ')}
                                  acoes={<Segmentado rotulo="Indicador" base="/unidades" param="indicador" atual={chave}
                                                     opcoes={Object.entries(INDICADORES).map(([valor, i]) => ({ valor, rotulo: i.rotulo }))} />} />
+                <CardsMonitoramento supabase={supabase} modo="gestao" quem={perfil} />
 
                 <div className="grid gap-5 lg:grid-cols-12">
                     <Cartao variante="heroi" className="flex flex-col gap-3 lg:col-span-4 2xl:col-span-3">

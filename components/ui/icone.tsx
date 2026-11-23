@@ -24,6 +24,7 @@ const TRACOS = {
     lista: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
     estrela: <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />,
     microfone: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>,
+    faisca: <><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z" /></>,
     cadastro: <><circle cx="10" cy="8" r="3.6" /><path d="M3 20c1.3-3.4 3.9-5.2 7-5.2 1.3 0 2.5.3 3.5.9" /><path d="M18 14v6M15 17h6" /></>,
 } satisfies Record<string, ReactNode>;
 

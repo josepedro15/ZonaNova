@@ -30,6 +30,8 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/equipe/mec', rotulo: 'Aderência ao MEC', curto: 'MEC', icone: 'mec' },
         { href: '/conversas', rotulo: 'Conversas', icone: 'conversa' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        // Perguntar sobre as conversas e pedir monitoramento (Conversar com a IA, 23/11).
+        { href: '/ia', rotulo: 'Conversar com a IA', curto: 'IA', icone: 'faisca' },
         // No celular, Objeções, Feedbacks e Configurações cedem o lugar: as
         // objeções da semana estão na Minha equipe, e o Perfil no topo da tela.
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
@@ -47,6 +49,8 @@ const ITENS: Record<Papel, Item[]> = {
         // Só supervisor e admin aprovam alguém como gestor, e só eles resolvem
         // cadastro de unidade que ainda não tem gestor.
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        // Perguntar sobre as conversas e pedir monitoramento (Conversar com a IA, 23/11).
+        { href: '/ia', rotulo: 'Conversar com a IA', curto: 'IA', icone: 'faisca' },
         { href: '/admin/produtos', rotulo: 'Sem alternativa', curto: 'Produtos', icone: 'cadastro' },
         { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/descobertas', rotulo: 'Descobertas', icone: 'lampada' },
@@ -60,6 +64,8 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/admin/conexoes', rotulo: 'Conexões', icone: 'wifi' },
         { href: '/admin/eventos', rotulo: 'Registro de ações', curto: 'Registro', icone: 'lista' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
+        // Perguntar sobre as conversas e pedir monitoramento (Conversar com a IA, 23/11).
+        { href: '/ia', rotulo: 'Conversar com a IA', curto: 'IA', icone: 'faisca' },
         { href: '/admin/produtos', rotulo: 'Sem alternativa', curto: 'Produtos', icone: 'cadastro' },
         { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
