@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { dentroDoLimite } from '@/lib/limite';
 import { conversar, type PerfilConversa } from '@/lib/ia-conversa';
+import { iaLiberada } from '@/lib/ia-acesso';
 
 // Uma pergunta com várias consultas leva de 10 a 60 segundos.
 export const maxDuration = 120;
@@ -14,8 +15,8 @@ const schemaPedido = z.object({
 }).refine((p) => p.mensagens[0].papel === 'usuario' && p.mensagens[p.mensagens.length - 1].papel === 'usuario', { message: 'a conversa começa e termina com o usuário' });
 
 /**
- * O chat da tela Conversar com a IA (lib/ia-conversa.ts). Só gestor,
- * supervisor e admin; o vendedor fica para a fase 3. As consultas da IA usam
+ * O chat da tela Conversar com a IA (lib/ia-conversa.ts). Só para quem está
+ * liberado em ia_acesso (0037), e com papel de gestão. As consultas da IA usam
  * a sessão de quem pergunta: a RLS decide o que ela vê.
  */
 export async function POST(req: Request) {
@@ -24,8 +25,9 @@ export async function POST(req: Request) {
     if (!user) return Response.json({ erro: 'Sessão expirada. Entre de novo.' }, { status: 401 });
     const { data: perfil } = await supabase.from('profiles').select('id,nome,role,status,unidade_id,unidades!profiles_unidade_id_fkey(nome)').eq('id', user.id)
         .maybeSingle<{ id: string; nome: string; role: string; status: string; unidade_id: string | null; unidades: { nome: string } | null }>();
-    if (!perfil || perfil.status !== 'ativo' || !PAPEIS.includes(perfil.role as typeof PAPEIS[number])) {
-        return Response.json({ erro: 'Esta tela é da gestão.' }, { status: 403 });
+    // Por enquanto só quem está em ia_acesso (0037): o José Pedro e o Silas.
+    if (!perfil || perfil.status !== 'ativo' || !PAPEIS.includes(perfil.role as typeof PAPEIS[number]) || !(await iaLiberada(supabase))) {
+        return Response.json({ erro: 'A IA ainda não está liberada para o seu usuário.' }, { status: 403 });
     }
 
     const lido = schemaPedido.safeParse(await req.json().catch(() => null));

@@ -5,6 +5,8 @@ import { dataEmSaoPaulo } from '@/lib/analise';
 import { encerrarMonitoramento } from '@/app/actions/monitoramento';
 import { MAX_MONITORAMENTOS_ATIVOS, type Monitoramento } from '@/lib/monitoramento';
 import { Chat } from './chat';
+import { iaLiberada } from '@/lib/ia-acesso';
+import { inicioPorPapel } from '@/lib/conexao';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +18,8 @@ const diaCurto = (d: string) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit
  */
 export default async function IaPage() {
     const { supabase, perfil } = await contextoApp();
-    if (perfil.role === 'vendedor') redirect('/dashboard');
+    // Por enquanto só o José Pedro e o Silas (ia_acesso, 0037).
+    if (perfil.role === 'vendedor' || !(await iaLiberada(supabase))) redirect(inicioPorPapel(perfil.role));
     const hoje = dataEmSaoPaulo(new Date());
     const [{ data: monitoramentos }, { count: pendentes }] = await Promise.all([
         supabase.from('monitoramentos').select('*').order('created_at', { ascending: false }).limit(12).returns<Monitoramento[]>(),

@@ -8,6 +8,9 @@ import { sair } from '@/app/actions/auth';
 import { iniciais } from '@/lib/visual';
 import { Icone, type NomeIcone } from './icone';
 import { Selo } from './selo';
+// Só no servidor (consulta o banco): componente de navegador não importa o
+// índice '@/components/ui', senão este arquivo vai junto para o navegador.
+import { ItemIa } from './item-ia';
 
 export type Papel = 'vendedor' | 'gestor' | 'supervisor' | 'admin';
 type Item = { href: string; rotulo: string; curto?: string; icone: NomeIcone };
@@ -30,8 +33,6 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/equipe/mec', rotulo: 'Aderência ao MEC', curto: 'MEC', icone: 'mec' },
         { href: '/conversas', rotulo: 'Conversas', icone: 'conversa' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
-        // Perguntar sobre as conversas e pedir monitoramento (Conversar com a IA, 23/11).
-        { href: '/ia', rotulo: 'Conversar com a IA', curto: 'IA', icone: 'faisca' },
         // No celular, Objeções, Feedbacks e Configurações cedem o lugar: as
         // objeções da semana estão na Minha equipe, e o Perfil no topo da tela.
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
@@ -49,8 +50,6 @@ const ITENS: Record<Papel, Item[]> = {
         // Só supervisor e admin aprovam alguém como gestor, e só eles resolvem
         // cadastro de unidade que ainda não tem gestor.
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
-        // Perguntar sobre as conversas e pedir monitoramento (Conversar com a IA, 23/11).
-        { href: '/ia', rotulo: 'Conversar com a IA', curto: 'IA', icone: 'faisca' },
         { href: '/admin/produtos', rotulo: 'Sem alternativa', curto: 'Produtos', icone: 'cadastro' },
         { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/descobertas', rotulo: 'Descobertas', icone: 'lampada' },
@@ -64,8 +63,6 @@ const ITENS: Record<Papel, Item[]> = {
         { href: '/admin/conexoes', rotulo: 'Conexões', icone: 'wifi' },
         { href: '/admin/eventos', rotulo: 'Registro de ações', curto: 'Registro', icone: 'lista' },
         { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check' },
-        // Perguntar sobre as conversas e pedir monitoramento (Conversar com a IA, 23/11).
-        { href: '/ia', rotulo: 'Conversar com a IA', curto: 'IA', icone: 'faisca' },
         { href: '/admin/produtos', rotulo: 'Sem alternativa', curto: 'Produtos', icone: 'cadastro' },
         { href: '/evolucao', rotulo: 'Evolução', icone: 'tendencia' },
         { href: '/objecoes', rotulo: 'Objeções', icone: 'lista' },
@@ -104,6 +101,7 @@ export default function Shell({ papel, nome, unidade, atual, conexao, pendentes 
                             </Link>
                         );
                     })}
+                    <ItemIa atual={atual} />
                 </nav>
                 <div className="mt-auto flex flex-col gap-3.5 border-t border-white/15 px-2 pt-[18px]">
                     <div className="flex items-center gap-2.5">
@@ -132,6 +130,7 @@ export default function Shell({ papel, nome, unidade, atual, conexao, pendentes 
                     <Link href="/"><Image src={logo} alt="Redemac Zona Nova" width={92} priority /></Link>
                     <div className="flex items-center gap-1">
                         {conexao && <Selo tom={conexao === 'conectada' ? 'bom' : 'risco'} ponto>{conexao === 'conectada' ? 'Conectado' : 'Fora do ar'}</Selo>}
+                        <ItemIa atual={atual} compacto />
                         <Link href="/perfil" aria-label="Perfil" className="flex size-11 items-center justify-center text-azul"><Icone nome="pessoa" /></Link>
                         <form action={sair}>
                             <button type="submit" aria-label="Sair" className="flex size-11 items-center justify-center text-tinta-2"><Icone nome="sair" /></button>

@@ -6,6 +6,7 @@ import { dataEmSaoPaulo } from '@/lib/analise';
 import { paginar } from '@/lib/paginar';
 import { cardVisivel, DIAS_DA_BASE, resumoDoCard, type ClienteDaBase, type MarcaQueConta, type Monitoramento } from '@/lib/monitoramento';
 import { encerrarMonitoramento } from '@/app/actions/monitoramento';
+import { iaLiberada } from '@/lib/ia-acesso';
 
 type Supabase = Awaited<ReturnType<typeof criarClienteServidor>>;
 
@@ -32,11 +33,11 @@ export async function CardsMonitoramento({ supabase, modo, quem }: { supabase: S
     if (error) return null;
     const abertos = (data ?? []).filter((m) => cardVisivel(m, hoje));
     if (!abertos.length) return null;
-    const cards = await Promise.all(abertos.map((m) => dadosDoCard(supabase, m)));
+    const [cards, liberada] = await Promise.all([Promise.all(abertos.map((m) => dadosDoCard(supabase, m))), iaLiberada(supabase)]);
     return (
         <div className="grid gap-4 xl:grid-cols-2">
             {cards.map((c) => <CardMonitoramento key={c.m.id} {...c} hoje={hoje} modo={modo}
-                                                    podeEncerrar={c.m.criado_por === quem.id || ['supervisor', 'admin'].includes(quem.role)} />)}
+                                                    podeEncerrar={liberada && (c.m.criado_por === quem.id || ['supervisor', 'admin'].includes(quem.role))} />)}
         </div>
     );
 }

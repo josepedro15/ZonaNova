@@ -3,7 +3,11 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { Fragment, useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Botao, Cartao, Selo } from '@/components/ui';
+// Direto dos arquivos, não do índice '@/components/ui': o índice traz o Shell,
+// que consulta o banco (item-ia.tsx) e não pode entrar no navegador.
+import { Botao } from '@/components/ui/botao';
+import { Cartao } from '@/components/ui/cartao';
+import { Selo } from '@/components/ui/selo';
 import { criarMonitoramento } from '@/app/actions/monitoramento';
 import type { Proposta } from '@/lib/monitoramento';
 

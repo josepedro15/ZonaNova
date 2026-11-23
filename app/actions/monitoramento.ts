@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { criarClienteServidor } from '@/lib/supabase/server';
 import { dataEmSaoPaulo } from '@/lib/analise';
 import { MAX_MONITORAMENTOS_ATIVOS, schemaProposta, type Proposta } from '@/lib/monitoramento';
+import { iaLiberada } from '@/lib/ia-acesso';
 
 const TELAS = ['/ia', '/dashboard', '/equipe', '/unidades'];
 
@@ -17,6 +18,7 @@ export async function criarMonitoramento(proposta: Proposta): Promise<{ ok: true
     const supabase = await criarClienteServidor();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { erro: 'Sessão expirada. Entre de novo.' };
+    if (!(await iaLiberada(supabase))) return { erro: 'Criar monitoramento ainda não está liberado para o seu usuário.' };
     const { count } = await supabase.from('monitoramentos').select('id', { count: 'exact', head: true })
         .is('encerrado_em', null).gte('fim', dataEmSaoPaulo(new Date()));
     if ((count ?? 0) >= MAX_MONITORAMENTOS_ATIVOS) return { erro: `Já há ${MAX_MONITORAMENTOS_ATIVOS} monitoramentos abertos. Encerre um antes.` };
